@@ -145,7 +145,13 @@ void Engine::stepSmooth() {
 // на offset сэмплов позже начала буфера (host).
 void Engine::renderBlock(uint64_t host, int offset) {
   Action act;
-  while (actions_.pop(act)) {
+  bool heavy = false;                                       // тяжёлая операция (SNAP / RESTORE: JSON, аллокации) в этом блоке уже была
+  while (const Action* nx = actions_.peek()) {
+    const bool isHeavy = nx->slot == T2D_HOST && (nx->kind == T2D_H_SNAP || nx->kind == RESTORE);
+    if (isHeavy && heavy) break;                            // не больше одной за блок: остальное — в следующих; порядок действий сохраняется (undo)
+    heavy = heavy || isHeavy;
+    act = *nx;
+    actions_.drop();
     if (act.n > 0) std::memcpy(t2d_args(), act.a, static_cast<size_t>(act.n) * sizeof(double));
     if (act.slot == T2D_HOST) hostAction(act);
     else t2d_action(act.slot, act.kind, act.i, t2d_args(), act.n);

@@ -3215,6 +3215,7 @@ static std::string appSnapStr(int slot, int id, int* gotId = nullptr, int* gotSl
   const double a[1] = {static_cast<double>(id)};
   t2d_app_action(T2D_HOST, T2D_H_SNAP, slot, a, 1, 0);
   t2d_app_render(L, R, 128, 0);
+  t2d_app_render(L, R, 128, 0);                                           // restore перед снимком занимает свой блок: тяжёлая операция — одна за блок
   static char buf[1 << 16];
   int i = -1, sl = -1;
   const int n = t2d_app_snap_take(&i, &sl, buf, sizeof buf);
@@ -3274,6 +3275,30 @@ static void appRestoreGarbage() {
   CHECK(m[16] == before && before == 1);
 }
 
+// не больше одной тяжёлой операции (SNAP / RESTORE) за блок; остальное и всё за ней ждёт, порядок сохраняется
+static void appHeavyOnePerBlock() {
+  t2d_app_init(48000, 7, 1e9, 1u << 10);
+  float L[128], R[128];
+  const double a[1] = {1}, v[1] = {0.5};
+  for (int k = 0; k < 3; k++) t2d_app_action(T2D_HOST, T2D_H_SNAP, 10, a, 1, 0);
+  t2d_app_action(T2D_HOST, T2D_H_VOL, 0, v, 1, 1);                        // touch != 0 — действие попадёт в статистику задержки
+  t2d_app_stats_t st;
+  t2d_app_render(L, R, 128, 0); t2d_app_stats(&st);
+  CHECK(st.snap_n == 1 && st.lat_n == 0);                                 // VOL стоит за вторым снимком — ждёт
+  t2d_app_render(L, R, 128, 0); t2d_app_stats(&st);
+  CHECK(st.snap_n == 1 && st.lat_n == 0);                                 // stats — окно: чтение его сбрасывает
+  t2d_app_render(L, R, 128, 0); t2d_app_stats(&st);
+  CHECK(st.snap_n == 1 && st.lat_n == 1);                                 // третий снимок и сразу за ним VOL
+  const char r[] = "{}";                                                  // RESTORE — тоже тяжёлая: в одном блоке со снимком не выполняется
+  t2d_app_init(48000, 7, 1e9, 1u << 10);
+  t2d_app_action(T2D_HOST, T2D_H_SNAP, 10, a, 1, 0);
+  CHECK(t2d_app_restore(10, r, 2, 0) == 1);
+  t2d_app_render(L, R, 128, 0); t2d_app_stats(&st);
+  CHECK(st.snap_n == 1);
+  t2d_app_render(L, R, 128, 0);                                           // второй блок — restore выполнен, кольцо строк свободно
+  for (int k = 0; k < 18; k++) CHECK(t2d_app_restore(10, r, 2, 0) == 1);
+}
+
 static void appStrOverflow() {
   t2d_app_init(48000, 7, 1e9, 1u << 10);
   const char s[] = "{}";
@@ -3283,7 +3308,7 @@ static void appStrOverflow() {
   float L[128], R[128];
   const double a[1] = {1};
   for (int k = 0; k < 19; k++) t2d_app_action(T2D_HOST, T2D_H_SNAP, 10, a, 1, 0);
-  t2d_app_render(L, R, 128, 0);
+  for (int k = 0; k < 19; k++) t2d_app_render(L, R, 128, 0);              // по одному снимку на блок
   t2d_app_stats_t st; t2d_app_stats(&st);
   CHECK(st.snap_lost == 1 && st.snap_n == 19);
   static char buf[1 << 16];
@@ -4970,7 +4995,7 @@ int main(int argc, char** argv) {
   tenebraeWorldBus(); tenebraeTzfmFollows(); tenebraeLinksClear(); tenebraeMirror(); tenebraeModelPick(); tenebraeActionNan(); tenebraeCycleSafe(); tenebraeStrikeClear(); tenebraeScaleRetune();
   shaper(); shaperOs4(); shaperChromium2(); bpbank(); noise(); infernoModel(); infernoSound(); bridgeNative(); mixWebUntouched(); mixSum(); mixMaster();
   appSpscThreads(); appTripleThreads(); appChunking(); appVsBridge(); appHeardAccumulates(); appMidiClock(); appMidiTime(); appMidiOverflow(); appOverflow(); appLatency(); appReinitRate();
-  appHostOrder(); appSnapRoundtrip(); appRestoreGarbage(); appStrOverflow(); appHostVolScale(); appStrCap();
+  appHostOrder(); appSnapRoundtrip(); appRestoreGarbage(); appHeavyOnePerBlock(); appStrOverflow(); appHostVolScale(); appStrCap();
   lfoForms(); lfoRandom(); hostLfo(); lfoApply(); lfoUnits(); lfoOff(); lfoOrder(); lfoDeadObj(); lfoSpecNan(); lfoForeign(); oceanLfo(); oceanLfoIgnores(); monoLfo(); monoLfoIgnores(); monoDice(); horoLfo(); horoFilterMap(); horoFilterAudio(); horoFilterTail(); horoFilterExtremes(); horoModelFltGarbage(); horoLfoFlt(); horoDiceFlt(); horoModelInst(); horoModelLen(); horoModelDefaults(); horoModelGarbage(); horoSoundGarbage(); horoModelPitch(); horoModelPitchGarbage(); drumVoices(); drumGlitch(); horoLfoIgnores(); sdkEuclid(); horoOnsets(); horoBackward(); horoBackwardJump(); horoRot(); horoLenSwitch(); horoNonFiniteTempo(); horoConcursus(); horoAttacksPerTurn(); horoCeiling(); horoKitPeak(); horoKitRms(); horoTailOff(); horoInstSwitch(); horoDice(); horoRetiredActions(); horoLockNeedsRunOnly(); hostTwoWorldsSamePhase(); hostMasterBpmChange(); horoLockNoMidi(); cymaticaGridNoLock(); cymaticaLockOverriddenByGrid(); arcLfo(); arcLfoIgnores(); triaLfo(); triaLfoIgnores(); infLfo(); infLfoIgnores(); portusLfo(); portusLfoIgnores(); portusDice(); arcPicSame(); arcPicMeta(); arcPicRiverName(); arcName(); arcRouteSame(); arcPicFixture(); appScaleSteps(); appLfo(); appLevels(); appLevelsPreFader(); appHostFader(); appHostFaderSmooth(); appHostMaster();
   std::printf("sdk-test: %d checks, %d failed\n", checks, fails);
   return fails ? 1 : 0;
