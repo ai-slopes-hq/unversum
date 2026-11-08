@@ -693,6 +693,8 @@ static void json() {
   CHECK(o.dump() == "{\"b\":2,\"a\":\"x\"}");
   sdk::Json::parse("{\"a\":", &ok); CHECK(!ok);
   sdk::Json::parse("[1,2] x", &ok); CHECK(!ok);
+  sdk::Json::parse(std::string(100000, '['), &ok); CHECK(!ok);              // глубина ограничена — стек цел
+  sdk::Json::parse(std::string(60, '[') + std::string(60, ']'), &ok); CHECK(ok);
 }
 
 // Ревербы: T60 по кривой спада энергии (интеграл Шрёдера, наклон от −5 до −35 дБ × 2), тишина без денормалов, шум без разноса.
@@ -3275,16 +3277,15 @@ static void appRestoreGarbage() {
 static void appStrOverflow() {
   t2d_app_init(48000, 7, 1e9, 1u << 10);
   const char s[] = "{}";
-  CHECK(t2d_app_restore(10, s, 2, 0) == 1);
-  CHECK(t2d_app_restore(10, s, 2, 0) == 1);
-  CHECK(t2d_app_restore(10, s, 2, 0) == 0);                               // кольцо строк: ровно 2
+  for (int k = 0; k < 18; k++) CHECK(t2d_app_restore(10, s, 2, 0) == 1);  // reapply: по строке на слот до запуска аудио — 16 слотов влезают
+  CHECK(t2d_app_restore(10, s, 2, 0) == 0);                               // кольцо строк: ровно 18
   t2d_app_init(48000, 7, 1e9, 1u << 10);
   float L[128], R[128];
   const double a[1] = {1};
-  for (int k = 0; k < 3; k++) t2d_app_action(T2D_HOST, T2D_H_SNAP, 10, a, 1, 0);
+  for (int k = 0; k < 19; k++) t2d_app_action(T2D_HOST, T2D_H_SNAP, 10, a, 1, 0);
   t2d_app_render(L, R, 128, 0);
   t2d_app_stats_t st; t2d_app_stats(&st);
-  CHECK(st.snap_lost == 1 && st.snap_n == 3);
+  CHECK(st.snap_lost == 1 && st.snap_n == 19);
   static char buf[1 << 16];
   int id, sl;
   CHECK(t2d_app_snap_take(&id, &sl, buf, 8) == 0);                        // не влез в cap — потерян

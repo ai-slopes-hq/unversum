@@ -55,8 +55,9 @@ struct Json {
   }
 
  private:
+  static constexpr int MAX_DEPTH = 64;
   struct Reader {                                       // разбор: at — текущий символ, end — конец текста, ok — пока без ошибок
-    const char* at; const char* end; bool ok;
+    const char* at; const char* end; bool ok; int depth = 0;       // depth — вложенность: без предела '[[[[…' роняет стек
     void ws() { while (at < end && (*at == ' ' || *at == '\t' || *at == '\n' || *at == '\r')) at++; }
     bool eat(char c) { ws(); if (at < end && *at == c) { at++; return true; } return false; }
     bool word(const char* w) {                          // слово целиком (true / false / null) — съесть, иначе не двигаться
@@ -69,6 +70,8 @@ struct Json {
       ws();
       if (at >= end) return fail();
       char c = *at;
+      if ((c == '{' || c == '[') && ++depth > MAX_DEPTH) return fail();
+      struct Out { int& d; char c; ~Out() { if (c == '{' || c == '[') d--; } } out{depth, c};
       if (c == '{') {
         at++; Json j = object();
         if (eat('}')) return j;

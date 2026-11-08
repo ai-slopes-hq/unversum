@@ -42,6 +42,7 @@ class Engine {
   static constexpr int HEARD_RECS = 64, HEARD_REC = 256;    // записей heard на слот; чисел в записи (Cymatica ≤ 200)
   static constexpr int MIRROR_CAP = 2048;                   // = MBUF ядра
   static constexpr int LFO_N = T2D_APP_LFO_MAX * T2D_APP_LFO_REC;   // снимок LFO: LFO_MAX · 10 чисел
+  static constexpr int TEXT_RING = SLOTS + 2;               // reapply кладёт по строке на каждый слот до запуска аудио — все должны влезть
   static constexpr int STR = 1 << 16;                       // строка снимка, = t2d_str_cap()
   enum { RESTORE = 15 };                                    // внутренний kind слота хоста (после T2D_H_*, не пересекается с ними): строка из кольца UI → аудио
 
@@ -109,7 +110,7 @@ class Engine {
   Spsc<HEv, 128> hev_;                                      // аудио → UI: события часов (= 256 чисел); полно — теряются (hevLost_)
   Triple<Grid> gridSnap_;                                   // сетка хоста для UI
   Grid gridRead_{};
-  Spsc<Text, 2> restoreText_, snapText_;                    // строки UI → аудио (restore) и аудио → UI (снимки)
+  Spsc<Text, TEXT_RING> restoreText_, snapText_;            // строки UI → аудио (restore) и аудио → UI (снимки); влезает TEXT_RING − 1
 
   // Статистика окна (между вызовами stats): суммы в целых — нс и доли ×1e9, чтобы снимать атомарным exchange.
   std::atomic<uint64_t> loadSum_{0}, loadMax_{0}, loadN_{0}, latSum_{0}, latMax_{0}, latN_{0}, snapSum_{0}, snapMax_{0}, snapN_{0};

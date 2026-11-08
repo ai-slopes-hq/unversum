@@ -83,12 +83,13 @@ final class Host {
     self.core = core; self.store = store
     undo = Undo(core: core)
     // prefs: нечисло и выход за 0…1 — не доверяем
-    let v = store.loadPrefs()?.vol ?? Vol.def
+    let prefs = store.loadPrefs()                          // один раз: пять чтений файла могли дать разные куски
+    let v = prefs?.vol ?? Vol.def
     vol = v.isFinite ? min(max(v, 0), 1) : Vol.def
-    if let l = store.loadPrefs()?.link { link = l }
-    if let a = store.loadPrefs()?.audio { audioPref = a }
-    if let m = store.loadPrefs()?.mix { mix = m }
-    prefsScl = store.loadPrefs()?.scl ?? .off
+    if let l = prefs?.link { link = l }
+    if let a = prefs?.audio { audioPref = a }
+    if let m = prefs?.mix { mix = m }
+    prefsScl = prefs?.scl ?? .off
     if link.scale { scl = prefsScl }                       // лад общий: из prefs, лад из файлов сцен не берём
     for v in views {
       let slot = v.slot
@@ -299,7 +300,7 @@ final class Host {
   private var heldBtns: Set<Btn> { Set(Btn.allCases.filter { held($0) }) }
 
   // recycle на карте: очистить все миры. Состояния до очистки — в recycleStash (база отмены каждого мира);
-  // нет базы хотя бы у одного — ничего не очищаем, иначе отмена потеряла бы мир
+  // у мира без базы (сразу после старта) отмены нет: он очищается без возврата
   @discardableResult func recycleAll(_ only: [Int]? = nil) -> Bool {
     let targets = only ?? slots
     for b in undo.pollAll() { setScene(b.slot, b.w, b.scl) }
@@ -391,7 +392,7 @@ final class Host {
     let g = plateGeo(p), dx = Double((f.x - f.x0) / (g.mixTx1 - g.mixTx0))
     if onMap {
       let c = min(max((v0 + dx * 160).rounded(), 40), 200)
-      if c != lastBpm { tempoFrom(slot: -1, c); for case let t? in views.values.map(\.tempo) { t.setBpm(min(max(c, t.tempoRange.lowerBound), t.tempoRange.upperBound)) } }
+      if c != lastBpm { tempoFrom(slot: -1, c) }               // tempoFrom сам ставит темп всем мирам по их диапазонам
     } else if let t = world?.tempo, let w = world {
       let lo = t.tempoRange.lowerBound, hi = t.tempoRange.upperBound
       let b = min(max((v0 + dx * (hi - lo)).rounded(), lo), hi)
