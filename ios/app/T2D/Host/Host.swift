@@ -193,7 +193,7 @@ final class Host {
     core.master(lpf: m.lpf, thr: m.thr, ratio: m.ratio, ceil: m.ceil)
   }
 
-  // stable audio и restart audio — общие у concordia и панели audio
+  // stable audio и restart audio — переключатели вкладки sys
   func toggleStable() {
     audioPref.stable.toggle(); markPrefs(); savePrefs()     // сразу: настройка нужна и после падения звука
     restartAt = now                                         // как в вебе: смена буфера перезапускает звук — вспышка «audio restarted»

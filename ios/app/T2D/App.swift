@@ -5,8 +5,6 @@ import SwiftUI
 //   map — старт на карте, через 2 с кубик в Firmamentum (через ядро, без входа): к снимку (5 с) у его карточки лучи;
 //   nav — go(10), кубик, через 2 с тап по стрелке назад (выход), переход заморожен на k = 0.5;
 //   peek — тап по карточке Cymatica (лицо без вида), peek заморожен на середине («nondum»);
-//   concordia — тап по солнцу на карте; mixer — карта → солнце → строка mixer, фейдер Arcadia сдвинут влево и мир заглушён (как nav-mixer-set веба);
-//   audio — go(10), через 1 с тап по кнопке громкости: панель audio;
 //   monochord | monochord-sheet | monochord-earth-sheet | monochord-wind | monochord-fan — go(7), см. shotMono;
 //   horologium | horologium-ring-sheet | horologium-hub-sheet | horologium-fan | horologium-pads — go(9), см. shotHoro.
 //   arcadia | arcadia-land | arcadia-held | arcadia-held-rim | arcadia-sheet | arcadia-fan — go(12), см. shotArc;
