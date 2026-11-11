@@ -91,37 +91,19 @@ final class TenFrameTests: XCTestCase {
     XCTAssertNotEqual(bytes(a), bytes(b), "частицы и пунктир бегут")
   }
 
-  func testRingPinned() {
+  func testLinkPlate() {
     twoVoices()
-    let R2 = Ten.menuDead + view.geo.menuSpan, cx = 195.0, cy = 420.0
-    let w = win(cx + R2, cy, 6), c = view.closeChip
-    let chipW = win(c.x + c.w / 2, c.y, 6)
-    let before = lit(chipW)
-    view.ring = TenRing(dst: 0, src: 1, cx: cx, cy: cy, pinned: true)
-    XCTAssertGreaterThan(lit(w, over: 5), 0, "окружность R2 (альфа 0.08, штрих делится на два пикселя)")
-    XCTAssertGreaterThan(lit(chipW), before)
+    let g = view.linkGeo, chip = CGRect(x: g.x + 20, y: g.top + 52, width: 20, height: 4)
+    let w = win(chip.midX, chip.midY, 6)
+    let before = lit(w)
+    view.ring = TenRing(dst: 0, src: 1, finger: nil)
+    XCTAssertGreaterThan(lit(w), before, "плашка связи: фишки и бумага")
     view.sheetVoice = 0
-    let withRing = frame()                                   // плашка рисует свой «close» поверх: чип кольца виден, только если кадры различаются
-    let sheetRing = view.ring
+    let withSheet = frame()
     view.ring = nil
-    XCTAssertEqual(tenLit(withRing, chipW), lit(chipW), "при плашке чипа кольца нет (в этом месте плашка)")
-    view.ring = sheetRing
+    XCTAssertEqual(tenLit(withSheet, w), lit(w), "при плашке планеты плашки связи нет")
   }
 
-  func testRingHung() {
-    twoVoices()
-    var r = TenRing(dst: 0, src: 1, cx: 195, cy: 420)
-    r.overPin = true
-    let before = lit(win(195, 420 - Ten.pinR - 5, 6))
-    view.ring = r
-    XCTAssertGreaterThan(lit(win(195, 420 - Ten.pinR - 5, 6)), before, "булавка на кольце на весу")
-    var g = r; g.overPin = false
-    view.ring = nil
-    view.ghost = (g, now + 1)
-    XCTAssertGreaterThan(lit(win(195, 420 - Ten.pinR, 8)), 0, "призрак")
-    view.ghost = (g, now - 1)
-    XCTAssertEqual(lit(win(195, 420 - Ten.pinR, 8), over: 60), 0, "призрак погас")
-  }
 
   func testHoldArc() {
     twoVoices()
@@ -187,9 +169,7 @@ final class TenFrameTests: XCTestCase {
     }
     for k in 0..<5 { rig.tick(now - 0.1 + Double(k) * 0.02) }
     view.zoomShow = now + 1
-    view.ring = TenRing(dst: 0, src: 1, cx: 195, cy: 420, pinned: true)
-    _ = frame()
-    view.ring = TenRing(dst: 0, src: 1, cx: 195, cy: 420)
+    view.ring = TenRing(dst: 0, src: 1, finger: nil)
     _ = frame()
   }
 

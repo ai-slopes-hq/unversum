@@ -6,7 +6,7 @@ private final class TLRec: Core {
   func action(_ kind: Int, _ i: Int, _ a: [Double], touchTime: Double) -> Bool { acts.append((kind, i, a, touchTime)); return true }
 }
 
-// мост двух пальцев и кольцо связи Tenebrae (app.js:325-349, 885-982)
+// мост двух пальцев и плашка связи Tenebrae (app.js:325-349, 885-982)
 final class TenLinkTests: XCTestCase {
   private let rec = TLRec()
   private var mbuf: [Double] = []
@@ -14,7 +14,6 @@ final class TenLinkTests: XCTestCase {
     let n = min(self.mbuf.count, b.count); b.replaceSubrange(0..<n, with: self.mbuf[0..<n]); return n
   }, readHeard: { _ in 0 }, readLevel: { 0 }, rng: { 0.5 })
   private let a = NSObject(), b = NSObject(), c = NSObject()
-  private var span: Double { view.geo.menuSpan }
 
   override func setUp() {
     mbuf = mirror()
@@ -137,27 +136,16 @@ final class TenLinkTests: XCTestCase {
     view.up(fing(b, pb.x, pb.y, t0: 1.1)); view.up(fing(a, pa.x, pa.y, t0: 1))
   }
 
-  func testHandleRing() {
-    let m = openRing()
+  private var plate: TenLinkGeo { view.linkGeo }
+  private func tap(_ x: Double, _ y: Double, t0: Double = 2) {
+    view.down(fing(a, x, y, t0: t0)); view.up(fing(a, x, y, t0: t0))
+  }
+
+  func testHandleOpensPlate() {
+    _ = openRing()
     XCTAssertEqual(log.map(\.kind), [Act.link]); XCTAssertEqual(log[0].i, 0); XCTAssertEqual(log[0].a, [3])
     let r = try! XCTUnwrap(view.ring)
-    let rc = view.ringCenter(m.x, m.y)
-    XCTAssertEqual(r.cx, rc.x, accuracy: 1e-9); XCTAssertEqual(r.cy, rc.y, accuracy: 1e-9)
-    XCTAssertFalse(r.pinned); XCTAssertTrue(r.overPin)
-    rec.acts.removeAll()
-    let t = dir(54, 40 + 0.5 * span, from: m)
-    view.move(fing(c, t.x, t.y, t0: 1))
-    XCTAssertEqual(log.map(\.kind), [Act.linkType, Act.linkDepth])
-    XCTAssertEqual(log[0].i, 0); XCTAssertEqual(log[0].a, [3, 2])
-    XCTAssertEqual(log[1].a[0], 3); XCTAssertEqual(log[1].a[1], 0.5, accuracy: 1e-9)
-    XCTAssertFalse(view.ring!.overPin)
-    rec.acts.removeAll()
-    tick(2)
-    view.up(fing(c, t.x, t.y, t0: 1))
-    XCTAssertNil(view.ring)
-    let g = try! XCTUnwrap(view.ghost)
-    XCTAssertEqual(g.until, 2 + 1.6, accuracy: 1e-9)
-    XCTAssertTrue(log.isEmpty, "отпускание вне булавки и без разреза ничего не шлёт")
+    XCTAssertEqual(r.dst, 0); XCTAssertEqual(r.src, 3); XCTAssertNil(r.finger, "ручка — тап, палец плашку не ведёт")
   }
 
   func testAutoLinkHasNoHandle() {
@@ -169,144 +157,54 @@ final class TenLinkTests: XCTestCase {
     XCTAssertNil(view.ring, "хаос-связь (auto) ручки не имеет")
   }
 
-  func testRingCut() {
-    var m = openRing()
+  func testPlateType() {
+    _ = openRing(); rec.acts.removeAll()
+    let c2 = plate.chips[2]                                   // am
+    tap(c2.midX, c2.midY)
+    XCTAssertEqual(log.map(\.kind), [Act.linkType]); XCTAssertEqual(log[0].i, 0); XCTAssertEqual(log[0].a, [3, 2])
+    XCTAssertNotNil(view.ring, "плашка остаётся")
     rec.acts.removeAll()
-    var t = dir(198, 40 + 0.4 * span, from: m)
-    view.move(fing(c, t.x, t.y, t0: 1))
-    XCTAssertTrue(view.ring!.cutting)
-    XCTAssertTrue(log.isEmpty, "cut только флаг")
-    view.up(fing(c, t.x, t.y, t0: 1))
-    XCTAssertEqual(log.map(\.kind), [Act.unlink]); XCTAssertEqual(log[0].i, 0); XCTAssertEqual(log[0].a, [3])
-    XCTAssertNil(view.ring); XCTAssertNil(view.ghost, "связи нет — призрака нет")
-    // t 0.3 — не разрез
-    rec.acts.removeAll()
-    view.restored()
-    m = openRing()
-    rec.acts.removeAll()
-    t = dir(198, 40 + 0.3 * span, from: m)
-    view.move(fing(c, t.x, t.y, t0: 1))
-    view.up(fing(c, t.x, t.y, t0: 1))
-    XCTAssertFalse(has(Act.unlink)); XCTAssertNotNil(view.ghost)
-  }
-
-  func testRingPin() {
-    var m = openRing()
-    view.up(fing(c, m.x, m.y, t0: 1))                        // отпустил на булавке
-    XCTAssertEqual(view.ring?.pinned, true); XCTAssertNil(view.ghost)
-    // вытянул и вернул в центр — тоже булавка
-    view.restored()
-    m = openRing()
-    let t = dir(54, 90, from: m)
-    view.move(fing(c, t.x, t.y, t0: 1)); XCTAssertFalse(view.ring!.overPin)
-    view.move(fing(c, m.x + 10, m.y, t0: 1)); XCTAssertTrue(view.ring!.overPin)
-    view.up(fing(c, m.x + 10, m.y, t0: 1))
-    XCTAssertEqual(view.ring?.pinned, true)
-    // призрак: тап по булавке в 1.6 с
-    view.restored()
-    m = openRing()
-    view.move(fing(c, t.x, t.y, t0: 1)); tick(2)
-    view.up(fing(c, t.x, t.y, t0: 1))
-    let rc = (x: view.ghost!.ring.cx, y: view.ghost!.ring.cy)
-    rec.acts.removeAll()
-    tick(3)
-    view.down(fing(a, rc.x + 20, rc.y, t0: 3))
-    XCTAssertEqual(view.ring?.pinned, true); XCTAssertNil(view.ghost); XCTAssertTrue(log.isEmpty, "касание съедено")
-  }
-
-  func testGhostExpired() {
-    let m = openRing()
-    let t = dir(54, 90, from: m)
-    view.move(fing(c, t.x, t.y, t0: 1)); tick(2)
-    view.up(fing(c, t.x, t.y, t0: 1))
-    let rc = (x: view.ghost!.ring.cx, y: view.ghost!.ring.cy)
-    rec.acts.removeAll()
-    tick(3.7)                                                // 1.7 с спустя
-    view.down(fing(a, rc.x, rc.y + 28, t0: 3.7))
-    XCTAssertNil(view.ghost); XCTAssertNil(view.ring)
-    XCTAssertEqual(view.fingers.count, 1, "касание пошло в поле (голосов нет — отказ, но палец поля)")
-  }
-
-  func testGhostEaten() {                                    // любое касание гасит призрак
-    let m = openRing()
-    let t = dir(54, 90, from: m)
-    view.move(fing(c, t.x, t.y, t0: 1)); tick(2)
-    view.up(fing(c, t.x, t.y, t0: 1))
-    tick(2.5)
-    let p5 = pos(5)
-    view.down(fing(a, p5.x, p5.y, t0: 2.5))
-    XCTAssertNil(view.ghost)
-  }
-
-  func testTapHandle() {
-    let m = openRing()
-    tick(1.1)
-    view.up(fing(c, m.x, m.y, t0: 1))
-    XCTAssertEqual(view.ring?.pinned, true)
-  }
-
-  func testHangingRingPinByOtherFinger() {
-    let m = openRing()
-    let t = dir(54, 90, from: m)
-    view.move(fing(c, t.x, t.y, t0: 1))
-    rec.acts.removeAll()
-    let rc = (x: view.ring!.cx, y: view.ring!.cy)
-    view.down(fing(a, rc.x, rc.y, t0: 1.2))
-    XCTAssertEqual(view.ring?.pinned, true); XCTAssertNil(view.ring?.finger); XCTAssertTrue(log.isEmpty)
-    view.move(fing(c, t.x + 30, t.y, t0: 1)); view.up(fing(c, t.x + 30, t.y, t0: 1))
-    XCTAssertTrue(log.isEmpty, "палец-держатель больше ничего не двигает")
-    XCTAssertEqual(view.ring?.pinned, true)
-  }
-
-  func testPinnedRing() {
-    let m = openRing()
-    view.up(fing(c, m.x, m.y, t0: 1))
-    let r = view.ring!
-    rec.acts.removeAll()
-    let t = dir(126, 40 + 0.25 * span, from: (r.cx, r.cy))
-    view.down(fing(a, t.x, t.y, t0: 2))
-    XCTAssertEqual(log.map(\.kind), [Act.linkType, Act.linkDepth]); XCTAssertEqual(log[0].a, [3, 3])
-    XCTAssertEqual(log[1].a[1], 0.25, accuracy: 1e-9)
-    view.up(fing(a, t.x, t.y, t0: 2))
-    XCTAssertEqual(view.ring?.pinned, true, "кольцо остаётся")
-    // центр — ничего
-    rec.acts.removeAll()
-    view.down(fing(a, r.cx, r.cy, t0: 3)); view.up(fing(a, r.cx, r.cy, t0: 3))
-    XCTAssertTrue(log.isEmpty); XCTAssertNotNil(view.ring)
-    // close-чип
-    view.down(fing(a, 390 - 80 + 10, 844 - 34 - 320 + 10, t0: 4))
-    XCTAssertNil(view.ring); XCTAssertTrue(log.isEmpty)
-  }
-
-  func testPinnedRingOutside() {
-    let m = openRing()
-    view.up(fing(c, m.x, m.y, t0: 1))
-    let r = view.ring!
-    rec.acts.removeAll()
-    let far = (x: r.cx < 195 ? r.cx + 40 + span + 34 + 6 : r.cx - 40 - span - 34 - 6, y: r.cy)
-    view.down(fing(a, far.x, far.y, t0: 2))
-    XCTAssertNil(view.ring); XCTAssertTrue(log.isEmpty, "мимо кольца: закрыть, в поле не идёт")
-    XCTAssertTrue(view.fingers.isEmpty)
-  }
-
-  func testPinnedRingCut() {
-    let m = openRing()
-    view.up(fing(c, m.x, m.y, t0: 1))
-    let r = view.ring!
-    rec.acts.removeAll()
-    let t = dir(198, 40 + 0.5 * span, from: (r.cx, r.cy))
-    view.down(fing(a, t.x, t.y, t0: 2))
+    tap(c2.midX, c2.midY, t0: 3)                              // am уже выбран (своё значение сразу)
     XCTAssertTrue(log.isEmpty)
-    view.up(fing(a, t.x, t.y, t0: 2))
-    XCTAssertEqual(log.map(\.kind), [Act.unlink]); XCTAssertNil(view.ring)
   }
 
-  func testPinnedRingHuge() {
-    let m = openRing()
-    view.up(fing(c, m.x, m.y, t0: 1))
-    let r = view.ring!
-    let t = dir(54, 100, from: (r.cx, r.cy))
-    view.down(fing(a, t.x, t.y, t0: 2))
+  func testPlateDepth() {
+    _ = openRing(); rec.acts.removeAll()
+    let g = plate, x = g.tx0 + 0.25 * (g.tx1 - g.tx0)
+    view.down(fing(a, x, g.sliderY, t0: 2))
+    XCTAssertEqual(log.map(\.kind), [Act.linkDepth]); XCTAssertEqual(log[0].a[0], 3); XCTAssertEqual(log[0].a[1], 0.25, accuracy: 1e-9)
+    rec.acts.removeAll()
+    view.move(fing(a, g.tx1 + 500, g.sliderY - 60, t0: 2))
+    XCTAssertEqual(log[0].a[1], 1, "за краем — предел, палец ведёт и выше полосы")
+    view.up(fing(a, g.tx1, g.sliderY, t0: 2))
+    rec.acts.removeAll()
+    view.move(fing(a, g.tx0, g.sliderY, t0: 2))
+    XCTAssertTrue(log.isEmpty, "палец поднят — ползунок не ведёт")
+    XCTAssertNotNil(view.ring)
+  }
+
+  func testPlateCut() {
+    _ = openRing(); rec.acts.removeAll()
+    let c4 = plate.chips[4]
+    tap(c4.midX, c4.midY)
+    XCTAssertEqual(log.map(\.kind), [Act.unlink]); XCTAssertEqual(log[0].i, 0); XCTAssertEqual(log[0].a, [3])
+    XCTAssertNil(view.ring)
+  }
+
+  func testPlateClose() {
+    _ = openRing(); rec.acts.removeAll()
+    let c = plate.close
+    tap(c.midX, c.midY)
+    XCTAssertNil(view.ring); XCTAssertTrue(log.isEmpty)
+    _ = openRing(); rec.acts.removeAll()
+    view.down(fing(a, 195, plate.top - 30, t0: 3))            // мимо плашки — закрыть, в поле не идёт
+    XCTAssertNil(view.ring); XCTAssertTrue(log.isEmpty); XCTAssertTrue(view.fingers.isEmpty)
+  }
+
+  func testPlateHuge() {
+    _ = openRing()
+    let g = plate
+    view.down(fing(a, g.tx0, g.sliderY, t0: 2))
     rec.acts.removeAll()
     view.move(fing(a, 1e300, 1e300, t0: 2))
     XCTAssertEqual(log.map(\.kind), [Act.linkDepth]); XCTAssertEqual(log[0].a[1], 1)
@@ -324,29 +222,10 @@ final class TenLinkTests: XCTestCase {
     XCTAssertNil(view.ring)
   }
 
-  func testRingClosesWhenGone() {
-    let m = openRing()
-    view.up(fing(c, m.x, m.y, t0: 1))
+  func testPlateClosesWhenLinkGone() {
+    _ = openRing()
     XCTAssertNotNil(view.ring)
     load { self.put(&$0, 0, x: 0.25, y: 0.3); self.put(&$0, 3, x: 0.6, y: 0.5) }   // связи нет
-    tick(2)
-    XCTAssertNil(view.ring)
-    // и призрак
-    linked(); tick(2.1)
-    let m2 = mid
-    view.down(fing(c, m2.x, m2.y, t0: 2.1))
-    view.move(fing(c, m2.x + 90, m2.y, t0: 2.1)); tick(2.2)
-    view.up(fing(c, m2.x + 90, m2.y, t0: 2.1))
-    XCTAssertNotNil(view.ghost)
-    load { self.put(&$0, 0, x: 0.25, y: 0.3, links: []); self.put(&$0, 3, x: 0.6, y: 0.5) }
-    tick(2.6)                                                // свои значения старше 0.25 с — зеркало решает
-    XCTAssertNil(view.ghost)
-  }
-
-  func testRingClosesWhenDstGone() {
-    let m = openRing()
-    view.up(fing(c, m.x, m.y, t0: 1))
-    load { self.put(&$0, 3, x: 0.6, y: 0.5) }
     tick(2)
     XCTAssertNil(view.ring)
   }
@@ -362,24 +241,15 @@ final class TenLinkTests: XCTestCase {
     view.up(fing(a, pa.x, pa.y, t0: 1))
   }
 
-  func testRestoredMidRing() {
-    let m = openRing()
-    let t = dir(54, 90, from: m)
-    view.move(fing(c, t.x, t.y, t0: 1))
+  func testRestoredMidPlateAndBridge() {
+    _ = openRing()
+    let g = plate
+    view.down(fing(a, g.tx0 + 40, g.sliderY, t0: 2))
     rec.acts.removeAll()
     view.restored()
-    XCTAssertNil(view.ring); XCTAssertNil(view.ghost); XCTAssertNil(view.bridge)
-    view.move(fing(c, t.x + 10, t.y, t0: 1)); view.up(fing(c, t.x + 10, t.y, t0: 1))
+    XCTAssertNil(view.ring)
+    view.move(fing(a, g.tx0 + 80, g.sliderY, t0: 2)); view.up(fing(a, g.tx0 + 80, g.sliderY, t0: 2))
     XCTAssertTrue(rec.acts.isEmpty)
-  }
-
-  func testRestoredMidGhostAndBridge() {
-    let m = openRing()
-    let t = dir(54, 90, from: m)
-    view.move(fing(c, t.x, t.y, t0: 1)); view.up(fing(c, t.x, t.y, t0: 1))
-    XCTAssertNotNil(view.ghost)
-    view.restored()
-    XCTAssertNil(view.ghost)
     let (pa, pb) = bridgeUp()
     rec.acts.removeAll()
     view.restored()

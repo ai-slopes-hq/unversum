@@ -279,7 +279,6 @@ extension NaturaView {
     drawDucks(p, nowMs: nowMs)                                   // с заводью
     drawSkiff(d, p, nowMs: nowMs)
     drawFlies(p, nowMs: nowMs)
-    drawStone(p, nowMs: nowMs)
     drawTouches(d)
     drawMenu(d, p)
     g.restoreGState()

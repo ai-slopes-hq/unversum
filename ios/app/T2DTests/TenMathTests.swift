@@ -10,10 +10,10 @@ final class TenMathTests: XCTestCase {
   func testGeo() {
     XCTAssertEqual(phone.top, 47); XCTAssertEqual(phone.bot, 806); XCTAssertEqual(phone.oy, 806); XCTAssertEqual(phone.ox, 0)
     XCTAssertEqual(phone.a.count, 416); XCTAssertEqual(phone.a[100], 0.11622393703045132, accuracy: acc); XCTAssertEqual(phone.a.last!, 1, accuracy: acc)
-    XCTAssertEqual(phone.zoomDef, 0.8573645219195573, accuracy: acc); XCTAssertEqual(phone.menuSpan, 121)
+    XCTAssertEqual(phone.zoomDef, 0.8573645219195573, accuracy: acc)
     XCTAssertEqual(pad.top, 12); XCTAssertEqual(pad.bot, 1342)
     XCTAssertEqual(pad.a.count, 829); XCTAssertEqual(pad.a[100], 0.02152963975757556, accuracy: acc)
-    XCTAssertEqual(pad.zoomDef, 1); XCTAssertEqual(pad.menuSpan, 150)
+    XCTAssertEqual(pad.zoomDef, 1)
     XCTAssertEqual(Ten.zoomDef, pow(0.8, 1 / 1.45), accuracy: 1e-12)
   }
 

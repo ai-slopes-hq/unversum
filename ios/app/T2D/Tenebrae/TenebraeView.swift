@@ -76,8 +76,7 @@ final class TenebraeView: World {
   var refuse: (x: Double, y: Double, t0: Double)? = nil       // отказ «нет голоса» / «закреплённых три» (0.6 с, рисует план (б))
   var hold: (id: ObjectIdentifier, t0: Double)? = nil         // палец, чьё удержание идёт к плашке (кольцо прогресса — план (б))
   var bridge: TenBridge? = nil                                // мост двух пальцев (TenLink.swift)
-  var ring: TenRing? = nil                                    // кольцо связи: на весу у пальца или закреплённое
-  var ghost: (ring: TenRing, until: Double)? = nil            // погасшее кольцо: 1.6 с можно тапнуть булавку
+  var ring: TenRing? = nil                                    // плашка связи (тап по ручке нити)
   var touchedOnce = false                                      // был хоть один палец (down) — подсказка гаснет
   var frameVoices: [TenVoiceM]? = nil, frameFx: [Double]? = nil   // срез на время одного кадра (drawFrame): voice(i) и fx не пересобираются на каждом обращении
   var sclPcs: [Int]? = nil, sclRoot = 0                       // лад: ноты по модулю 12 от A; nil — выключен

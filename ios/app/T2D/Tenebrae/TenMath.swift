@@ -18,12 +18,11 @@ enum Ten {
   static let lfoRateMin = 0.03, lfoRateMax = 20.0, lfoOff = 0.03       // depth < lfoOff на отпускании — снять LFO
   static let fLo = 55.0, semis = 60.0, warp = 1.45
   static let cutLo = 40.0, cutHi = 18000.0, shiftMax = 1500.0
-  static let grabR = 52.0, handleR = 24.0, pinR = 17.0, ghost = 1.6
+  static let grabR = 52.0, handleR = 24.0
   static let holeR = 84.0, sunR = 100.0, edge = 26.0, edgeT = 64.0
   static let sunCornerR = 46.0                                           // солнце-угол
   static let zoomMin = 0.35, phoneField = 430.0 * 860
   static let zoomDef = pow(0.8, 1 / 1.45)
-  static let menuDead = 40.0
   static let tap = 0.22, tapMove = 14.0, dtap = 0.32, hold = 0.42, holeMoved = 10.0, holdMove = 10.0
   static let pinchWindow = 0.25, pinchDelta = 26.0, pinchTime = 0.7
   static let bridgeCut = 0.06
@@ -142,9 +141,6 @@ struct TenGeo {
 
   // зум по умолчанию: на экране больше телефона видно больше (та же доля площади); iPad — все пять октав
   var zoomDef: Double { tenClamp(Ten.zoomDef * (W * (bot - top)) / Ten.phoneField, Ten.zoomDef, 1) }
-
-  // радиус кольца свойств: на узком экране меньше, чтобы лучи с подписями помещались
-  var menuSpan: Double { max(90, min(150, min(W, H) / 2 - Ten.menuDead - 34)) }
 }
 
 // ---------- звук вида (worlds/tenebrae/tone.js) ----------

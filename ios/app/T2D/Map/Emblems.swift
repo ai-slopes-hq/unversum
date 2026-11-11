@@ -104,7 +104,7 @@ enum Emblems {
       g.strokePath(); g.setLineWidth(1)
       S(0.9); g.beginPath(); arc(g, cx, cy, R * 1.2); g.strokePath()
       S(0.35); g.beginPath(); arc(g, cx, cy, R * 1.2 + 3); g.strokePath()
-    case 4:                                               // кувшинка с цветком; под ней три волны: sine, square, triangle
+    case 4:                                               // кувшинка с цветком
       let rx = R * 1.1, ry = rx * 0.45, ly = cy - R * 0.1
       g.setFillColor(d.paper(1)); g.setLineWidth(1.2); S(0.85)
       g.beginPath(); ell(g, cx, ly, rx, ry, 0.35, T2 - 0.05); g.addLine(to: pt(cx, ly)); g.closePath(); g.drawPath(using: .fillStroke)
@@ -118,14 +118,6 @@ enum Emblems {
         g.beginPath(); ell(g, 0, -s * 0.62, s * 0.24, s * 0.5); g.drawPath(using: .fillStroke); g.restoreGState()
       }
       F(0.85); g.beginPath(); arc(g, fx0, fy0, s * 0.26); g.fillPath()
-      let wy = cy + R * 0.95, ww = R * 0.55
-      S(0.8); g.setLineWidth(1.1)
-      let waves: [(CGFloat, (CGFloat) -> CGFloat)] = [(-1, { sin($0 * T2) }), (0, { $0 < 0.5 ? 1 : -1 }), (1, { 1 - 4 * abs($0 - 0.5) })]
-      for (k, fn) in waves {
-        let ox = cx + k * ww * 1.35 - ww / 2; g.beginPath()
-        for i in 0...30 { let u = CGFloat(i) / 30, p = pt(ox + u * ww, wy - fn(u) * ww * 0.3); i > 0 ? g.addLine(to: p) : g.move(to: p) }
-        g.strokePath()
-      }
     case 5:                                               // воронка ада: круги сужаются вниз, на двух — пламя
       for k in 0..<6 {
         let rx = R * (1.25 - CGFloat(k) * 0.17), ry = rx * 0.16 + 1.5, y = cy - R * 0.75 + CGFloat(k) * R * 0.3, fl = k == 2 || k == 4

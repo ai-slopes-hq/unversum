@@ -1,6 +1,6 @@
 import UIKit
 
-// Нити Tenebrae: мост двух пальцев, кольцо связи, булавка, призрак (порт app.js:325-349, 525-540, 854-858, 885-982).
+// Нити Tenebrae: мост двух пальцев, плашка связи (порт app.js:325-349, 525-540, 854-858, 885-982).
 // Время — часы тика (now). Связь, которой нет в виде, кольцу и мосту уже не принадлежит: ничего по ней не шлём
 
 // мост: палец fa держит A, палец fb — B; B модулирует A. d0 — расстояние между пальцами на старте, depth0 — глубина связи тогда
@@ -11,21 +11,27 @@ struct TenBridge {
   var depth: Double
 }
 
-// кольцо связи (центр cx, cy; gx, gy — где лёг палец, от этой точки тянут); key — луч: 0 fm, 1 tzfm, 2 am, 3 rm, 4 cut
+// плашка связи: какую нить правит (dst ← src); finger — палец, что ведёт ползунок глубины
 struct TenRing {
   let dst, src: Int
-  let cx, cy: Double
-  var gx = 0.0, gy = 0.0
-  var key: Int?
-  var t = 0.0
-  var overPin = true                                          // палец в центре, на булавке: отпустишь — кольцо закрепится
-  var cutting = false
-  var pinned = false
   var finger: ObjectIdentifier?
 }
 
-private let cutKey = 4
-let sectors: [(key: Int, ang: Double)] = [(0, -90), (1, -18), (2, 54), (3, 126), (4, 198)].map { ($0.0, $0.1 * .pi / 180) }
+// геометрия плашки связи: шапка (подпись, close), пять фишек (fm tzfm am rm cut), ползунок глубины
+struct TenLinkGeo {
+  static let height = 134.0
+  let x, w, top, bottom, tx0, tx1, sliderY: Double
+  let close: CGRect
+  let chips: [CGRect]
+  init(W: Double, H: Double, safeBot: Double) {
+    bottom = H - safeBot - 8; x = 16; w = W - 32; top = bottom - TenLinkGeo.height
+    close = CGRect(x: x + w - 64, y: top + 12, width: 64, height: 30)
+    let gap = 8.0, cw = (w - 4 * gap) / 5
+    let x0 = x, y0 = top + 52
+    chips = (0..<5).map { CGRect(x: x0 + Double($0) * (cw + gap), y: y0, width: cw, height: 32) }
+    tx0 = x + 20; tx1 = x + w - 20; sliderY = top + 108
+  }
+}
 
 // точка квадратичной кривой нити при t = 0…1 (bez, app.js:536)
 func tenBez(_ c: (x0: Double, y0: Double, cx: Double, cy: Double, x1: Double, y1: Double), _ t: Double) -> (x: Double, y: Double) {
@@ -41,9 +47,6 @@ extension TenebraeView {
     return voice(dst).mods.first { $0.src == src }
   }
   private func linkAlive(_ r: TenRing) -> Bool { linkMod(r.dst, r.src) != nil }
-
-  var ringR: Double { Ten.menuDead + geo.menuSpan + 34 }
-  var closeChip: (x: Double, y: Double, w: Double, h: Double) { (area.W - 80, area.H - area.safeBot - 320, 64, 26) }
 
   // нить связи (linkCurve, app.js:527): квадратичная кривая src → dst, прогнутая к солнцу; глубже связь — сильнее прогиб
   func linkCurve(dst: Int, src: Int) -> (x0: Double, y0: Double, cx: Double, cy: Double, x1: Double, y1: Double) {
@@ -61,116 +64,60 @@ extension TenebraeView {
   // середина нити — ручка (app.js:539)
   func linkMid(dst: Int, src: Int) -> (x: Double, y: Double) { tenBez(linkCurve(dst: dst, src: src), 0.5) }
 
-  // кольцо целиком на экране: у края открывается ближе к середине (app.js:854)
-  func ringCenter(_ x: Double, _ y: Double) -> (x: Double, y: Double) {
-    let R = Ten.menuDead + geo.menuSpan + 26
-    let x0 = R, x1 = area.W - R, y0 = area.topY + 12 + R, y1 = area.H - area.safeBot - 24 - R
-    return (x0 < x1 ? tenClamp(x, x0, x1) : area.W / 2, y0 < y1 ? tenClamp(y, y0, y1) : (y0 + y1) / 2)
+  var linkGeo: TenLinkGeo { TenLinkGeo(W: area.W, H: area.H, safeBot: area.safeBot) }
+
+  // глубина по ползунку: x пальца → 0…1
+  private func setDepth(_ x: Double) {
+    guard let r = ring, linkMod(r.dst, r.src) != nil else { return }
+    let g = linkGeo
+    send(Act.linkDepth, r.dst, [Double(r.src), tenClamp((x - g.tx0) / (g.tx1 - g.tx0))])
   }
 
-  private func sector(_ a: Double) -> Int? {
-    var bd = 9.0, found: Int?
-    for s in sectors {
-      let diff = abs(atan2(sin(a - s.ang), cos(a - s.ang)))
-      if diff < bd { bd = diff; found = s.key }
-    }
-    return found
-  }
-
-  // луч k, значение t: cut — только флаг «режем»; остальные — тип и глубина связи (set в openLink :894 и ringTouch :975)
-  private func ringSet(_ k: Int, _ t: Double) {
-    guard var r = ring else { return }
-    r.t = t
-    r.cutting = k == cutKey && t > 0.35
-    ring = r
-    guard k != cutKey, let m = linkMod(r.dst, r.src) else { return }
-    if m.type != k { send(Act.linkType, r.dst, [Double(r.src), Double(k)]) }
-    send(Act.linkDepth, r.dst, [Double(r.src), t])
-  }
-
-  // ---------- касание: булавки (до плашки) ----------
-
-  // призрак и булавка кольца на весу у другого пальца; любое касание гасит призрак. true — касание съедено
-  func ringPinDown(_ f: Finger) -> Bool {
-    guard let p = pt(f) else { return false }
-    let g = ghost
-    ghost = nil
-    if var r = g?.ring, let g, now < g.until, hypot(p.x - r.cx, p.y - r.cy) < Ten.pinR + 14 {
-      r.pinned = true; r.finger = nil; r.cutting = false
-      ring = r
-      return true
-    }
-    if var r = ring, !r.pinned, r.finger != f.id, hypot(p.x - r.cx, p.y - r.cy) < Ten.pinR + 12 {
-      r.pinned = true; r.finger = nil; r.cutting = false      // тот палец больше ничего не двигает: его move / up уже не наши
-      ring = r
-      return true
-    }
-    return false
-  }
-
-  // ---------- касание: закреплённое кольцо и ручка нити (после плашки) ----------
+  // ---------- касание: плашка связи (после плашки планеты) ----------
 
   func linkDown(_ f: Finger) -> Bool {
     guard let p = pt(f) else { return false }
-    if var r = ring, r.pinned {                               // закреплённое кольцо берёт любое касание: внутри — луч, мимо — закрыть
-      let c = closeChip
-      if p.x > c.x - 6, p.x < c.x + c.w + 6, p.y > c.y - 6, p.y < c.y + c.h + 6 { ring = nil; return true }
-      let dx = p.x - r.cx, dy = p.y - r.cy, d = hypot(dx, dy)
-      guard d < ringR else { ring = nil; return true }
-      r.finger = f.id; r.key = nil; r.cutting = false
-      if d >= Ten.menuDead { r.key = sector(atan2(dy, dx)) }
-      ring = r
-      if let k = r.key { ringSet(k, tenClamp((d - Ten.menuDead) / geo.menuSpan)) }
+    if var r = ring {                                         // плашка берёт любое касание: внутри — фишка / ползунок, выше — закрыть
+      let g = linkGeo
+      if p.y < g.top || inBoxPlate(p, g.close) { ring = nil; return true }
+      for (k, c) in g.chips.enumerated() where inBoxPlate(p, c) {
+        if k == 4 { send(Act.unlink, r.dst, [Double(r.src)]); ring = nil }
+        else if let m = linkMod(r.dst, r.src), m.type != k { send(Act.linkType, r.dst, [Double(r.src), Double(k)]) }
+        return true
+      }
+      if p.y >= g.sliderY - 22 { r.finger = f.id; ring = r; setDepth(p.x) }
       return true
     }
     for dst in 0..<Ten.voices where voice(dst).active {       // ручка на середине нити: не auto, источник активен
       for m in voice(dst).mods where voice(m.src).active && !m.auto {
         let c = linkMid(dst: dst, src: m.src)
-        if hypot(p.x - c.x, p.y - c.y) < Ten.handleR { openLink(f, p, dst: dst, src: m.src, mid: c); return true }
+        if hypot(p.x - c.x, p.y - c.y) < Ten.handleR { openLink(dst: dst, src: m.src, touchTime: f.touchTime); return true }
       }
     }
     return false
   }
 
-  // кольцо на весу: хаос-связь пользователь забирает себе (LINK), кольцо открывается у середины нити
-  private func openLink(_ f: Finger, _ p: (x: Double, y: Double), dst: Int, src: Int, mid: (x: Double, y: Double)) {
-    send(Act.link, dst, [Double(src)], touchTime: f.touchTime)
-    let rc = ringCenter(mid.x, mid.y)
-    ring = TenRing(dst: dst, src: src, cx: rc.x, cy: rc.y, gx: p.x, gy: p.y, finger: f.id)
+  private func inBoxPlate(_ p: (x: Double, y: Double), _ r: CGRect) -> Bool {
+    p.x >= r.minX - 4 && p.x <= r.maxX + 4 && p.y >= r.minY - 4 && p.y <= r.maxY + 4
+  }
+
+  // тап по ручке: связь хаоса пользователь забирает себе (LINK), открывается плашка
+  private func openLink(dst: Int, src: Int, touchTime: Double) {
+    send(Act.link, dst, [Double(src)], touchTime: touchTime)
+    ring = TenRing(dst: dst, src: src, finger: nil)
   }
 
   func linkMove(_ f: Finger) {
-    guard var r = ring, r.finger == f.id, let p = pt(f) else { return }
-    if r.pinned {                                             // ringTouch: луч выбран на касании, значение — от центра
-      guard let k = r.key else { return }
-      ringSet(k, tenClamp((hypot(p.x - r.cx, p.y - r.cy) - Ten.menuDead) / geo.menuSpan))
-      return
-    }
-    let dx = p.x - r.gx, dy = p.y - r.gy, d = hypot(dx, dy)   // menuMove: от точки, где лежал палец
-    if d < Ten.menuDead { r.overPin = true; r.key = nil; ring = r; return }
-    r.overPin = false
-    if r.key == nil && d > Ten.menuDead + 16 { r.key = sector(atan2(dy, dx)) }
-    ring = r
-    if let k = r.key { ringSet(k, tenClamp((d - Ten.menuDead) / geo.menuSpan)) }
+    guard let r = ring, r.finger == f.id, let p = pt(f) else { return }
+    setDepth(p.x)
   }
 
   func linkUp(_ f: Finger) {
     guard var r = ring, r.finger == f.id else { return }
-    r.finger = nil
-    if r.pinned {
-      if r.cutting { send(Act.unlink, r.dst, [Double(r.src)]); ring = nil } else { ring = r }
-      return
-    }
-    ring = nil
-    if r.overPin { r.pinned = true; r.cutting = false; ring = r; return }
-    if r.cutting { send(Act.unlink, r.dst, [Double(r.src)]) }
-    if linkAlive(r) { ghost = (r, now + Ten.ghost) }          // связь только что удалена — призрака нет
+    r.finger = nil; ring = r
   }
 
-  func linkCancel(_ f: Finger) {                              // система отняла палец: ничего не режем и не фиксируем
-    guard var r = ring, r.finger == f.id else { return }
-    if r.pinned { r.finger = nil; r.cutting = false; ring = r } else { ring = nil }
-  }
+  func linkCancel(_ f: Finger) { linkUp(f) }
 
   // ---------- мост ----------
 
@@ -216,8 +163,7 @@ extension TenebraeView {
   func linkTick(now: Double) {
     if let br = bridge, !voice(br.a).active || !voice(br.b).active { bridge = nil }
     if let r = ring, !linkAlive(r) { ring = nil }
-    if let g = ghost, now >= g.until || !linkAlive(g.ring) { ghost = nil }
   }
 
-  func linkReset() { bridge = nil; ring = nil; ghost = nil }
+  func linkReset() { bridge = nil; ring = nil }
 }

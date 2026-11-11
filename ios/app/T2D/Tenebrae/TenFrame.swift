@@ -26,17 +26,8 @@ extension TenebraeView {
     drawHold(p, now: now)
     drawRefusals(d, now: now)
     if bridgeDrawn != nil { drawBridge(p, d, nowMs: nowMs) }
-    let pinned = ring?.pinned ?? false
-    if let r = ring, r.pinned, sheetVoice == nil { drawRingPinned(p, d, r) }
-    if let g = ghost, now <= g.until, !pinned {                // погасшее кольцо: один слой с общей альфой, булавку ещё можно тапнуть
-      let a = 0.85 * pow(tenClamp((g.until - now) / Ten.ghost), 0.6)
-      d.g.saveGState(); d.g.setAlpha(CGFloat(a)); d.g.beginTransparencyLayer(auxiliaryInfo: nil)
-      drawRingHung(p, d, g.ring)
-      d.g.endTransparencyLayer(); d.g.restoreGState()
-    }
-    if let r = ring, !r.pinned { drawRingHung(p, d, r) }
+    if ring != nil, sheetVoice == nil { drawLinkPlate(p, d) }
     if sheetVoice != nil, let i = sheetVoice, voice(i).active { drawSheet(p, d, nowMs: nowMs); return }   // плашка открыта — после неё ничего (:1975)
-    if pinned && sheetVoice == nil { drawCloseChip(d) }
   }
 
   // ---------- поле (drawField :1738) ----------
@@ -177,14 +168,13 @@ extension TenebraeView {
         if !s.active { continue }
         if let br = bridgeDrawn?.br, br.a == dst, br.b == m.src { continue }
         let depth = tenClamp(m.depth), k = m.auto ? 0.45 : 1.0
-        let ed = ring.map { $0.pinned && $0.dst == dst && $0.src == m.src } ?? false
-        let cutting = ed && (ring?.cutting ?? false)
+        let ed = ring.map { $0.dst == dst && $0.src == m.src } ?? false
         let a = (0.15 + 0.55 * min(1, tenClamp(s.env, 0, 10) * 1.2)) * (0.4 + 0.6 * depth) * k
         let c = linkCurve(dst: dst, src: m.src)
         let pat = Ten.linkDash[m.type], per = pat.reduce(0, +)
         let ph = per > 0 ? CGFloat(((-nowMs * 0.02).truncatingRemainder(dividingBy: Double(per)) + Double(per)).truncatingRemainder(dividingBy: Double(per))) : 0
         g.setLineDash(phase: ph, lengths: pat)
-        p.line(cutting ? 0.12 : ed ? 0.9 : a, ed ? 1.5 : 1)
+        p.line(ed ? 0.9 : a, ed ? 1.5 : 1)
         p.begin(); p.move(c.x0, c.y0); p.quad(c.cx, c.cy, c.x1, c.y1); p.stroke()
         g.setLineDash(phase: 0, lengths: [])
         // поток частиц: глубже — гуще, выше источник — быстрее; у концов тают

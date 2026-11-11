@@ -274,25 +274,4 @@ extension NaturaView {
     NatArt.duck(p, D.a, nod: nod); NatArt.duck(p, D.r, nod: 0)
     NatArt.ducklings(p, G, nowMs, rel: rel)                                              // утята ближе к нам — поверх
   }
-
-  // scene.js:455-470 — четверть надгробия из левого нижнего угла: ось камня — край экрана
-  func drawStone(_ p: NatPen, nowMs: Double) {
-    let G = geo, yb = G.bot + 40, R = min(84, G.W * 0.22), top = yb - R * 1.55, sh = yb - R * 0.55
-    p.g.saveGState(); p.begin(); p.rect(0, 0, G.W, yb); p.g.clip()
-    func outline(_ d: Double) { p.move(0, top + d); p.arc(0, sh, R - d, -Double.pi / 2, 0); p.to(R - d, yb + 2) }
-    p.fillPap(1); p.begin(); outline(0); p.to(0, yb + 2); p.close(); p.fill()
-    p.line(0.95, 1.7); p.begin(); outline(0); p.stroke()
-    p.line(0.55, 0.9); p.begin(); outline(7); p.stroke()
-    NatScene.hatchIn(p, G, {
-      p.move(R * 0.7, sh); p.arc(0, sh, R, -0.75, 0); p.to(R, yb); p.to(R * 0.7, yb); p.close()
-    }, Double.pi / 2, 2.6, 0.45)
-    p.line(0.85, 2.2); p.begin()                                                          // крест — половина, по оси камня
-    p.move(1, top + R * 0.3); p.to(1, top + R * 0.95); p.move(0, top + R * 0.5); p.to(R * 0.3, top + R * 0.5); p.stroke()
-    p.line(0.55, 0.9)
-    for k in 0..<3 { let yy = top + R * (1.12 + Double(k) * 0.1); p.begin(); p.move(0, yy); p.to(R * 0.5, yy); p.stroke() }   // стёртая надпись
-    p.strokeInk(0.6); p.begin()                                                           // трещина
-    p.move(R * 0.72, top + R * 0.42); p.to(R * 0.6, top + R * 0.62); p.to(R * 0.66, top + R * 0.75); p.to(R * 0.55, top + R * 0.95); p.stroke()
-    p.g.restoreGState()
-    p.line(0.6, 0.9); NatScene.tuft(p, R + 8, yb - 2, 0.9); NatScene.tuft(p, R + 22, yb - 1, 0.7)
-  }
 }

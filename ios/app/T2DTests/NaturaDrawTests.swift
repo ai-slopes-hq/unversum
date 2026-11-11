@@ -122,7 +122,7 @@ final class NaturaDrawTests: XCTestCase {
         let img = shot { p, d in
           view.drawSun(d, nowMs: t); view.drawBirds(p, nowMs: t); view.drawFog(p, nowMs: t); view.drawRainRings(p, nowMs: t)
           view.drawPier(p, nowMs: t); view.drawBridge(p, nowMs: t); view.drawReeds(p, nowMs: t); view.drawTree(p, nowMs: t)
-          view.drawCloud(p, nowMs: t); view.drawPond(p, nowMs: t); view.drawDucks(p, nowMs: t); view.drawStone(p, nowMs: t)
+          view.drawCloud(p, nowMs: t); view.drawPond(p, nowMs: t); view.drawDucks(p, nowMs: t)
         }
         XCTAssertGreaterThan(inkPixels(img, in: CGRect(x: 0, y: 0, width: 390, height: 844)), 1000)
         let g = view.geo, b = g.river(g.bridgeT(len: len))

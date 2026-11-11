@@ -1,118 +1,45 @@
 import UIKit
 
-// Tenebrae: кольцо связи как прибор, булавка, призрак, чип close (app.js:1262-1343, 1364-1404)
+// Tenebrae: плашка связи — тип модуляции (fm tzfm am rm) и cut фишками, глубина ползунком. Как плашка планеты, в стиле для чтения
 
-private let ringLabels = Ten.linkTypes + ["cut"]
+private let linkLabels = Ten.linkTypes + ["cut"]
 
 extension TenebraeView {
-  // булавка (:1262): включённая — залитый диск с иглой цвета фона; выключенная — бумажный диск с кольцом
-  func drawPin(_ p: NatPen, _ d: Draw, _ x: Double, _ y: Double, on: Bool) {
-    let g = p.g, R = Ten.pinR
-    if on { p.fillInk(0.95) } else { p.fillPap(0.9) }
-    g.fillEllipse(in: CGRect(x: x - R, y: y - R, width: 2 * R, height: 2 * R))
-    if !on { d.ring(x, y, R, 0.8, 1.2) }
-    g.saveGState()
-    g.translateBy(x: x, y: y); g.rotate(by: .pi / 4)
-    if on { g.setFillColor(theme.bg.cgColor); g.setStrokeColor(theme.bg.cgColor) } else { p.fillInk(0.9); p.strokeInk(0.9) }
-    g.setLineWidth(1.4); g.setLineCap(.round)
-    g.fillEllipse(in: CGRect(x: -3.2, y: -6 - 3.2, width: 6.4, height: 6.4))
-    p.begin(); p.move(-5, -1.5); p.to(5, -1.5); p.move(0, -1.5); p.to(0, 9); p.stroke()
-    g.restoreGState()
-  }
-
-  // нить от сдвинутого кольца к тому, что оно правит (tether, :1331)
-  private func tether(_ p: NatPen, _ cx: Double, _ cy: Double, _ x: Double, _ y: Double) {
-    if hypot(x - cx, y - cy) <= 12 { return }
-    p.g.saveGState(); p.g.setLineDash(phase: 0, lengths: [2, 4])
-    p.line(0.5, 1); p.begin(); p.move(cx, cy); p.to(x, y); p.stroke()
-    p.g.restoreGState()
-  }
-
-  private func readoutAt(_ cx: Double, _ cy: Double) -> (x: Double, y: Double) {
-    (tenClamp(cx, 90, area.W - 90), max(geo.top + 12 + 56, cy - Ten.menuDead - geo.menuSpan - 48))   // scopeY веба — geo.top + 12 (решение 8)
-  }
-
-  // луч k, значение: cut — флаг «режем»; остальные — глубина связи, если тип совпал
-  private func ringVal(_ r: TenRing, _ m: TenMod, _ k: Int) -> Double {
-    k == 4 ? (r.cutting ? 1 : 0) : (m.type == k ? tenClamp(m.depth) : 0)
-  }
-
-  // кольцо как прибор (:1273): тонкие лучи со шкалой, значение — поперечная риска, подпись на конце луча
-  func drawRing(_ p: NatPen, _ d: Draw, _ r: TenRing, pointer: (x: Double, y: Double)?) {
-    guard let m = linkMod(r.dst, r.src), (0..<Ten.linkTypes.count).contains(m.type) else { return }
-    let g = p.g, cx = r.cx, cy = r.cy, span = geo.menuSpan, R1 = Ten.menuDead, R2 = R1 + span
-    let W = area.W, H = area.H
-    let sel: Int = r.pinned ? (r.cutting ? 4 : m.type) : (r.key ?? m.type)
-    p.fillPap(0.74)
-    g.fillEllipse(in: CGRect(x: cx - (R2 + 40), y: cy - (R2 + 40), width: 2 * (R2 + 40), height: 2 * (R2 + 40)))
-    g.saveGState(); g.setLineDash(phase: 0, lengths: [2, 5]); d.ring(cx, cy, R1, 0.4, 1); g.restoreGState()
-    d.ring(cx, cy, R2, 0.08, 1)
-    for sc in sectors {
-      let on = sel == sc.key
-      let al = on ? 1.0 : 0.4                                    // у связи луч всегда выбран (sel не nil)
-      let c = cos(sc.ang), s = sin(sc.ang), px = -s, py = c
-      p.line(al * 0.4, 1)
-      p.begin(); p.move(cx + c * R1, cy + s * R1); p.to(cx + c * R2, cy + s * R2); p.stroke()
-      p.begin()                                                  // шкала: риски каждые 10%, середина длиннее
-      for k in 1..<10 {
-        let rr = R1 + Double(k) / 10 * span, l = k == 5 ? 5.0 : 2.5
-        p.move(cx + c * rr - px * l, cy + s * rr - py * l); p.to(cx + c * rr + px * l, cy + s * rr + py * l)
+  func drawLinkPlate(_ p: NatPen, _ d: Draw) {
+    guard let r = ring, let m = linkMod(r.dst, r.src), (0..<Ten.linkTypes.count).contains(m.type) else { return }
+    let g = d.g, s = linkGeo, W = CGFloat(d.W), H = CGFloat(d.H), top = CGFloat(s.top)
+    for i in [r.dst, r.src] where voice(i).active {                // на поле — кто в связи: приёмник ярче, источник бледнее
+      let pos = screenPos(i)
+      d.ring(pos.x, pos.y, tenPlanetR(voice(i).amp) + 9, i == r.dst ? 0.85 : 0.5, 1.4)
+    }
+    d.reading {
+      g.setFillColor(d.paper(0.97)); g.fill(CGRect(x: 0, y: top, width: W, height: H - top))
+      g.setStrokeColor(d.ink(0.35)); g.setLineWidth(1)
+      g.beginPath(); g.move(to: CGPoint(x: 0, y: top + 0.5)); g.addLine(to: CGPoint(x: W, y: top + 0.5)); g.strokePath()
+      g.setFillColor(d.ink(0.3)); g.fill(CGRect(x: W / 2 - 18, y: top + 5, width: 36, height: 2))
+      let depth = tenClamp(m.depth)
+      d.mapText("link · \(tenInt(Horo.jsRound(depth * 100)))%", s.x, s.top + 27, 16, 0.95)
+      d.hairBox(s.close.minX, s.close.minY, s.close.width, s.close.height, 0.5)
+      d.text("close", s.close.midX, s.close.midY, 12, 0.85, align: .center)
+      for (k, c) in s.chips.enumerated() {
+        let on = k == m.type
+        if on { g.setFillColor(d.ink(0.12)); g.fill(c) }
+        d.hairBox(c.minX, c.minY, c.width, c.height, on ? 0.9 : 0.4)
+        d.text(linkLabels[k], c.midX, c.midY, 13, on ? 1 : 0.65, align: .center)
       }
-      p.strokeInk(al * 0.35); p.stroke()
-      let val = ringVal(r, m, sc.key)
-      if val > 0 {                                               // значение — яркая поперечная риска
-        let rr = R1 + val * span, l = on ? 10.0 : 7.0
-        p.line(al, on ? 2.5 : 1.6)
-        p.begin(); p.move(cx + c * rr - px * l, cy + s * rr - py * l); p.to(cx + c * rr + px * l, cy + s * rr + py * l); p.stroke()
+      let y = s.sliderY
+      g.setStrokeColor(d.ink(0.3)); g.setLineWidth(1)
+      g.beginPath(); g.move(to: CGPoint(x: s.tx0, y: y)); g.addLine(to: CGPoint(x: s.tx1, y: y)); g.strokePath()
+      g.setStrokeColor(d.ink(0.85)); g.setLineWidth(2)
+      let vx = s.tx0 + depth * (s.tx1 - s.tx0)
+      g.beginPath(); g.move(to: CGPoint(x: s.tx0, y: y)); g.addLine(to: CGPoint(x: vx, y: y)); g.strokePath()
+      g.setStrokeColor(d.ink(0.35)); g.setLineWidth(1); g.beginPath()
+      for k in 0...10 {
+        let x = s.tx0 + Double(k) / 10 * (s.tx1 - s.tx0), l = k % 5 == 0 ? 5.0 : 2.5
+        g.move(to: CGPoint(x: x, y: y - l)); g.addLine(to: CGPoint(x: x, y: y + l))
       }
-      let lx = tenClamp(cx + c * (R2 + 22), 30, W - 30), ly = tenClamp(cy + s * (R2 + 22), 14, H - 14)
-      d.text(ringLabels[sc.key], lx, ly, 12, al, align: .center)
+      g.strokePath()
+      d.ring(vx, y, 7, 1, 1.4)
     }
-    if let q = pointer {
-      p.line(0.5, 1); p.begin(); p.move(cx, cy); p.to(q.x, q.y); p.stroke()
-      d.dot(q.x, q.y, 3, 1)
-    }
-    let readout: String
-    if r.pinned { readout = r.cutting ? "release to cut" : "\(Ten.linkTypes[m.type]) · \(tenInt(Horo.jsRound(tenClamp(m.depth) * 100)))%" }
-    else if let k = r.key {
-      let t = k == 4 ? (r.cutting ? "release to cut" : "pull further") : "\(tenInt(Horo.jsRound(tenClamp(m.depth) * 100)))%"
-      readout = ringLabels[k] + " · " + t
-    } else { readout = "\(Ten.linkTypes[m.type]) · \(tenInt(Horo.jsRound(tenClamp(m.depth) * 100)))%" }
-    let at = readoutAt(cx, cy)
-    d.text(readout, at.x, at.y, 15, 1, align: .center)
-  }
-
-  // закреплённое кольцо связи (:1364): привязь к середине нити, ромб в центре; булавки нет
-  func drawRingPinned(_ p: NatPen, _ d: Draw, _ r: TenRing) {
-    guard linkMod(r.dst, r.src) != nil else { return }
-    let mid = linkMid(dst: r.dst, src: r.src)
-    tether(p, r.cx, r.cy, mid.x, mid.y)
-    drawRing(p, d, r, pointer: nil)
-    d.diamond(r.cx, r.cy, 6, 1, true)
-  }
-
-  // кольцо на весу (:1392): указатель — движение пальца, перенесённое в кольцо; булавка — закрепить. Призрак — тот же вид без пальца
-  func drawRingHung(_ p: NatPen, _ d: Draw, _ r: TenRing) {
-    guard linkMod(r.dst, r.src) != nil else { return }
-    let mid = linkMid(dst: r.dst, src: r.src)
-    var ptr: (x: Double, y: Double)?
-    if let id = r.finger, let f = fingers[id] { ptr = (r.cx + (f.x - r.gx), r.cy + (f.y - r.gy)) }
-    tether(p, r.cx, r.cy, mid.x, mid.y)
-    drawRing(p, d, r, pointer: r.key != nil ? ptr : nil)
-    d.diamond(r.cx, r.cy, 6, 1, true)
-    if let q = ptr, r.key == nil {                               // путь пальца, пока луч не выбран (например, к булавке)
-      p.line(0.4, 1); p.begin(); p.move(r.cx, r.cy); p.to(q.x, q.y); p.stroke()
-      d.dot(q.x, q.y, 3, 0.8)
-    }
-    if r.overPin { d.ring(r.cx, r.cy, Ten.pinR + 5, 0.35, 3); drawPin(p, d, r.cx, r.cy, on: true) }
-    else { drawPin(p, d, r.cx, r.cy, on: false) }
-  }
-
-  // чип close под закреплённым кольцом (:1338); «палец на пустоте» не рисуем: касание вне кольца закрывает его сразу
-  func drawCloseChip(_ d: Draw) {
-    let c = closeChip
-    d.g.setFillColor(d.paper(0.9)); d.g.fill(CGRect(x: c.x, y: c.y, width: c.w, height: c.h))
-    d.hairBox(c.x, c.y, c.w, c.h, 0.5)
-    d.text("close", c.x + c.w / 2, c.y + c.h / 2, 12, 0.8, align: .center)
   }
 }

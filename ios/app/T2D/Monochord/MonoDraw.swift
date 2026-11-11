@@ -106,7 +106,7 @@ extension MonochordView {
     }
     for i in 0..<MonochordView.n { sphere(d, i) }
     for i in 0..<MonochordView.n where bridgeHeld(i) { bridgeLabel(d, i) }
-    earth(d, now); hand(d)
+    earth(d, now); hand(d, now)
     aeolus(d, now)
   }
 
@@ -151,42 +151,10 @@ extension MonochordView {
     if hit > 0 { d.glowAt(E.x, E.y - E.r, 30, hit * 0.25) }
   }
 
-  // облако справа от колков, из него — рука Бога, держит колок крайней струны (view.js:173-197 drawHand)
-  private func hand(_ d: Draw) {
-    let g = d.g, G = geo, H = G.hand, hx = H.x, hy = H.y, r = H.r, K = 11, tau = MonochordView.tau
-    let px = G.xs[MonochordView.n - 1], py = G.y0 - 8, sx = hx - r * 0.75, sy = hy - r * 0.05   // рука: рукав из облака к колку, манжета, кисть
-    let ax = px + 22, ay = py + 2, nx = -(ay - sy), ny = ax - sx, nl = hypot(nx, ny), ux = nx / nl, uy = ny / nl, wv: CGFloat = 6
-    let mx = (sx + ax) / 2 + 10, my = (sy + ay) / 2 + 4
-    g.setLineWidth(1); g.setStrokeColor(d.ink(0.8)); g.setFillColor(theme.bg.cgColor)
-    g.beginPath(); g.move(to: CGPoint(x: sx + ux * wv, y: sy + uy * wv))
-    g.addQuadCurve(to: CGPoint(x: ax + ux * wv * 0.7, y: ay + uy * wv * 0.7), control: CGPoint(x: mx + ux * wv, y: my + uy * wv))
-    g.addLine(to: CGPoint(x: ax - ux * wv * 0.7, y: ay - uy * wv * 0.7))
-    g.addQuadCurve(to: CGPoint(x: sx - ux * wv, y: sy - uy * wv), control: CGPoint(x: mx - ux * wv, y: my - uy * wv))
-    g.closePath(); g.drawPath(using: .fillStroke)
-    g.beginPath(); g.move(to: CGPoint(x: ax + ux * wv * 0.9, y: ay + uy * wv * 0.9)); g.addLine(to: CGPoint(x: ax - ux * wv * 0.9, y: ay - uy * wv * 0.9)); g.strokePath()   // манжета
-    g.saveGState(); g.translateBy(x: px + 13, y: py + 2); g.rotate(by: 0.3)                    // кисть — эллипс под 0.3
-    g.addEllipse(in: CGRect(x: -8, y: -6, width: 16, height: 12)); g.drawPath(using: .fillStroke); g.restoreGState()
-    g.setStrokeColor(d.ink(0.85)); g.beginPath()                                                // пальцы на колке
-    for k in 0..<3 {
-      let y = py - 2 + CGFloat(k) * 3
-      g.move(to: CGPoint(x: px + 8, y: y)); g.addQuadCurve(to: CGPoint(x: px - 3, y: y + 1), control: CGPoint(x: px + 1, y: y - 2.5))
-    }
-    g.strokePath()
-    // облако: 11 точек на эллипсе с «дыханием» радиуса; контур — дуги-«фестоны» к точке, выдвинутой от центра (push)
-    func pt(_ k: Int, _ sc: CGFloat, _ dy: CGFloat) -> CGPoint {
-      let a = CGFloat(k) / CGFloat(K) * tau, q = 1 + 0.12 * sin(CGFloat(k) * 2.7)
-      return CGPoint(x: hx + (cos(a) * r * q) * sc, y: hy + (sin(a) * r * 0.62 * q) * sc + dy)
-    }
-    func scallop(_ sc: CGFloat, _ dy: CGFloat, _ push: CGFloat) {
-      g.beginPath(); g.move(to: pt(0, sc, dy))
-      for k in 0..<K {
-        let p0 = pt(k, sc, dy), p1 = pt((k + 1) % K, sc, dy), mx = (p0.x + p1.x) / 2, my = (p0.y + p1.y) / 2
-        g.addQuadCurve(to: p1, control: CGPoint(x: hx + (mx - hx) * push, y: hy + (my - hy) * push))
-      }
-      g.closePath()
-    }
-    g.setStrokeColor(d.ink(0.8)); g.setFillColor(theme.bg.cgColor); scallop(1, 0, 1.55); g.drawPath(using: .fillStroke)
-    g.setStrokeColor(d.ink(0.18)); scallop(0.6, r * 0.1, 1.4); g.strokePath()
+  // солнце справа от колков (как на карте и в Cymatica-стиле гравюры): тап ведёт на карту
+  private func hand(_ d: Draw, _ now: Double) {
+    let H = geo.hand
+    d.sunGlyph(H.x, H.y, 0, MonochordView.tau, scale: H.r / 55, now: now * 1000)
   }
 
   // роза ветров, как на старых картах: с ветром крутится и дует струями на струны (view.js:198-242 drawAeolus)
