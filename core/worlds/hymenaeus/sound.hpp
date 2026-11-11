@@ -1,5 +1,6 @@
 // Hymenaeus — звук: три кольца (Plucker → Resonator из rings/) в сумму и облака (Cloud). Всё в блоках; мир (world.hpp) решает, когда бить.
 //   кольцо i: щипок (strike) возбуждает резонатор; odd-моды — в левый канал, even — в правый; уровень кольца lvl.
+//   mix: сухая сумма колец ×dry, выход облаков и посыл в общий ревербер ×wet (при 0.5 оба 1).
 //   сумма колец идёт в облака (пишется в буфер) и сухим выходом; облака — отдельной долей clevel. Выход — мягкое колено (потолок 1).
 // Режим кольца (MODE): modal — Resonator (щипок возбуждает банк мод); strings — sympathetic strings Rings: до 8 струн на кольцо,
 //   главная струна (0) на ноте удара, остальные звенят от неё сочувственно, их строй ведёт structure (развёртка = глайд).
@@ -25,6 +26,7 @@ class Sound {
   void prepare(double sr, uint32_t seed);
   // зажимается; mode — доля 0…1 (modeOf), poly — доля 0…1 (polyOf); без изменений — ничего не пересчитывает
   void setRing(int i, double structure, double bright, double damp, double lvl, double mode = 0, double poly = 0);
+  void setMix(double m);                                 // 0…1 (0.5 — как без mix): сухое = min(1, 2(1−m)), влажное (облака и посыл в ревербер) = min(1, 2m)
   void setCloud(const double* c);                                                  // NCK значений CloudKey
   void strike(int ring, double hz, double pos, double vel);
   // n ≤ BLOCK сэмплов: пишет L, R (сухо) и sL, sR (посыл) — присваивает, не прибавляет
@@ -42,7 +44,7 @@ class Sound {
   rings::Plucker pl_[NR][VOICES];
   rings::String str_[NR][STRINGS];                       // голос v, струна s — str_[r][v + s·polyS_[r]]
   Cloud cloud_;
-  double structure_[NR] = {}, bright_[NR] = {}, damp_[NR] = {}, lvl_[NR] = {}, pos_[NR] = {}, send_ = 0.35, clevel_ = 0.6, env_[NR] = {}, cenv_ = 0;
+  double structure_[NR] = {}, bright_[NR] = {}, damp_[NR] = {}, lvl_[NR] = {}, pos_[NR] = {}, send_ = 0.35, clevel_ = 0.6, dry_ = 1, wet_ = 1, env_[NR] = {}, cenv_ = 0;
   double note_[NR][VOICES] = {}, lfo_[NR][STRINGS] = {};   // нота голоса (полутона MIDI); фаза LFO положения сочувственных струн
   float dcx_[NR][VOICES] = {}, dcy_[NR][VOICES] = {};      // DC-блокер входа струн
   int pluckLeft_[NR][VOICES] = {};                       // сколько сэмплов ещё гонять щипок (хвост гребёнки)

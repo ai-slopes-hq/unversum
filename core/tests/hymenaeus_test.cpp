@@ -3,7 +3,9 @@
 #include <chrono>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <functional>
+#include <new>
 #include <string>
 #include <vector>
 
@@ -632,7 +634,7 @@ static void worldSilentWhenStopped() {
 static void worldStepsInTime() {
   Scale sc; auto& w = theWorld(sc);
   act(w, hymenaeus::THREAD, 0, {0, 1});                                   // déjà vu 1
-  for (int i = 0; i < hymenaeus::PEARL_MAX; i++) act(w, hymenaeus::PEARL, i, {1, 0});   // ни одной паузы
+  for (int i = 0; i < hymenaeus::PEARL_MAX; i++) act(w, hymenaeus::PEARL, i, {0, 1, 0});   // ни одной паузы
   act(w, hymenaeus::BPM, 0, {120}); act(w, hymenaeus::RUN, 0, {1});
   double rg[8] = {};
   const WRun r = runWorld(w, 4 * 48000 / 128, nullptr, rg);
@@ -708,7 +710,7 @@ static void worldBudget() {
   act(w, hymenaeus::CLOUD, 0, {2, 1}); act(w, hymenaeus::CLOUD, 0, {1, 1}); act(w, hymenaeus::CLOUD, 0, {5, 0.8});
   act(w, hymenaeus::BPM, 0, {300}); act(w, hymenaeus::RUN, 0, {1});
   for (int r = 0; r < NR; r++) act(w, hymenaeus::RING, r, {2, 0.1});       // damping 0.1: звенят долго
-  for (int i = 0; i < hymenaeus::PEARL_MAX; i++) act(w, hymenaeus::PEARL, i, {1, 0});
+  for (int i = 0; i < hymenaeus::PEARL_MAX; i++) act(w, hymenaeus::PEARL, i, {0, 1, 0});
   runWorld(w, 48000 * 2 / 128);                                            // разогнать
   const int blocks = 48000 * 4 / 128;
   const auto t0 = std::chrono::steady_clock::now();
@@ -889,16 +891,181 @@ static void soundModeSwitchLive() {
   CHECK(bo <= in * 1.5 + 1e-4);
 }
 
-static void worldMirrorSize() {
-  CHECK(MIRROR_RING == 7); CHECK(MIRROR_N == 5 + 32 + NR * 7 + NCK + 1); CHECK(MIRROR_N == 60);
-  Scale sc; auto& w = theWorld(sc);
-  act(w, hymenaeus::RING, 1, {4, 0.5});
-  double m[MIRROR_N]; CHECK(w.mirror(m, MIRROR_N) == MIRROR_N);
-  const int base = 5 + 32 + 1 * 7;
-  CHECK(m[base + 4] == 1); CHECK(m[base + 5] == 0.5); CHECK(m[base + 6] == 0);          // mode (временно: номер кольца), poly, energy
-  act(w, hymenaeus::RING, 1, {5, 1}); CHECK(w.mirror(m, MIRROR_N) == MIRROR_N); CHECK(m[base + 5] == 0.5);   // ключ 5 вне диапазона
-  act(w, sdk::ACT_LFO, -1, {double(NRK + 4), 0.75});                                  // LFO-ключ кольца 1, POLY
-  w.mirror(m, MIRROR_N); CHECK(m[base + 5] == 0.75);
+// ---------- Task 4 (two rings): Act, mix, зеркало ----------
+
+// эталонный сценарий: seed 5, bpm 240, оба кольца бьются нитями, облака с эхом; 1 с (375 блоков)
+struct MixRef { double peakL = 0, peakR = 0, rmsL = 0, rmsR = 0, peakS = 0; bool finite = true; };
+static MixRef mixScenario(hymenaeus::World& w, int blocks) {
+  static float L[128], R[128], sL[128], sR[128];
+  sdk::Out out{L, R, sL, sR};
+  MixRef r; double eL = 0, eR = 0;
+  for (int b = 0; b < blocks; b++) {
+    w.process(out, 128);
+    for (int i = 0; i < 128; i++) {
+      for (float x : {L[i], R[i], sL[i], sR[i]}) if (!std::isfinite(x)) r.finite = false;
+      r.peakL = std::max(r.peakL, double(std::fabs(L[i]))); r.peakR = std::max(r.peakR, double(std::fabs(R[i])));
+      r.peakS = std::max(r.peakS, double(std::max(std::fabs(sL[i]), std::fabs(sR[i]))));
+      eL += double(L[i]) * L[i]; eR += double(R[i]) * R[i];
+    }
+  }
+  r.rmsL = std::sqrt(eL / (blocks * 128.0)); r.rmsR = std::sqrt(eR / (blocks * 128.0));
+  return r;
+}
+static void mixSetup(hymenaeus::World& w) {
+  act(w, hymenaeus::BPM, 0, {240}); act(w, hymenaeus::RUN, 0, {1});
+  act(w, hymenaeus::CLOUD, 0, {5, 0.6}); act(w, hymenaeus::CLOUD, 0, {2, 0.7});
+}
+
+// Эталон снят с коммита 99105d1 (до Task 4: звук без mix) сценарием mixSetup + 375 блоков, seed 5 (theWorld(sc, 5))
+static const MixRef MIX_REF = {0.992462575, 0.996800303, 0.167876728, 0.181552131, 0.348880112, true};
+
+static std::vector<double> mirrorOf(hymenaeus::World& w) { std::vector<double> m(MIRROR_N + 4, -777); CHECK(w.mirror(m.data(), MIRROR_N) == MIRROR_N); return m; }
+// смещения зеркала (см. world.hpp)
+constexpr int M_RUN = 0, M_BPM = 1, M_LOC = 2, M_MIX = 3, M_CUR = 4, M_LEN = 6, M_DEJAVU = 8, M_LO = 10, M_HI = 12, M_PEARL = 14,
+              M_RING = M_PEARL + 2 * 2 * PEARL_MAX, M_CLOUD = M_RING + NR * 6, M_CENV = M_CLOUD + NCK;
+
+static void worldActRouting() {
+  CHECK(hymenaeus::RING == 0 && hymenaeus::CLOUD == 1 && hymenaeus::PEARL == 2 && hymenaeus::STRIKE == 3 && hymenaeus::THREAD == 4 && hymenaeus::DICE == 5
+        && hymenaeus::CLEAR == 6 && hymenaeus::RUN == 7 && hymenaeus::BPM == 8 && hymenaeus::TIMBRE == 9 && hymenaeus::LOC == 10 && hymenaeus::MIX == 11);
+  Scale sc; auto& w = theWorld(sc, 3);
+  act(w, hymenaeus::THREAD, 1, {2, 50}); CHECK(w.model().thread(1).lo == 50 && w.model().thread(0).lo == 45);
+  act(w, hymenaeus::THREAD, 1, {3, 80}); CHECK(w.model().thread(1).hi == 80);
+  act(w, hymenaeus::THREAD, 0, {0, 0.25}); CHECK(w.model().thread(0).dejavu == 0.25 && w.model().thread(1).dejavu != 0.25);
+  act(w, hymenaeus::THREAD, 1, {1, 4}); CHECK(w.model().thread(1).len == 4 && w.model().thread(0).len == PEARL_DEF);
+  act(w, hymenaeus::PEARL, 3, {1, 0, 0.77}); CHECK(w.model().thread(1).p[3].pitch == 0.77 && w.model().thread(0).p[3].pitch != 0.77);
+  act(w, hymenaeus::PEARL, 3, {1, 1, 1}); CHECK(w.model().thread(1).p[3].rest);
+  act(w, hymenaeus::PEARL, 3, {1, 1, 0}); CHECK(!w.model().thread(1).p[3].rest);
+  act(w, hymenaeus::PEARL, 2, {0, 1, 1}); CHECK(w.model().thread(0).p[2].rest);
+  act(w, hymenaeus::RING, 1, {0, 0.1}); CHECK(w.model().ring(1, STRUCT) == 0.1);
+  act(w, hymenaeus::CLOUD, 0, {3, 0.9}); CHECK(w.model().cloud(PITCH) == 0.9);
+  act(w, hymenaeus::MIX, 0, {0.8}); CHECK(w.model().mix() == 0.8);
+  act(w, hymenaeus::LOC, 0, {2}); CHECK(w.model().loc() == 2);
+  act(w, hymenaeus::LOC, 0, {9}); CHECK(w.model().loc() == 2);
+  act(w, hymenaeus::BPM, 0, {120}); act(w, hymenaeus::RUN, 0, {1});
+  { auto m = mirrorOf(w); CHECK(m[M_RUN] == 1 && m[M_BPM] == 120 && m[M_LOC] == 2 && m[M_MIX] == 0.8); }
+  const double rs0 = w.model().ring(0, STRUCT), cs0 = w.model().cloud(POS), cur = w.model().ring(1, LVL), lvl = w.model().ring(0, LVL), snd = w.model().cloud(SEND);
+  act(w, hymenaeus::TIMBRE, 0, {});
+  CHECK(w.model().ring(0, STRUCT) != rs0 || w.model().cloud(POS) != cs0);
+  CHECK(w.model().ring(1, LVL) == cur && w.model().ring(0, LVL) == lvl && w.model().cloud(SEND) == snd);
+  act(w, hymenaeus::CLEAR, 0, {}); CHECK(!w.model().sounding());
+  // неверные индексы и аргументы — тихо игнорируются
+  const std::string before = w.model().snapshot();
+  act(w, hymenaeus::PEARL, 99, {0, 0, 1}); act(w, hymenaeus::PEARL, -1, {0, 0, 1}); act(w, hymenaeus::PEARL, 1, {2, 0, 1}); act(w, hymenaeus::PEARL, 1, {-1, 1, 1});
+  act(w, hymenaeus::PEARL, 1, {0, 5, 1}); act(w, hymenaeus::PEARL, 1, {0, 0}); act(w, hymenaeus::PEARL, 1, {0, 0, NAN});
+  act(w, hymenaeus::THREAD, 2, {2, 50}); act(w, hymenaeus::THREAD, -1, {2, 50}); act(w, hymenaeus::THREAD, 0, {9, 1}); act(w, hymenaeus::THREAD, 0, {2, NAN});
+  act(w, hymenaeus::LOC, 0, {-1}); act(w, hymenaeus::LOC, 0, {NAN}); act(w, hymenaeus::LOC, 0, {}); act(w, hymenaeus::MIX, 0, {NAN}); act(w, hymenaeus::MIX, 0, {});
+  CHECK(w.model().snapshot() == before);
+}
+
+static void worldDiceBothOrOne() {
+  Scale sc; auto& w = theWorld(sc, 4);
+  const Pearl a0 = w.model().thread(0).p[0], b0 = w.model().thread(1).p[0];
+  act(w, hymenaeus::DICE, 0, {0});
+  CHECK(w.model().thread(0).p[0].pitch != a0.pitch); CHECK(w.model().thread(1).p[0].pitch == b0.pitch);
+  const Pearl a1 = w.model().thread(0).p[0];
+  act(w, hymenaeus::DICE, 0, {1});
+  CHECK(w.model().thread(0).p[0].pitch == a1.pitch); CHECK(w.model().thread(1).p[0].pitch != b0.pitch);
+  const Pearl a2 = w.model().thread(0).p[0], b2 = w.model().thread(1).p[0];
+  act(w, hymenaeus::DICE, 0, {-1});
+  CHECK(w.model().thread(0).p[0].pitch != a2.pitch && w.model().thread(1).p[0].pitch != b2.pitch);
+  const Pearl a3 = w.model().thread(0).p[0], b3 = w.model().thread(1).p[0];
+  act(w, hymenaeus::DICE, 0, {});
+  CHECK(w.model().thread(0).p[0].pitch != a3.pitch && w.model().thread(1).p[0].pitch != b3.pitch);
+  const std::string s = w.model().snapshot();
+  act(w, hymenaeus::DICE, 0, {2}); act(w, hymenaeus::DICE, 0, {99}); act(w, hymenaeus::DICE, 0, {-5}); act(w, hymenaeus::DICE, 0, {NAN}); act(w, hymenaeus::DICE, 0, {INFINITY}); act(w, hymenaeus::DICE, 0, {-INFINITY});
+  CHECK(w.model().snapshot() == s);                                        // вне диапазона — ничего (ни одной нити, ни обеих)
+}
+
+static void worldMixSignal() {
+  Scale sc;
+  { auto& w = theWorld(sc, 5); mixSetup(w); act(w, hymenaeus::MIX, 0, {0.5});     // 0.5 — как до изменения
+    const MixRef r = mixScenario(w, 375);
+    CHECK(r.finite);
+    CHECK(std::fabs(r.peakL - MIX_REF.peakL) < 1e-4 && std::fabs(r.peakR - MIX_REF.peakR) < 1e-4);
+    CHECK(std::fabs(r.rmsL - MIX_REF.rmsL) < 1e-4 && std::fabs(r.rmsR - MIX_REF.rmsR) < 1e-4);
+    CHECK(std::fabs(r.peakS - MIX_REF.peakS) < 1e-4); }
+  { auto& w = theWorld(sc, 5); mixSetup(w); act(w, hymenaeus::MIX, 0, {0});        // 0: облаков нет, сухое то же
+    const MixRef r0 = mixScenario(w, 375);
+    CHECK(r0.finite && r0.rmsL > 0.01);
+    CHECK(r0.peakL <= MIX_REF.peakL + 1e-3 || r0.rmsL <= MIX_REF.rmsL + 1e-3); }
+  { auto& w = theWorld(sc, 5); mixSetup(w); act(w, hymenaeus::MIX, 0, {1});        // 1: сухого нет, звучат облака
+    const MixRef r1 = mixScenario(w, 375);
+    CHECK(r1.finite); CHECK(r1.rmsL < MIX_REF.rmsL); }
+  // чистая проверка: облака без входа → при mix 0 ровно сухое; сухое в mix 1 = 0 пока облака пусты
+  { auto& w = theWorld(sc, 5); mixSetup(w); act(w, hymenaeus::MIX, 0, {1}); act(w, hymenaeus::CLOUD, 0, {6, 0});   // CLEVEL 0 и mix 1 → полная тишина
+    act(w, hymenaeus::CLOUD, 0, {7, 0});
+    const MixRef r = mixScenario(w, 100); CHECK(r.peakL == 0 && r.peakR == 0 && r.peakS == 0); }
+  { auto& w = theWorld(sc, 5); mixSetup(w); act(w, hymenaeus::MIX, 0, {0}); act(w, hymenaeus::CLOUD, 0, {6, 1}); act(w, hymenaeus::CLOUD, 0, {7, 1});
+    const MixRef rA = mixScenario(w, 375);
+    auto& w2 = theWorld(sc, 5); mixSetup(w2); act(w2, hymenaeus::MIX, 0, {0}); act(w2, hymenaeus::CLOUD, 0, {6, 0}); act(w2, hymenaeus::CLOUD, 0, {7, 0});
+    const MixRef rB = mixScenario(w2, 375);
+    CHECK(std::fabs(rA.rmsL - rB.rmsL) < 1e-6 && std::fabs(rA.peakL - rB.peakL) < 1e-6); }   // mix 0: облака (clevel, send) на выход не влияют
+}
+
+static void worldMixNoNaN() {
+  Scale sc;
+  for (double v : {0.0, 1.0, 0.5, -3.0, 9.0, double(NAN), double(INFINITY), -double(INFINITY)}) {
+    auto& w = theWorld(sc, 6); mixSetup(w); act(w, hymenaeus::MIX, 0, {v});
+    const MixRef r = mixScenario(w, 200);
+    CHECK(r.finite); CHECK(r.peakL <= 1.0 + 1e-6 && r.peakR <= 1.0 + 1e-6);
+    const double mx = w.model().mix(); CHECK(mx >= 0 && mx <= 1);
+  }
+}
+
+// считает операторы new/delete в аудио-блоке
+static long gAllocs = 0; static bool gCount = false;
+void* operator new(std::size_t n) { if (gCount) gAllocs++; void* p = std::malloc(n ? n : 1); if (!p) throw std::bad_alloc(); return p; }
+void operator delete(void* p) noexcept { std::free(p); }
+void operator delete(void* p, std::size_t) noexcept { std::free(p); }
+
+static void worldNoAllocInProcess() {
+  Scale sc; auto& w = theWorld(sc, 5); mixSetup(w); act(w, hymenaeus::MIX, 0, {0.3}); act(w, hymenaeus::LOC, 0, {1}); act(w, hymenaeus::RING, 1, {4, 1});
+  runWorld(w, 4);
+  static float L[128], R[128], sL[128], sR[128]; sdk::Out out{L, R, sL, sR};
+  double hb[64];
+  gAllocs = 0; gCount = true;
+  for (int b = 0; b < 400; b++) {
+    if (b == 100) { const double a[1] = {0.9}; w.action(hymenaeus::MIX, 0, a, 1); }
+    w.process(out, 128); w.heard(hb, 64);
+  }
+  gCount = false;
+  CHECK(gAllocs == 0);
+}
+
+static void worldMirrorLayout() {
+  CHECK(hymenaeus::MIRROR_HEAD == 14); CHECK(hymenaeus::MIRROR_RING == 6);
+  CHECK(MIRROR_N == 14 + 2 * 2 * 16 + 2 * 6 + 8 + 1); CHECK(MIRROR_N == 99);
+  CHECK(M_CENV == MIRROR_N - 1);
+  Scale sc; auto& w = theWorld(sc, 8);
+  act(w, hymenaeus::MIX, 0, {0.25}); act(w, hymenaeus::LOC, 0, {3});
+  act(w, hymenaeus::THREAD, 1, {1, 6}); act(w, hymenaeus::THREAD, 1, {0, 0.33}); act(w, hymenaeus::THREAD, 0, {2, 40}); act(w, hymenaeus::THREAD, 0, {3, 70});
+  act(w, hymenaeus::PEARL, 4, {1, 0, 0.6}); act(w, hymenaeus::PEARL, 5, {1, 1, 1}); act(w, hymenaeus::RING, 1, {1, 0.42}); act(w, hymenaeus::CLOUD, 0, {7, 0.12});
+  const auto m = mirrorOf(w);
+  const Model& md = w.model();
+  CHECK(m[M_LOC] == 3 && m[M_MIX] == 0.25);
+  for (int t = 0; t < NR; t++) {
+    CHECK(m[M_CUR + t] == md.thread(t).cur); CHECK(m[M_LEN + t] == md.thread(t).len); CHECK(m[M_DEJAVU + t] == md.thread(t).dejavu);
+    CHECK(m[M_LO + t] == md.thread(t).lo); CHECK(m[M_HI + t] == md.thread(t).hi);
+    for (int i = 0; i < PEARL_MAX; i++) { CHECK(m[M_PEARL + t * 2 * PEARL_MAX + 2 * i] == md.thread(t).p[i].pitch); CHECK(m[M_PEARL + t * 2 * PEARL_MAX + 2 * i + 1] == md.thread(t).p[i].rest); }
+  }
+  CHECK(m[M_LEN + 1] == 6 && m[M_DEJAVU + 1] == 0.33 && m[M_LO] == 40 && m[M_HI] == 70);
+  CHECK(m[M_PEARL + 2 * PEARL_MAX + 8] == 0.6 && m[M_PEARL + 2 * PEARL_MAX + 9] == 0 && m[M_PEARL + 2 * PEARL_MAX + 11] == 1);
+  CHECK(m[M_RING + 6 + 1] == 0.42);                                      // кольцо 1, bright
+  CHECK(m[M_CLOUD + SEND] == 0.12);
+  for (int k = 0; k < MIRROR_N; k++) CHECK(std::isfinite(m[k]));
+  CHECK(m[MIRROR_N] == -777);                                            // за пределы не пишет
+}
+
+static void worldLfoKeys() {
+  Scale sc; auto& w = theWorld(sc, 2);
+  act(w, sdk::ACT_LFO, -1, {5, 0.4}); CHECK(w.model().ring(1, STRUCT) == 0.4 && w.model().ring(0, STRUCT) != 0.4);   // key 5 → кольцо 1, ключ 0
+  act(w, sdk::ACT_LFO, -1, {9, 0.6}); CHECK(w.model().ring(1, POLY) == 0.6);
+  act(w, sdk::ACT_LFO, -1, {3, 0.2}); CHECK(w.model().ring(0, LVL) == 0.2);
+  act(w, sdk::ACT_LFO, -1, {10, 0.9}); CHECK(w.model().cloud(POS) == 0.9);                                        // 10 → облако POS
+  act(w, sdk::ACT_LFO, -1, {17, 0.15}); CHECK(w.model().cloud(SEND) == 0.15);
+  const std::string s = w.model().snapshot();
+  act(w, sdk::ACT_LFO, -1, {18, 0.5}); act(w, sdk::ACT_LFO, -1, {-1, 0.5}); act(w, sdk::ACT_LFO, 0, {5, 0.5}); act(w, sdk::ACT_LFO, -1, {NAN, 0.5});
+  CHECK(w.model().snapshot() == s);
 }
 
 int main() {
@@ -910,7 +1077,7 @@ int main() {
   cloudSilentIn(); cloudEchoesInput(); cloudFreezeHolds(); cloudFreezeEmpty(); cloudEchoDecays(); cloudNoNan(); cloudDensityBounded(); cloudSleepsAgain();
   worldSilentWhenStopped(); worldStepsInTime(); worldStrikeSounds(); worldNoStepFlood(); worldStopNoStuck(); worldSnapshotRoundTrip();
   worldGarbageActions(); worldBudget(); worldBothRingsStep(); worldClearSilences();
-  modelRingModePoly(); soundStringsSound(); soundStructureGlide(); soundPolyVoices(); soundPolyStrings(); soundModeSwitchLive(); worldMirrorSize();
+  modelRingModePoly(); soundStringsSound(); soundStructureGlide(); soundPolyVoices(); soundPolyStrings(); soundModeSwitchLive(); worldActRouting(); worldDiceBothOrOne(); worldMixSignal(); worldMixNoNaN(); worldNoAllocInProcess(); worldMirrorLayout(); worldLfoKeys();
   std::printf("hymenaeus-test: %d checks, %d failed\n", checks, fails);
   return fails ? 1 : 0;
 }

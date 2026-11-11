@@ -23,7 +23,7 @@ void Sound::prepare(double sr, uint32_t seed) {
     mode_[i] = 0; poly_[i] = polyS_[i] = 1; next_[i] = 0; strActive_[i] = false;
   }
   cloud_.prepare(sr_, seed + 101);
-  send_ = 0.35; clevel_ = 0.6; cenv_ = 0;
+  send_ = 0.35; clevel_ = 0.6; cenv_ = 0; dry_ = wet_ = 1;
 }
 
 void Sound::setRing(int i, double structure, double bright, double damp, double lvl, double mode, double poly) {
@@ -34,6 +34,12 @@ void Sound::setRing(int i, double structure, double bright, double damp, double 
   lvl_[i] = c01(lvl, lvl_[i]);
   if (!std::isnan(mode)) mode_[i] = mode >= 0.5 ? 1 : 0;
   if (!std::isnan(poly)) poly_[i] = polyOf(poly);
+}
+
+void Sound::setMix(double m) {
+  if (!std::isfinite(m)) { if (std::isnan(m)) return; m = m > 0 ? 1 : 0; }
+  m = std::min(std::max(m, 0.0), 1.0);
+  dry_ = std::min(1.0, 2.0 * (1.0 - m)); wet_ = std::min(1.0, 2.0 * m);
 }
 
 void Sound::setCloud(const double* c) {
@@ -163,11 +169,11 @@ void Sound::render(float* L, float* R, float* sL, float* sR, int n) {
     cloud_.write(mixL[k], mixR[k]);
     float cl, cr; cloud_.process(cl, cr);
     cpk = std::max(cpk, std::max(std::fabs(cl), std::fabs(cr)));
-    const double l = knee_(mixL[k] + cl * clevel_), r = knee_(mixR[k] + cr * clevel_);
+    const double l = knee_(mixL[k] * dry_ + cl * clevel_ * wet_), r = knee_(mixR[k] * dry_ + cr * clevel_ * wet_);
     L[k] = static_cast<float>(l); R[k] = static_cast<float>(r);
-    sL[k] = static_cast<float>(l * send_); sR[k] = static_cast<float>(r * send_);
+    sL[k] = static_cast<float>(l * send_ * wet_); sR[k] = static_cast<float>(r * send_ * wet_);
   }
-  cenv_ = std::max(static_cast<double>(cpk * clevel_), cenv_ * std::pow(0.999, n));
+  cenv_ = std::max(static_cast<double>(cpk * clevel_ * wet_), cenv_ * std::pow(0.999, n));
   if (cenv_ < 1e-5) cenv_ = 0;
 }
 

@@ -1,13 +1,20 @@
-// Hymenaeus (XIV) — мир SDK: нить жемчужин (model.hpp) бьёт по трём кольцам (rings/), звон уходит в облака (cloud.hpp) и в общий ревербер.
+// Hymenaeus (XIV) — мир SDK: две нити жемчужин (model.hpp) бьют по двум кольцам (rings/; нить t — кольцо t), звон уходит в облака (cloud.hpp) и в общий ревербер.
 // Шаги нити — восьмые от своего темпа (bpm 20…300, по умолчанию 90) или по сетке MIDI-часов хоста; не больше MAX_EV шагов за блок.
 //
 // action(kind, i, a, n):
-//   RING i = кольцо, a = [RingKey (STRUCT BRIGHT DAMP LVL MODE POLY), v];  CLOUD a = [CloudKey, v];  PEARL i = жемчужина, a = [0 высота | 1 пауза, v];
-//   STRIKE i = кольцо, a = [место удара 0…1, сила 0…1] (по умолчанию 1) — ручной удар;  THREAD a = [0 déjà vu | 1 длина, v];
-//   DICE, CLEAR;  RUN a = [on];  BPM a = [bpm];
-//   ACT_LFO (i == -1) a = [key, v]: key 0…NR·NRK−1 — кольцо key / NRK, ключ key % NRK; затем CloudKey (key − NR·NRK)
-// Зеркало (MIRROR_N): run, bpm, dejavu, len, cursor; PEARL_MAX × (высота, пауза); NR × (struct, bright, damp, lvl, mode, poly, энергия); NCK облаков; энергия облаков.
-// heard: [k, (кольцо, жемчужина) × k]; жемчужина −1 — ручной удар.
+//   RING i = кольцо, a = [RingKey (STRUCT BRIGHT DAMP LVL POLY), v];  CLOUD a = [CloudKey, v];  STRIKE i = кольцо, a = [место удара 0…1, сила 0…1] (по умолчанию 1) — ручной удар;
+//   PEARL i = жемчужина, a = [нить, 0 высота | 1 пауза, v];  THREAD i = нить, a = [0 déjà vu | 1 длина | 2 lo | 3 hi (ноты MIDI), v];
+//   DICE a = [нить] (пусто или −1 — обе нити; вне диапазона — ничего);  TIMBRE — тембр колец и облаков случайно (ноты не трогает);  CLEAR — очистить всё;
+//   LOC a = [слот 0…3];  MIX a = [0…1];  RUN a = [on];  BPM a = [bpm];
+//   ACT_LFO (i == -1) a = [key, v]: key 0…NR·NRK−1 — кольцо key / NRK, ключ key % NRK (кольцо 1, ключ 0 = 5); затем 10 + CloudKey (POS = 10)
+//   Act-номера зеркалит Swift (ActNumbers): порядок enum Act менять нельзя.
+// Зеркало (MIRROR_N = 99 чисел), порядок:
+//   [0] run  [1] bpm  [2] loc  [3] mix
+//   [4..5] cursor нитей  [6..7] len  [8..9] dejavu  [10..11] lo  [12..13] hi          (MIRROR_HEAD = 14; по полю на все нити)
+//   [14..77] жемчужины: нить 0 — PEARL_MAX × (высота, пауза), затем нить 1 (2 × PEARL_MAX × 2 = 64)
+//   [78..89] кольца: NR × (struct, bright, damp, lvl, poly, энергия)                   (MIRROR_RING = 6)
+//   [90..97] облака: NCK значений CloudKey  [98] энергия облаков
+// heard: [k, (кольцо, жемчужина) × k]; кольцо = нить, жемчужина −1 — ручной удар.
 #pragma once
 #include "../../sdk/transport.hpp"
 #include "../../sdk/world.hpp"
@@ -16,8 +23,8 @@
 
 namespace hymenaeus {
 
-enum Act { RING, CLOUD, PEARL, STRIKE, THREAD, DICE, CLEAR, RUN, BPM };
-constexpr int MIRROR_HEAD = 5, MIRROR_RING = 7, MIRROR_N = MIRROR_HEAD + 2 * PEARL_MAX + NR * MIRROR_RING + NCK + 1;
+enum Act { RING, CLOUD, PEARL, STRIKE, THREAD, DICE, CLEAR, RUN, BPM, TIMBRE, LOC, MIX };
+constexpr int MIRROR_HEAD = 14, MIRROR_RING = 6, MIRROR_N = MIRROR_HEAD + NR * 2 * PEARL_MAX + NR * MIRROR_RING + NCK + 1;
 constexpr int MAX_EV = 4, HEARD_MAX = 32;
 
 class World : public sdk::World {

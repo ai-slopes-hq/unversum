@@ -25,11 +25,14 @@ void World::action(int kind, int i, const double* a, int n) {
   switch (kind) {
     case RING: if (has(2)) model_.setRing(i, keyOf(a[0]), a[1]); break;
     case CLOUD: if (has(2)) model_.setCloud(keyOf(a[0]), a[1]); break;
-    case PEARL:
-      if (!has(2)) break;
-      if (keyOf(a[0]) == 0) model_.setPearlPitch(0, i, a[1]);       // временно: нить 0 (Task 4)
-      else if (keyOf(a[0]) == 1 && !std::isnan(a[1])) model_.setRest(0, i, a[1] != 0);
+    case PEARL: {                                              // i = жемчужина, a = [нить, 0 высота | 1 пауза, v]
+      if (!has(3) || i < 0 || i >= PEARL_MAX) break;
+      const int t = keyOf(a[0]);
+      if (t < 0 || t >= NR) break;
+      if (keyOf(a[1]) == 0) model_.setPearlPitch(t, i, a[2]);
+      else if (keyOf(a[1]) == 1 && !std::isnan(a[2])) model_.setRest(t, i, a[2] != 0);
       break;
+    }
     case STRIKE: {
       if (i < 0 || i >= NR) break;
       const double pos = (has(1) && !std::isnan(a[0])) ? std::min(std::max(a[0], 0.0), 1.0) : 0.3;
@@ -37,11 +40,25 @@ void World::action(int kind, int i, const double* a, int n) {
       queue(man_, nman_, 8, Ev{0, i, -1, model_.hzOf(i, 0.5), pos, vel});
       break;
     }
-    case THREAD:
-      if (!has(2)) break;
-      if (keyOf(a[0]) == 0) model_.setDejaVu(0, a[1]); else if (keyOf(a[0]) == 1) model_.setLen(0, a[1]);   // временно: нить 0 (Task 4)
+    case THREAD: {                                             // i = нить, a = [0 déjà vu | 1 длина | 2 lo | 3 hi, v]
+      if (!has(2) || i < 0 || i >= NR) break;
+      const double v = a[1];
+      switch (keyOf(a[0])) {
+        case 0: model_.setDejaVu(i, v); break;
+        case 1: model_.setLen(i, v); break;
+        case 2: if (std::isfinite(v)) model_.setRange(i, v, model_.thread(i).hi); break;
+        case 3: if (std::isfinite(v)) model_.setRange(i, model_.thread(i).lo, v); break;
+        default: break;
+      }
       break;
-    case DICE: model_.roll(); break;
+    }
+    case DICE:                                                 // a = [нить]; пусто или −1 — обе; вне диапазона, NaN и ±inf — ничего
+      if (!has(1)) model_.roll();
+      else if (std::isfinite(a[0])) { const int t = keyOf(a[0]); if (t == -1) model_.roll(); else if (t >= 0 && t < NR) model_.roll(t); }
+      break;
+    case TIMBRE: model_.rollTimbre(); break;
+    case LOC: if (has(1) && std::isfinite(a[0])) model_.setLoc(keyOf(a[0])); break;
+    case MIX: if (has(1)) model_.setMix(a[0]); break;
     case CLEAR: model_.clearAll(); sound_.silence(); nman_ = 0; nh_ = 0; break;
     case RUN: if (has(1) && !std::isnan(a[0])) { const bool on = a[0] != 0; if (on && !run_) steps_.reset(); run_ = on; } break;
     case BPM: if (has(1) && !std::isnan(a[0]) && a[0] > 0) bpm_ = std::min(std::max(a[0], 20.0), 300.0); break;
@@ -64,7 +81,7 @@ void World::process(const sdk::Out& out, int n) {
   for (int i = 0; i < NR; i++)
     sound_.setRing(i, model_.ring(i, STRUCT), model_.ring(i, BRIGHT), model_.ring(i, DAMP), model_.ring(i, LVL), i == 1 ? 1.0 : 0.0, model_.ring(i, POLY));
   double cl[NCK]; for (int k = 0; k < NCK; k++) cl[k] = model_.cloud(k);
-  sound_.setCloud(cl);
+  sound_.setCloud(cl); sound_.setMix(model_.mix());
 
   Ev ev[MAX_EV + 8]; int ne = 0;
   for (int j = 0; j < nman_; j++) queue(ev, ne, MAX_EV + 8, man_[j]);
@@ -100,13 +117,16 @@ void World::process(const sdk::Out& out, int n) {
 int World::mirror(double* buf, int cap) const {
   if (!buf || cap < MIRROR_N) return 0;
   double* p = buf;
-  *p++ = run_; *p++ = bpm_; const Thread& th0 = model_.thread(0);   // временно: зеркало одной нити (Task 4)
-  *p++ = th0.dejavu; *p++ = th0.len; *p++ = th0.cur;
-  for (int i = 0; i < PEARL_MAX; i++) { const Pearl q = th0.p[i]; *p++ = q.pitch; *p++ = q.rest; }
+  *p++ = run_; *p++ = bpm_; *p++ = model_.loc(); *p++ = model_.mix();
+  for (int t = 0; t < NR; t++) *p++ = model_.thread(t).cur;
+  for (int t = 0; t < NR; t++) *p++ = model_.thread(t).len;
+  for (int t = 0; t < NR; t++) *p++ = model_.thread(t).dejavu;
+  for (int t = 0; t < NR; t++) *p++ = model_.thread(t).lo;
+  for (int t = 0; t < NR; t++) *p++ = model_.thread(t).hi;
+  for (int t = 0; t < NR; t++) for (int i = 0; i < PEARL_MAX; i++) { const Pearl q = model_.thread(t).p[i]; *p++ = q.pitch; *p++ = q.rest; }
   for (int r = 0; r < NR; r++) {
     *p++ = model_.ring(r, STRUCT); *p++ = model_.ring(r, BRIGHT); *p++ = model_.ring(r, DAMP); *p++ = model_.ring(r, LVL);
-    *p++ = r; *p++ = model_.ring(r, POLY);   // слот MODE: кольцо 0 — modal, 1 — strings
-    *p++ = sound_.ringEnergy(r);
+    *p++ = model_.ring(r, POLY); *p++ = sound_.ringEnergy(r);
   }
   for (int k = 0; k < NCK; k++) *p++ = model_.cloud(k);
   *p++ = sound_.cloudEnergy();
