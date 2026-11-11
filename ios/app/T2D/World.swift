@@ -51,6 +51,8 @@ protocol World: AnyObject {
   func layout(W: CGFloat, H: CGFloat, topY: CGFloat, safeBot: CGFloat)
   func cornerHit(_ x: CGFloat, _ y: CGFloat) -> Bool     // предмет, ведущий на карту
   func dice()
+  func timbre()                                          // вторая кость (Hymenaeus: «тембр»); кнопка есть, только когда hasTimbre
+  var hasTimbre: Bool { get }
   func clear()
   func enter()                                           // хост вошёл в мир (goWorld, go): разбудить ядро мира
   func scale(pcs: [Int]?, root: Int)                     // лад сменился: ноты лада по модулю 12 от A, nil — выключен; root — тоника (0, когда выключен)
@@ -68,6 +70,8 @@ protocol World: AnyObject {
 }
 
 extension World {
+  func timbre() {}
+  var hasTimbre: Bool { false }
   var hasFx: Bool { fx != nil }
   var goMap: (() -> Void)? { get { nil } set {} }        // прочим мирам не нужно
   var lfoBase: ((Int, Int) -> Double?)? { get { nil } set {} }

@@ -292,6 +292,7 @@ final class Host {
     let t = transportState()
     var e: Set<Btn> = [.play, .transport, .vol, .fx]
     if !onMap { e.insert(.back) }
+    if !onMap, world?.hasTimbre == true { e.insert(.timbre) }
     if t.diceOn { e.insert(.dice) }
     if t.canUndo { e.insert(.undo) }
     if t.recycleOn { e.insert(.clear) }
@@ -349,7 +350,7 @@ final class Host {
     case .dice: transportAct(.dice)
     case .undo: transportAct(.undo)
     case .clear: transportAct(.recycle)
-    case .back: break
+    case .back, .timbre: break
     }
   }
 
@@ -364,6 +365,7 @@ final class Host {
     case .dice: transportAct(.dice)
     case .undo: transportAct(.undo)
     case .clear: transportAct(.recycle)
+    case .timbre: world?.timbre(); diceAt = now * 1000; syncModelsToMaster()
     }
   }
 
@@ -757,6 +759,7 @@ final class Host {
     var st = TopBar.State(title: w.title, held: heldBtns)
     st.playing = w.tempo?.playing ?? true
     st.enabled = barEnabled
+    st.timbre = w.hasTimbre
     st.diceSpin = transportState().diceSpin
     return st
   }

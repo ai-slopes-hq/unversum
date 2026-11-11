@@ -59,9 +59,17 @@ final class HymenaeusView: World {
       let y: CGFloat
       switch h.zone {
       case .cloud?, .echo?: y = cr.minY + 8 * geo.S
-      default: y = geo.staveRect(0).minY - 6 * geo.S      // Task 6
+      case .mix?: y = geo.pt(0, HymGeo.mixY).y - 18 * geo.S
+      case .ring?: y = geo.ringsRect.minY - 8 * geo.S
+      case .seal?: y = geo.sealRect(0).minY - 6 * geo.S
+      case .pearl(let t, _)?, .clasp(let t)?, .stave(let t)?: y = geo.staveRect(t).minY + 2 * geo.S
+      default: y = geo.staveRect(0).minY - 6 * geo.S
       }
-      return (HymTouch.label(g), CGPoint(x: geo.W / 2, y: y))
+      var text = HymTouch.label(g)
+      if case .pearlPitch(let t, _, let v) = g, mirror.hi[t] > mirror.lo[t] {          // высота жемчужины — нота MIDI в диапазоне нити
+        text += " · " + HymenaeusView.noteName(mirror.lo[t] + Int((v * Double(mirror.hi[t] - mirror.lo[t])).rounded()))
+      }
+      return (text, CGPoint(x: geo.W / 2, y: y))
     }
   }
 
@@ -73,8 +81,9 @@ final class HymenaeusView: World {
 
   func layout(W: CGFloat, H: CGFloat, topY: CGFloat, safeBot: CGFloat) { geo = HymGeo(W: W, H: H, topY: topY) }
   func cornerHit(_ x: CGFloat, _ y: CGFloat) -> Bool { geo.cornerHit(x, y) }
-  func dice() { core.action(Act.dice.rawValue, 0, [], touchTime: 0) }                 // обе нити; Task 6: кнопка «ноты»
-  func timbre() { core.action(Act.timbre.rawValue, 0, [], touchTime: 0) }             // Task 6: кнопка «тембр»
+  func dice() { core.action(Act.dice.rawValue, 0, [], touchTime: 0) }                 // кубик «ноты»: обе нити активной локации, звук не трогает
+  func timbre() { core.action(Act.timbre.rawValue, 0, [], touchTime: 0) }             // кубик «тембр»: кольца и облака, ноты не трогает
+  var hasTimbre: Bool { true }                                                         // хост рисует вторую кость в нижнем баре
   func clear() { core.action(Act.clear.rawValue, 0, [], touchTime: 0) }
   private var started = false
   func enter() {                                          // нить играет сама при первом входе; остановленную и восстановленную не будим
@@ -97,6 +106,9 @@ final class HymenaeusView: World {
     }
     for (k, h) in holds where !h.moved && !h.pinching && now - h.downAt > Touch.holdMs / 1000 {     // удержание на кольце — его плашка
       if case .ring(let r, _)? = h.zone { holds[k]?.moved = true; openSheet?(ringSpec(r)) }
+    }
+    for (k, h) in holds where !h.moved && !h.pinching && now - h.downAt > Touch.holdMs / 1000 {     // удержание на стане — перебросить только эту нить
+      if case .stave(let t)? = h.zone { holds[k]?.moved = true; holds[k]?.last = .staveDice(thread: t); core.action(Act.dice.rawValue, 0, [Double(t)], touchTime: 0) }
     }
     for _ in 0..<4 {                                      // heard: [k, (кольцо, жемчужина) × k]; читаем до пустого, но не бесконечно
       let hn = min(max(0, readHeard(&hbuf)), hbuf.count)
@@ -128,6 +140,7 @@ final class HymenaeusView: World {
     let p = CGPoint(x: f.x, y: f.y)
     let z = HymTouch.zone(at: p, geo: geo, mirror: mirror)
     var h = Hold(zone: z, p0: p, base: baseAt(z), downAt: now); h.cur = p
+    if case .seal(let l)? = z { h.last = .sealTap(l) }                  // подпись «loca», пока палец на печати
     if case .ring(let r, _)? = z, let (k, o) = holds.first(where: { sameRing($0.value.zone, r) }) {
       holds[k]?.pinching = true; holds[k]?.moved = true; h.pinching = true; h.moved = true     // второй палец на том же кольце — щипок
       h.base = o.base
@@ -152,6 +165,9 @@ final class HymenaeusView: World {
     case .claspDrag(let t, let v): core.action(Act.thread.rawValue, t, [Double(Hym.Thread.dejavu), v], touchTime: touchTime)
     case .pearlTap(let t, let i): core.action(Act.pearl.rawValue, i, [Double(t), 1, mirror.pearls[t][i].rest ? 0 : 1], touchTime: touchTime)
     case .pearlPitch(let t, let i, let v): core.action(Act.pearl.rawValue, i, [Double(t), 0, v], touchTime: touchTime)
+    case .mixDrag(let v): core.action(Act.mix.rawValue, 0, [v], touchTime: touchTime)
+    case .staveDice: break                                                  // бросок уходит из tick
+    case .sealTap(let l): core.action(Act.loc.rawValue, 0, [Double(l)], touchTime: touchTime)
     }
   }
 
@@ -181,6 +197,8 @@ final class HymenaeusView: World {
       ringHitPos[r] = pos
       send(.ringStrike(ring: r, pos: pos), touchTime: f.touchTime)           // ручной удар поверх нити
     case .pearl(let t, let i)?: send(.pearlTap(thread: t, i), touchTime: f.touchTime)
+    case .seal(let l)?: send(.sealTap(l), touchTime: f.touchTime)
+    case .mix?: send(.mixDrag(geo.mixValue(CGFloat(h.p0.x))), touchTime: f.touchTime)          // тап по линии — прыжок бегунка
     default: break
     }
   }

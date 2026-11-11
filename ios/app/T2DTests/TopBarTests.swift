@@ -29,8 +29,17 @@ final class TopBarTests: XCTestCase {
     for k in [Btn.vol, .transport, .play, .back, .clear, .undo, .dice] { XCTAssertEqual(bar.pos(k).r, 17) }
   }
 
+  func testTimbreButtonOnlyWhenEnabled() {
+    let p = bar.pos(.timbre)
+    XCTAssertNil(bar.hit(p.x, p.y, titleW: tw))                                            // обычному миру кнопка не нужна
+    XCTAssertEqual(bar.hit(p.x, p.y, titleW: tw, enabled: Btn.standard.union([.timbre])), .btn(.timbre))
+    let off = render(TopBar.State(title: "x")).1(p.x + p.r, p.y)
+    var st = TopBar.State(title: "x"); st.timbre = true
+    XCTAssertGreaterThan(render(st).1(p.x + p.r, p.y), off + 20)
+  }
+
   func testHitCentres() {
-    for k in Btn.allCases {
+    for k in Btn.standard {
       let p = bar.pos(k)
       XCTAssertEqual(bar.hit(p.x, p.y, titleW: tw), .btn(k), "\(k)")
     }
@@ -96,7 +105,7 @@ final class TopBarTests: XCTestCase {
   }
 
   func testHeldHighlight() {
-    for k in Btn.allCases {
+    for k in Btn.standard {
       let p = bar.pos(k)
       let still = render(TopBar.State(title: "x")).1(p.x + p.r, p.y)
       let held = render(TopBar.State(title: "x", held: [k])).1(p.x + p.r, p.y)

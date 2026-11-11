@@ -4,7 +4,10 @@ import CoreText
 // хост: нижний бар (восемь кнопок) и заголовок сверху — порт host/ui-top.js: раскладка, попадания, список ладов, рисование.
 // top — safeAreaInsets.top (scopeY веба), W — ширина экрана в пунктах. Без теней, жирного и градиентов.
 
-enum Btn: CaseIterable { case back, play, transport, vol, fx, clear, undo, dice }
+enum Btn: CaseIterable {
+  case back, play, transport, vol, fx, clear, undo, dice, timbre
+  static let standard = Set(Btn.allCases).subtracting([.timbre])     // восемь обычных кнопок; timbre — только у мира с hasTimbre
+}
 enum Hit: Equatable { case btn(Btn), title }
 
 struct TopBar {
@@ -22,7 +25,8 @@ struct TopBar {
     var held: Set<Btn> = []             // палец на кнопке: кольцо и знак ярче
     var playing = false                 // часы идут: на кнопке пауза, иначе треугольник
     var diceSpin = false                // кубик крутится после броска
-    var enabled = Set(Btn.allCases)     // неактивные кнопки притушены и не ловят касания
+    var enabled = Btn.standard     // неактивные кнопки притушены и не ловят касания
+    var timbre = false                  // у мира есть вторая кость (hasTimbre): рисуем кнопку timbre
   }
 
   // восемь кнопок на нижней строке: back слева; fx, vol, transport, play, clear, undo, dice справа налево, шаг 38
@@ -37,6 +41,7 @@ struct TopBar {
     case .clear: return (W - 182, y, TopBar.clrR)
     case .undo: return (W - 220, y, TopBar.clrR)
     case .dice: return (W - 258, y, TopBar.clrR)
+    case .timbre: return (W - 296, y, TopBar.clrR)               // вторая кость, только у миров с hasTimbre
     }
   }
 
@@ -45,12 +50,12 @@ struct TopBar {
 
   // нижний бар и заголовок: побеждает ближайший центр (зоны соседей перекрываются на 4 пт).
   // Неактивные кнопки не ловят касание. Заголовок — вход в легенду. Угол 44×44 знает Stage, левую полосу — Host.route
-  func hit(_ x: CGFloat, _ y: CGFloat, titleW: CGFloat, enabled: Set<Btn> = Set(Btn.allCases)) -> Hit? {
+  func hit(_ x: CGFloat, _ y: CGFloat, titleW: CGFloat, enabled: Set<Btn> = Btn.standard) -> Hit? {
     let B = pos(.back)
     if enabled.contains(.back) && hypot(x - B.x, y - B.y) < B.r + 10 { return .btn(.back) }
     if y < top + 38 && x > TopBar.titleX - 4 && x < TopBar.titleX + titleW + 10 { return .title }
     var best: (Btn, CGFloat)?
-    for k in [Btn.fx, .vol, .transport, .play, .clear, .undo, .dice] where enabled.contains(k) {
+    for k in [Btn.fx, .vol, .transport, .play, .clear, .undo, .dice, .timbre] where enabled.contains(k) {
       let b = pos(k), dd = hypot(x - b.x, y - b.y)
       if dd < (k == .fx ? TopBar.btnR + 6 : TopBar.clrR + 4) && dd < (best?.1 ?? .infinity) { best = (k, dd) }
     }
@@ -152,6 +157,16 @@ struct TopBar {
       g.setStrokeColor(d.ink(h * (on ? 0.85 : 0.3))); g.setFillColor(d.ink(h * (on ? 0.85 : 0.3))); g.setLineWidth(1.2); g.setLineCap(.round); g.setLineJoin(.round)
       PlateDraw.glyph(d, row, p.x, p.y, on: on, spin: b == .dice && s.diceSpin)
       g.setLineCap(.butt)
+    }
+    // timbre: круг со звёздочкой (макет Hymenaeus v2); нужна только миру с hasTimbre, иначе кнопка погашена и не рисуется
+    if s.timbre {
+      let p = pos(.timbre), h: CGFloat = s.held.contains(.timbre) ? 1 : 0.85
+      ringOf(.timbre)
+      g.setStrokeColor(d.ink(h * 0.85)); g.setLineWidth(1.2); g.setLineCap(.round)
+      d.ring(p.x, p.y, 7, h * 0.85, 1.2)
+      g.setStrokeColor(d.ink(h * 0.85)); g.beginPath()
+      g.move(to: CGPoint(x: p.x - 3.5, y: p.y)); g.addLine(to: CGPoint(x: p.x + 3.5, y: p.y)); g.move(to: CGPoint(x: p.x, y: p.y - 3.5)); g.addLine(to: CGPoint(x: p.x, y: p.y + 3.5))
+      g.strokePath(); g.setLineCap(.butt)
     }
     return tw
   }

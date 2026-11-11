@@ -1,4 +1,5 @@
 import XCTest
+import T2DCore
 @testable import T2D
 private final class HymRec: Core {
   var acts: [(kind: Int, i: Int, a: [Double])] = []
@@ -248,8 +249,8 @@ final class HymenaeusTests: XCTestCase {
     XCTAssertEqual(Set(fx.rows.map(\.key)), ["pos", "size", "dens", "pitch", "freeze", "echo", "level", "send", "mix"])
     XCTAssertEqual(HymenaeusView.cloudRows.filter { $0.kind == .cloud }.map(\.idx).sorted(), Array(0..<Hym.nck))
     let ring = v.ringSpec(1)
-    XCTAssertEqual(ring.rows.map(\.key), ["structure", "bright", "damp", "lvl", "poly", "len"])
-    XCTAssertEqual(ring.rows.map(\.code), [5, 6, 7, 8, -1, -1])                              // LFO кольца 1: ring·NRK + ключ
+    XCTAssertEqual(ring.rows.map(\.key), ["structure", "bright", "damp", "lvl", "poly", "lo", "hi", "len"])
+    XCTAssertEqual(ring.rows.map(\.code), [5, 6, 7, 8, -1, -1, -1, -1])                              // LFO кольца 1: ring·NRK + ключ
     XCTAssertEqual(fx.rows.first { $0.key == "echo" }?.code, 10 + Hym.Cloud.echo)            // облака — после NR·NRK колец
     XCTAssertEqual(fx.rows.first { $0.key == "freeze" }?.code, -1)
     for k in ring.rows.map(\.key) { XCTAssertFalse(ring.text(k).isEmpty); XCTAssertTrue((0.0...1.0).contains(ring.get(k))) }
@@ -307,5 +308,111 @@ final class HymenaeusTests: XCTestCase {
     var m = vector(); m[7] = 2
     let (v, _) = make(m), ring = v.ringSpec(1)
     XCTAssertEqual(ring.get("len"), 0)
+  }
+
+  // ---------- Task 6: вид C, зоны, кнопки ----------
+  func testHitZones() {
+    let (v, _) = make(), g = v.geo, m = v.mirror
+    func hit(_ p: CGPoint) -> HymHit { HymTouch.hit(p, geo: g, mirror: m) }
+    for t in 0..<Hym.nr {
+      let n = m.len[t]
+      XCTAssertEqual(hit(g.pearlPoint(t, 3, n: n, pitch: m.pearls[t][3].pitch)), .pearl(t, 3))
+      XCTAssertEqual(hit(g.claspPoint(t, lastPitch: m.pearls[t][n - 1].pitch)), .clasp(t))
+      XCTAssertEqual(hit(CGPoint(x: g.pt(30, 0).x, y: g.staveY(t) + 2 * HymGeo.staveStep * g.S)), .stave(t))
+    }
+    for l in 0..<Hym.locN { XCTAssertEqual(hit(CGPoint(x: g.sealRect(l).midX, y: g.sealRect(l).minY + 3)), .seal(l)) }
+    for i in 0..<Hym.nr { let c = g.ringCenter(i); if case .ring(let r, _) = hit(CGPoint(x: c.x, y: c.y - g.ringR(i))) { XCTAssertEqual(r, i) } else { XCTFail("ring \(i)") } }
+    XCTAssertEqual(hit(CGPoint(x: g.mixTrack.midX, y: g.mixTrack.midY)), .mix)
+    XCTAssertEqual(hit(CGPoint(x: g.cloudsRect.midX, y: g.cloudsRect.minY + 20)), .cloud)
+    XCTAssertEqual(hit(CGPoint(x: g.cloudsRect.midX, y: g.cloudsRect.maxY - 3)), .echo)
+    XCTAssertEqual(hit(g.pt(20, 560)), HymHit.none)
+    XCTAssertEqual(hit(CGPoint(x: CGFloat.nan, y: 1)), HymHit.none)
+  }
+
+  func testPitchGestureSendsAct() {
+    let (v, rec) = make(), k = NSObject(), n = v.mirror.len[0], p0 = v.mirror.pearls[0][5].pitch, p = v.geo.pearlPoint(0, 5, n: n, pitch: p0)
+    v.down(fin(k, p.x, p.y, 0, 0)); v.move(fin(k, p.x, p.y - 22 * v.geo.S, 0, 0))
+    let a = acts(rec, .pearl).last
+    XCTAssertEqual(a?.i, 5); XCTAssertEqual(a?.a[0], 0); XCTAssertEqual(a?.a[1], 0); XCTAssertEqual(a?.a[2] ?? 0, p0 + 0.2, accuracy: 0.01)
+    XCTAssertTrue(v.activeLabels.first?.text.hasPrefix("margaritae · ") == true)          // подпись с нотой — пока тянешь
+  }
+
+  func testRangeSliderClamps() {
+    XCTAssertEqual(HymenaeusView.noteFrom(0), 24); XCTAssertEqual(HymenaeusView.noteFrom(1), 96); XCTAssertEqual(HymenaeusView.noteFrom(.nan), 24)
+    XCTAssertEqual(HymenaeusView.rangeSet(isLo: true, 1, lo: 45, hi: 69), 64)              // lo не ближе 5 к hi
+    XCTAssertEqual(HymenaeusView.rangeSet(isLo: false, 0, lo: 45, hi: 69), 50)             // hi не ближе 5 к lo
+    XCTAssertEqual(HymenaeusView.rangeSet(isLo: true, -3, lo: 45, hi: 69), 24)
+    XCTAssertEqual(HymenaeusView.rangeSet(isLo: false, 9, lo: 45, hi: 69), 96)
+    XCTAssertEqual(HymenaeusView.noteName(45), "A2"); XCTAssertEqual(HymenaeusView.noteName(60), "C4")
+    let (v, rec) = make(), ring = v.ringSpec(1)                                            // вектор: нить 1 lo 55, hi 84
+    ring.set("hi", 0); ring.set("lo", 1)
+    XCTAssertEqual(acts(rec, .thread).map { $0.a }, [[3, 60], [2, 79]])
+    XCTAssertEqual(ring.text("lo"), "G3"); XCTAssertEqual(ring.text("hi"), "C6")
+    XCTAssertEqual(ring.get("lo"), HymenaeusView.noteUnit(55), accuracy: 1e-9)
+  }
+
+  func testSealTapSendsLoc() {
+    let (v, rec) = make(), k = NSObject(), r = v.geo.sealRect(3)
+    v.down(fin(k, r.midX, r.minY + 3, 0, 0))
+    XCTAssertEqual(v.activeLabels.first?.text, "loca")
+    v.up(fin(k, r.midX, r.minY + 3, 0, 0))
+    XCTAssertEqual(acts(rec, .loc).map { $0.a }, [[3]])
+    XCTAssertTrue(v.activeLabels.isEmpty)
+  }
+
+  func testMixDragAndTap() {
+    let (v, rec) = make(), k = NSObject(), t = v.geo.mixTrack, x0 = v.geo.pt(HymGeo.mixX0, 0).x, x1 = v.geo.pt(HymGeo.mixX1, 0).x
+    v.down(fin(k, x0 + (x1 - x0) * 0.5, t.midY, 0, 0)); v.move(fin(k, x0 + (x1 - x0) * 0.8, t.midY, 0, 0))
+    XCTAssertEqual(acts(rec, .mix).last?.a[0] ?? 0, 0.8, accuracy: 1e-6)
+    v.up(fin(k, x0 + (x1 - x0) * 0.8, t.midY, 0, 0))
+    v.down(fin(k, x0 + (x1 - x0) * 0.25, t.midY, 0, 0)); v.up(fin(k, x0 + (x1 - x0) * 0.25, t.midY, 0, 0))
+    XCTAssertEqual(acts(rec, .mix).last?.a[0] ?? 0, 0.25, accuracy: 1e-6)
+  }
+
+  func testStaveHoldRerollsOneThread() {
+    let (v, rec) = make(), k = NSObject(), p = CGPoint(x: v.geo.pt(30, 0).x, y: v.geo.staveY(1) + 2 * HymGeo.staveStep * v.geo.S)
+    v.down(fin(k, p.x, p.y, 0, 0)); v.tick(now: 1.6, dt: 0.016); v.tick(now: 1.7, dt: 0.016); v.up(fin(k, p.x, p.y, 0, 0))
+    XCTAssertEqual(acts(rec, .dice).map { $0.a }, [[1]])                                    // одна нить, один раз
+  }
+
+  func testDiceButtons() {
+    let (v, rec) = make()
+    XCTAssertTrue(v.hasTimbre)
+    v.dice(); v.timbre()
+    XCTAssertEqual(rec.acts.map { $0.kind }, [HymAct.dice.rawValue, HymAct.timbre.rawValue])
+    XCTAssertEqual(rec.acts[0].a, [])
+    XCTAssertEqual(HymAct.timbre.rawValue, 9); XCTAssertEqual(HymAct.dice.rawValue, 5)
+  }
+
+  func testClearButtonCallsClear() {
+    let (v, rec) = make()
+    v.clear()
+    XCTAssertEqual(rec.acts.map { $0.kind }, [HymAct.clear.rawValue])
+  }
+
+  // CLEAR и отмена: снимок до очистки возвращает ноты (живое ядро, как делает хост: snap → CLEAR → restore)
+  func testClearThenUndoRestoresState() throws {
+    t2d_app_init(48000, 1, 1e9, 1 << 14)                           // watch — маска слотов: следим за слотом 14
+    let core = AppCore(slot: HymenaeusView.slotN), host = AppHostCore()
+    var l = [Float](repeating: 0, count: 256), r = l, buf = [Double](repeating: 0, count: 128)
+    func render() { for _ in 0..<4 { t2d_app_render(&l, &r, 256, 0) } }
+    func mirror() -> HymMirror { render(); let n = Int(t2d_app_mirror(Int32(HymenaeusView.slotN), &buf, 128)); return HymMirror(Array(buf[0..<n])) }
+    core.action(HymAct.dice.rawValue, 0, [], touchTime: 0)
+    core.action(HymAct.pearl.rawValue, 2, [0, 0, 0.9], touchTime: 0)
+    let before = mirror()
+    XCTAssertTrue(host.snap(slot: HymenaeusView.slotN, id: 1))
+    var snap: (id: Int, slot: Int, w: String)?
+    for _ in 0..<20 where snap == nil { render(); snap = host.takeSnap() }
+    let s = try XCTUnwrap(snap)
+    core.action(HymAct.clear.rawValue, 0, [], touchTime: 0)
+    let cleared = mirror()
+    XCTAssertTrue((0..<Hym.nr).allSatisfy { t in cleared.pearls[t].allSatisfy { $0.rest } })          // после CLEAR тишина
+    XCTAssertFalse(before.pearls[0].prefix(before.len[0]).allSatisfy { $0.rest })
+    XCTAssertTrue(host.restore(slot: HymenaeusView.slotN, s.w))
+    let after = mirror()
+    XCTAssertEqual(after.pearls[0].map { $0.pitch }, before.pearls[0].map { $0.pitch })
+    XCTAssertEqual(after.pearls[1].map { $0.pitch }, before.pearls[1].map { $0.pitch })
+    XCTAssertEqual(after.pearls[0].map { $0.rest }, before.pearls[0].map { $0.rest })
+    XCTAssertEqual(after.len, before.len)
   }
 }

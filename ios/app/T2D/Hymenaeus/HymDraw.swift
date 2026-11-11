@@ -32,15 +32,21 @@ extension HymenaeusView {
   }
 
   // облако — объединение кругов: контур только там, где дуга не внутри соседа; снизу — штриховка-тень (макет cloud())
-  private func cloud(_ g: CGContext, _ cx: CGFloat, _ cy: CGFloat, _ scale: CGFloat, _ a: CGFloat, hatch: Bool = true, frozen: Bool = false, seed: Int? = nil) {
+  private typealias Circles = [(x: CGFloat, y: CGFloat, r: CGFloat)]
+  private func cloudCircles(_ cx: CGFloat, _ cy: CGFloat, _ scale: CGFloat, seed: Int? = nil) -> Circles {
     var rnd = HymRnd(seed ?? Int((cx * 7 + cy).rounded()))
-    var C: [(x: CGFloat, y: CGFloat, r: CGFloat)] = []
+    var C: Circles = []
     let n = 7
     for i in 0..<n {
       let t = CGFloat(i) / CGFloat(n - 1) - 0.5
       C.append((cx + t * 120 * scale, cy - cos(t * .pi) * 14 * scale + (rnd.next() - 0.5) * 8 * scale, (17 + cos(t * .pi) * 15 + rnd.next() * 6) * scale))
     }
     C.append((cx - 25 * scale, cy + 8 * scale, 20 * scale)); C.append((cx + 22 * scale, cy + 9 * scale, 19 * scale))
+    return C
+  }
+
+  private func cloud(_ g: CGContext, _ cx: CGFloat, _ cy: CGFloat, _ scale: CGFloat, _ a: CGFloat, hatch: Bool = true, frozen: Bool = false, seed: Int? = nil) {
+    let C = cloudCircles(cx, cy, scale, seed: seed)
     func inside(_ x: CGFloat, _ y: CGFloat, _ j: Int) -> Bool {
       for (k, c) in C.enumerated() where k != j && (x - c.x) * (x - c.x) + (y - c.y) * (y - c.y) < c.r * c.r - 0.5 { return true }
       return false
@@ -75,18 +81,6 @@ extension HymenaeusView {
     g.strokePath()
   }
 
-  // зёрна — рисинки: короткие наклонные зёрнышки
-  private func rice(_ g: CGContext, _ x: CGFloat, _ y: CGFloat, _ n: Int, _ spread: CGFloat, _ a: CGFloat) {
-    var rnd = HymRnd(5)
-    g.setLineWidth(1.1)
-    for _ in 0..<n {
-      let r = rnd.next().squareRoot() * spread, t = rnd.next() * tau, px = x + cos(t) * r * 1.3, py = y + sin(t) * r * 0.7
-      g.saveGState(); g.translateBy(x: px, y: py); g.rotate(by: rnd.next() * .pi)
-      g.setStrokeColor(col(Hym.ink, a * (0.5 + rnd.next() * 0.5)))
-      g.strokeEllipse(in: CGRect(x: -2.4, y: -0.9, width: 4.8, height: 1.8)); g.restoreGState()
-    }
-  }
-
   // обод кольца: двойной контур, гравировка — свет сверху-слева, тень частой штриховкой (макет band())
   private func band(_ g: CGContext, _ cx: CGFloat, _ cy: CGFloat, _ R: CGFloat, _ w: CGFloat, _ a: CGFloat) {
     g.setFillColor(theme.bg.cgColor); g.beginPath()
@@ -107,7 +101,13 @@ extension HymenaeusView {
     }
   }
 
-  // стена: фон, звёзды неба, два облака буфера и три ободка; ключ — W×H×плотность
+
+  // два облака макета C: A (левое, с тенью) и B (правое); пересечение — линза, её штриховка = число гранул
+  private var cloudA: CGPoint { geo.pt(185 - 34 * 1.3, 175 - 6 * 1.3) }
+  private var cloudB: CGPoint { geo.pt(185 + 34 * 1.3, 175 + 8 * 1.3) }
+  private var cloudSc: CGFloat { 1.3 * geo.S }
+
+  // стена: фон, звёзды неба, два облака и два переплетённых обода; ключ — W×H×плотность
   func wallImage() -> CGImage? {
     let sc = Draw.scale, G = geo
     let key = HymDrawState.WallKey(W: G.W, H: G.H, sc: sc)
@@ -118,65 +118,84 @@ extension HymenaeusView {
     g.translateBy(x: 0, y: CGFloat(g.height)); g.scaleBy(x: sc, y: -sc)
     g.setFillColor(theme.bg.cgColor); g.fill(CGRect(x: 0, y: 0, width: G.W, height: G.H))
     var rnd = HymRnd(11)
-    for _ in 0..<70 {
-      let x = rnd.next() * G.W, y = 70 * G.S + rnd.next() * (G.H * 0.62), r: CGFloat = rnd.next() < 0.1 ? 0.9 : 0.5
-      g.setFillColor(col(Hym.ink, 0.15 + rnd.next() * 0.35)); disc(g, x, y, r)
+    for _ in 0..<50 {                                                  // звёзды — только над станами (в облаках и кольцах их не видно)
+      let x = rnd.next() * G.W, y = 70 * G.S + rnd.next() * (G.H * 0.3), r: CGFloat = rnd.next() < 0.1 ? 0.9 : 0.5
+      g.setFillColor(col(Hym.ink, 0.12 + rnd.next() * 0.28)); disc(g, x, y, r)
     }
-    let p1 = G.pt(150, 185), p2 = G.pt(285, 250)
-    cloud(g, p1.x, p1.y, G.S, 0.55); cloud(g, p2.x, p2.y, 1.15 * G.S, 0.8)
-    for i in 0..<Hym.nr {
-      let c = G.ringCenter(i)
-      band(g, c.x, c.y, G.ringR(i), HymGeo.ringW * G.S, i == 0 ? 0.95 : 0.8)
-    }
+    cloud(g, cloudA.x, cloudA.y, cloudSc, 0.8); cloud(g, cloudB.x, cloudB.y, cloudSc, 0.8, hatch: false)
+    let a = G.ringCenter(0), b = G.ringCenter(1), R = G.ringR(0), w = HymGeo.ringW * G.S
+    band(g, a.x, a.y, R, w, 0.95)
+    band(g, b.x, b.y, G.ringR(1), w, 0.8)                              // струна поверх резонатора справа внизу, слева наверху — наоборот
+    let dx = (b.x - a.x) / 2, hy = (R * R - dx * dx).squareRoot()
+    g.saveGState(); g.beginPath(); g.addEllipse(in: CGRect(x: a.x + dx - w * 1.8, y: a.y - hy - w * 1.8, width: w * 3.6, height: w * 3.6)); g.clip()
+    band(g, a.x, a.y, R, w, 0.95); g.restoreGState()
     dr.wall = g.makeImage()
     return dr.wall
   }
 
   private func drawClouds(_ d: Draw, _ now: Double) {
     let g = d.g, G = geo, S = G.S, m = mirror
-    let pos = CGFloat(m.cloud[Hym.Cloud.pos]), size = CGFloat(m.cloud[Hym.Cloud.size]), dens = m.cloud[Hym.Cloud.dens]
-    let echo = CGFloat(m.cloud[Hym.Cloud.echo]), e = CGFloat(min(1, m.cloudEnergy))
-    if echo > 0.03 {                                     // призраки эха — правее и бледнее
-      let p = G.pt(285, 250)
-      cloud(g, p.x + 25 * S * echo * 2, p.y + 4 * S, 1.15 * S, 0.16 * echo * 2, hatch: false, seed: Int((p.x * 7 + p.y).rounded()) + 31)
-      cloud(g, p.x + 50 * S * echo * 2, p.y + 8 * S, 1.15 * S, 0.07 * echo * 2, hatch: false, seed: Int((p.x * 7 + p.y).rounded()) + 37)
+    let pos = CGFloat(m.cloud[Hym.Cloud.pos]), size = CGFloat(m.cloud[Hym.Cloud.size]), dens = CGFloat(m.cloud[Hym.Cloud.dens])
+    let echo = CGFloat(m.cloud[Hym.Cloud.echo]), e = CGFloat(min(1, m.cloudEnergy)), sc = cloudSc, B = cloudB
+    if echo > 0.03 {                                     // призраки эха — правее и бледнее второго облака
+      let k = min(1, echo * 2), dx = 18 * 1.3 * S * k
+      cloud(g, B.x + dx, B.y + 2 * S, sc, 0.16 * k, hatch: false, seed: Int((B.x * 7 + B.y).rounded()))
+      cloud(g, B.x + 2 * dx, B.y + 4 * S, sc, 0.07 * k, hatch: false, seed: Int((B.x * 7 + B.y).rounded()))
     }
-    if m.cloud[Hym.Cloud.freeze] > 0.5 { let p = G.pt(140, 335); cloud(g, p.x, p.y, 0.85 * S, 0.65, frozen: true) }
-    let px = G.pt(40 + pos * 310, 0).x, y0 = G.pt(0, 120).y, y1 = G.pt(0, 300).y
-    if e > 0.02 { d.glowAt(px, G.pt(0, 250).y, 70 * S, e * 0.35) }   // облако дышит громкостью
+    if m.cloud[Hym.Cloud.freeze] > 0.5 { cloud(g, cloudA.x, cloudA.y, sc, 0.65, frozen: true) }
+    // линза пересечения: штриховка, чем гуще densitas — тем чаще штрихи (площадь линзы — число гранул)
+    let A = cloudCircles(cloudA.x, cloudA.y, sc), Bc = cloudCircles(B.x, B.y, sc)
+    g.saveGState()
+    for C in [A, Bc] { g.beginPath(); for c in C { g.addEllipse(in: CGRect(x: c.x - c.r, y: c.y - c.r, width: 2 * c.r, height: 2 * c.r)) }; g.clip() }
+    g.setStrokeColor(col(Hym.ink, 0.5)); g.setLineWidth(0.8); g.beginPath()
+    let lens = G.lensRect.insetBy(dx: -20 * S, dy: -20 * S), step = (6 - dens * 3.6) * S
+    var y = lens.minY
+    while y < lens.maxY { g.move(to: CGPoint(x: lens.minX, y: y)); g.addLine(to: CGPoint(x: lens.maxX, y: y)); y += step }
+    g.strokePath(); g.restoreGState()
+    let px = G.pt(40 + pos * 310, 0).x, y0 = G.pt(0, 108).y, y1 = G.pt(0, 244).y        // позиция чтения: нить сверху вниз через облака
+    if e > 0.02 { d.glowAt(px, G.pt(0, 175).y, 70 * S, e * 0.35) }   // облако дышит громкостью
     g.setLineDash(phase: 0, lengths: [2, 4]); g.setStrokeColor(col(Hym.ink, 0.35)); g.setLineWidth(1)
     g.beginPath(); g.move(to: CGPoint(x: px, y: y0)); g.addLine(to: CGPoint(x: px, y: y1)); g.strokePath(); g.setLineDash(phase: 0, lengths: [])
     g.saveGState(); g.translateBy(x: px, y: y0); g.rotate(by: .pi / 4)
     g.setStrokeColor(col(Hym.ink, 0.8)); g.setLineWidth(1.1); g.stroke(CGRect(x: -3.5, y: -3.5, width: 7, height: 7)); g.restoreGState()
     g.setStrokeColor(col(Hym.ink, 0.5)); g.setLineWidth(1)                 // окно зерна — скобки вокруг нити
-    let hw = (8 + size * 28) * S, by0 = G.pt(0, 225).y, by1 = G.pt(0, 275).y
+    let hw = (8 + size * 28) * S, by0 = G.pt(0, 150).y, by1 = G.pt(0, 214).y
     for sgn: CGFloat in [-1, 1] {
       let x = px + sgn * hw
       g.beginPath(); g.move(to: CGPoint(x: x - sgn * 4, y: by0)); g.addLine(to: CGPoint(x: x, y: by0)); g.addLine(to: CGPoint(x: x, y: by1)); g.addLine(to: CGPoint(x: x - sgn * 4, y: by1)); g.strokePath()
     }
-    rice(g, px, G.pt(0, 250).y, Int(8 + dens * 32), hw * 0.95, 0.8)
   }
 
-  // нити звука: от каждого кольца к облаку, ноты в полёте
-  private func threadPoint(_ r: Int, _ t: CGFloat, _ x1: CGFloat, _ y1: CGFloat) -> CGPoint {
-    let c = geo.ringCenter(r), y0 = c.y - geo.ringR(r), x0 = c.x
-    let w = sin(t * 9 + CGFloat(r + 1)) * 9 * t * geo.S
-    return CGPoint(x: x0 + (x1 - x0) * t * t + w, y: y0 + (y1 - y0) * t)
+  // mix: волосяная линия с насечками и бегунок; внутри бегунка золотая дуга — доля сухого
+  private func drawMix(_ d: Draw) {
+    let g = d.g, G = geo, S = G.S, y = G.pt(0, HymGeo.mixY).y, x0 = G.pt(HymGeo.mixX0, 0).x, x1 = G.pt(HymGeo.mixX1, 0).x, t = CGFloat(mirror.mix)
+    g.setStrokeColor(col(Hym.ink, 0.4)); g.setLineWidth(1); g.beginPath(); g.move(to: CGPoint(x: x0, y: y)); g.addLine(to: CGPoint(x: x1, y: y))
+    for i in 0...4 { let x = x0 + (x1 - x0) * CGFloat(i) / 4; g.move(to: CGPoint(x: x, y: y - 3 * S)); g.addLine(to: CGPoint(x: x, y: y + 3 * S)) }
+    g.strokePath()
+    let kx = x0 + (x1 - x0) * t
+    g.setFillColor(theme.bg.cgColor); disc(g, kx, y, 8 * S)
+    g.setStrokeColor(col(Hym.ink, 0.9)); g.setLineWidth(1.2); circle(g, kx, y, 8 * S)
+    g.setStrokeColor(col(Hym.gold, 0.9)); g.setLineWidth(1); g.beginPath()
+    g.addArc(center: CGPoint(x: kx, y: y), radius: 3.2 * S, startAngle: 0, endAngle: tau * (1 - t * 0.8), clockwise: false); g.strokePath()
   }
 
-  private func drawThreads(_ d: Draw, _ now: Double) {
-    let g = d.g, G = geo, px = G.pt(40 + CGFloat(mirror.cloud[Hym.Cloud.pos]) * 310, 0).x, y1 = G.pt(0, 300).y
+  // ноты в полёте: от сыгравшей жемчужины к месту удара на ободе своего кольца, пунктир золотом
+  private func drawStrikes(_ d: Draw, _ now: Double) {
+    let g = d.g, G = geo, m = mirror
     for r in 0..<Hym.nr {
-      let a = CGFloat(0.28 + min(1, mirror.rings[r].energy) * 0.6) * (r == 1 ? 1 : 0.8)
-      let x1 = px + (CGFloat(r) - 0.5) * 50 * G.S
-      g.setStrokeColor(col(Hym.ink, a * 0.5)); g.setLineWidth(0.9); g.beginPath()
-      for i in 0...40 { let p = threadPoint(r, CGFloat(i) / 40, x1, y1); if i > 0 { g.addLine(to: p) } else { g.move(to: p) } }
-      g.strokePath()
+      let n = max(1, m.len[r]), i = m.playedIndex(r), from = G.pearlPoint(r, i, n: n, pitch: m.pearls[r][i].pitch)
+      let c = G.ringCenter(r), ang = CGFloat(ringHitPos[r]) * tau - .pi / 2, rr = G.ringR(r) + HymGeo.ringW * G.S / 2
+      let to = CGPoint(x: c.x + cos(ang) * rr, y: c.y + sin(ang) * rr)
+      let flash = max(0, 1 - CGFloat(now - ringHit[r]) / 0.9)
+      if flash > 0.02 && !m.pearls[r][i].rest {
+        g.setLineDash(phase: 0, lengths: [1.5, 3]); g.setStrokeColor(col(Hym.gold, 0.85 * flash)); g.setLineWidth(1.1)
+        g.beginPath(); g.move(to: from); g.addLine(to: to); g.strokePath(); g.setLineDash(phase: 0, lengths: [])
+      }
       for n in notes where n.ring == r {
         let age = now - n.born
         guard age >= 0 && age < HymenaeusView.noteLife else { continue }
-        let t = CGFloat(age / HymenaeusView.noteLife), p = threadPoint(r, t, x1, y1)
-        star4(g, p.x, p.y, 4 + 3 * (1 - t), col(Hym.gold, 0.9 * (1 - t * 0.6)))
+        let t = CGFloat(age / HymenaeusView.noteLife), p = CGPoint(x: from.x + (to.x - from.x) * min(1, t * 2.2), y: from.y + (to.y - from.y) * min(1, t * 2.2))
+        star4(g, p.x, p.y, 3 + 3 * (1 - t), col(Hym.gold, 0.9 * (1 - t * 0.7)))
       }
     }
   }
@@ -186,23 +205,35 @@ extension HymenaeusView {
     for r in 0..<Hym.nr {
       let c = G.ringCenter(r), R = G.ringR(r), w = HymGeo.ringW * G.S, st = mirror.rings[r].structure
       let e = CGFloat(min(1, mirror.rings[r].energy)), flash = max(0, 1 - CGFloat(now - ringHit[r]) / 0.7)
-      let modes = 1 + Int(st * 3.99)                      // моды — концентрические волны внутри ударенного кольца (structure)
-      let lit = max(e, flash)
-      if lit > 0.02 {
+      let lit = max(e, flash), inner = R - w / 2
+      if r == 0 {                                         // резонатор: моды — концентрические волны (structure), всегда едва видны
+        let modes = 1 + Int(st * 3.99)
         for i in 1...modes {
-          g.setStrokeColor(col(Hym.gold, 0.28 / CGFloat(i) * min(1, lit * 1.5))); g.setLineWidth(0.8)
-          circle(g, c.x, c.y, R - w / 2 - CGFloat(i) * 7 * G.S)
+          g.setStrokeColor(col(Hym.gold, (0.1 + 0.3 * min(1, lit * 1.5)) / CGFloat(i))); g.setLineWidth(0.8)
+          circle(g, c.x, c.y, inner - CGFloat(i) * 7 * G.S)
+        }
+      } else {                                            // струна: три волнистые хорды, дрожат от звона
+        let amp = (1.2 + lit * 2.5) * G.S, ph = CGFloat(now) * 18 * lit
+        g.setStrokeColor(col(Hym.gold, 0.12 + 0.3 * min(1, lit * 1.5))); g.setLineWidth(0.8)
+        for k in -1...1 {
+          let yy = c.y + CGFloat(k) * inner * 0.55 * (0.5 + st * 0.5), half = max(0, inner * inner - (yy - c.y) * (yy - c.y)).squareRoot() - 3 * G.S
+          g.beginPath()
+          for j in 0...30 {
+            let u = CGFloat(j) / 30, x = c.x - half + 2 * half * u, y = yy + sin(u * 14 + CGFloat(k) + ph) * amp
+            if j > 0 { g.addLine(to: CGPoint(x: x, y: y)) } else { g.move(to: CGPoint(x: x, y: y)) }
+          }
+          g.strokePath()
         }
       }
       if flash > 0 {                                      // место удара на ободе: вспышка и звёздочка
         let ang = CGFloat(ringHitPos[r]) * tau - .pi / 2, hx = c.x + cos(ang) * (R + w / 2), hy = c.y + sin(ang) * (R + w / 2)
-        d.glowAt(hx, hy, 26 * G.S, flash * 0.5)
-        star4(g, hx, hy, 7, col(Hym.gold, 0.95 * flash))
+        d.glowAt(hx, hy, 22 * G.S, flash * 0.35)
+        star4(g, hx, hy, 6, col(Hym.gold, 0.95 * flash))
       }
     }
   }
 
-  // Task 6: полная картинка станов (скрипичный ключ, нити удара, застёжка déjà vu, lo/hi); здесь — минимум, чтобы собиралось и играло
+  // два стана: пять линий, жемчужины (радиус — высота), пауза — колечко; застёжка справа: зазор крючков — déjà vu
   private func drawNecklace(_ d: Draw, _ now: Double) {
     let g = d.g, G = geo, m = mirror, S = G.S
     for t in 0..<Hym.nr {
@@ -221,14 +252,34 @@ extension HymenaeusView {
       for i in 0..<n {
         let p = pts[i], q = m.pearls[t][i]
         if q.rest { g.setStrokeColor(col(Hym.ink, 0.25)); g.setLineWidth(0.8); circle(g, p.x, p.y, 2.2 * S); continue }
-        let r = 6 * S, cur = m.run && i == played
+        let r = (4.5 + CGFloat(q.pitch) * 5) * S, cur = m.run && i == played
         g.setFillColor(theme.bg.cgColor); disc(g, p.x, p.y, r)
         g.setStrokeColor(col(Hym.ink, cur ? 0.95 : 0.55)); g.setLineWidth(1); circle(g, p.x, p.y, r)
         g.setFillColor(col(Hym.ink, cur ? 0.95 : 0.45)); disc(g, p.x - r * 0.35, p.y - r * 0.35, max(0.7, r * 0.22))
-        if cur { d.glowAt(p.x, p.y, 20 * S, 0.45) }
+        if cur { d.glowAt(p.x, p.y, 20 * S, 0.4) }
       }
-      let c = G.claspPoint(t, lastPitch: m.pearls[t][n - 1].pitch)
-      g.setStrokeColor(col(Hym.ink, 0.6)); g.setLineWidth(0.9); circle(g, c.x, c.y, 2.6 * S)
+      let c = G.claspPoint(t, lastPitch: m.pearls[t][n - 1].pitch), open = (1.5 + CGFloat(m.dejavu[t]) * 6.5) * S
+      g.setStrokeColor(col(Hym.ink, 0.6)); g.setLineWidth(0.9)
+      circle(g, c.x, c.y - open, 2.6 * S); circle(g, c.x, c.y + open, 2.6 * S)
+    }
+  }
+
+  // печати-локации: активная — двойной ободок и контур мелодии первой нити внутри; остальные — пустые кружки
+  private func drawSeals(_ d: Draw) {
+    let g = d.g, G = geo, S = G.S, m = mirror
+    for l in 0..<Hym.locN {
+      let x = G.pt(HymGeo.sealX0 + CGFloat(l) * HymGeo.sealDX, 0).x, y = G.pt(0, HymGeo.sealY).y, r = HymGeo.sealR * S, on = l == m.loc
+      g.setFillColor(theme.bg.cgColor); disc(g, x, y, r)
+      g.setStrokeColor(col(Hym.ink, on ? 0.9 : 0.4)); g.setLineWidth(on ? 1.2 : 1); circle(g, x, y, r)
+      if on {
+        g.setStrokeColor(col(Hym.ink, 0.45)); g.setLineWidth(0.8); circle(g, x, y, r - 3.5 * S)
+        let n = max(1, m.len[0])
+        for j in 0..<n where !m.pearls[0][j].rest {
+          let u = n > 1 ? CGFloat(j) / CGFloat(n - 1) : 0.5
+          g.setFillColor(col(Hym.ink, 0.85)); disc(g, x + (-9 + u * 18) * S, y + (5 - CGFloat(m.pearls[0][j].pitch) * 10) * S, 0.9 * S)
+        }
+      }
+      d.mapText(["i", "ii", "iii", "iv"][l], x, y + r + 9 * S, 12, on ? 0.8 : 0.4, align: .center)
     }
   }
 
@@ -239,10 +290,16 @@ extension HymenaeusView {
       g.draw(w, in: CGRect(x: 0, y: 0, width: G.W, height: G.H)); g.restoreGState()
     }
     drawClouds(d, now)
-    drawThreads(d, now)
+    drawMix(d)
     drawNecklace(d, now)
+    drawStrikes(d, now)
     drawRings(d, now)
+    drawSeals(d)
     for l in activeLabels { d.mapText(l.text, l.at.x, l.at.y, 12, 0.85, align: .center) }       // подписи — только пока жест идёт
+    if holds.values.contains(where: { $0.zone == HymHit.mix }) {                                  // концы mix подписаны, пока ведёшь бегунок
+      let y = G.pt(0, HymGeo.mixY).y + 22 * G.S
+      d.mapText("sicca", G.pt(HymGeo.mixX0, 0).x, y, 12, 0.7, align: .center); d.mapText("umida", G.pt(HymGeo.mixX1, 0).x, y, 12, 0.7, align: .center)
+    }
     guard sun else { return }
     d.quarterSun(G.sun.x, G.sun.y, G.sun.r, side: 1, now: now * 1000, col: Hym.gold, disc: theme.bg)
   }

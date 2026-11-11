@@ -1,17 +1,20 @@
 import CoreGraphics
 import Foundation
 
-// жесты Hymenaeus по зонам: облака (X — positio, Y — granum), полоса echo внизу облаков, кольца (↕ яркость, ↔ затухание, щипок — structure),
-// застёжка нити (déjà vu), жемчужины (тап — пауза, ↕ — высота). Чистые функции: вид только вызывает их и шлёт действие в ядро.
+// жесты Hymenaeus по зонам: облака (X — positio, Y — granum), полоса echo внизу облаков, mix, кольца (↕ яркость, ↔ затухание, щипок — structure),
+// застёжка нити (déjà vu), жемчужины (тап — пауза, ↕ — высота), стан (удержание — перебросить эту нить), печати (тап — локация).
+// Чистые функции: вид только вызывает их и шлёт действие в ядро.
 enum HymGesture: Equatable {
-  case cloudDrag(x: Double, y: Double), cloudHold, echoDrag(x: Double)
+  case cloudDrag(x: Double, y: Double), cloudHold, echoDrag(x: Double), mixDrag(Double)
   case ringStrike(ring: Int, pos: Double), ringAxes(ring: Int, bright: Double, damp: Double), ringPinch(ring: Int, structure: Double)
-  case claspDrag(thread: Int, Double), pearlTap(thread: Int, Int), pearlPitch(thread: Int, Int, Double)
+  case claspDrag(thread: Int, Double), pearlTap(thread: Int, Int), pearlPitch(thread: Int, Int, Double), sealTap(Int), staveDice(thread: Int)
 }
 
-enum HymZone: Equatable {
-  case cloud, echo, ring(Int, pos: Double), clasp(Int), pearl(Int, Int)   // Task 6: печати (loc), mix, линза, удержание на стане
+// что под пальцем (первое совпадение сверху вниз по приоритету: жемчужина, застёжка, кольцо, печать, mix, облака, стан)
+enum HymHit: Equatable {
+  case pearl(Int, Int), clasp(Int), stave(Int), seal(Int), ring(Int, pos: Double), cloud, echo, mix, none
 }
+typealias HymZone = HymHit
 
 // исходные значения, от которых отсчитывается относительный жест
 struct HymBase { var bright = 0.5, damp = 0.5, structure = 0.5, dejavu = 0.5, pitch = 0.5 }
@@ -22,19 +25,31 @@ enum HymTouch {
 
   static func ok(_ p: CGPoint) -> Bool { p.x.isFinite && p.y.isFinite }
 
-  static func zone(at p: CGPoint, geo: HymGeo, mirror m: HymMirror) -> HymZone? {
-    guard ok(p) else { return nil }
-    if let h = geo.ringAt(p.x, p.y) { return .ring(h.ring, pos: h.pos) }
-    let hit = 14 * geo.S                                    // Task 6: полная раскладка зон (печати, mix, линза, стан)
+  static func hit(_ p: CGPoint, geo: HymGeo, mirror m: HymMirror) -> HymHit {
+    guard ok(p) else { return .none }
+    let hit = 14 * geo.S
     for t in 0..<Hym.nr {
       let n = max(1, m.len[t])
-      for i in 0..<n where hypot(p.x - geo.pearlPoint(t, i, n: n, pitch: m.pearls[t][i].pitch).x, p.y - geo.pearlPoint(t, i, n: n, pitch: m.pearls[t][i].pitch).y) < hit { return .pearl(t, i) }
+      for i in 0..<n {
+        let q = geo.pearlPoint(t, i, n: n, pitch: m.pearls[t][i].pitch)
+        if hypot(p.x - q.x, p.y - q.y) < hit { return .pearl(t, i) }
+      }
       let c = geo.claspPoint(t, lastPitch: m.pearls[t][n - 1].pitch)
       if hypot(p.x - c.x, p.y - c.y) < 16 * geo.S { return .clasp(t) }
     }
+    if let h = geo.ringAt(p.x, p.y) { return .ring(h.ring, pos: h.pos) }
+    for l in 0..<Hym.locN where geo.sealRect(l).contains(p) { return .seal(l) }
+    if geo.mixTrack.contains(p) { return .mix }
     let cr = geo.cloudsRect
     if cr.contains(p) { return p.y > cr.minY + cr.height * echoStrip ? .echo : .cloud }
-    return nil
+    for t in 0..<Hym.nr where geo.staveRect(t).contains(p) { return .stave(t) }
+    return .none
+  }
+
+  // как hit, но nil вместо .none
+  static func zone(at p: CGPoint, geo: HymGeo, mirror m: HymMirror) -> HymZone? {
+    let h = hit(p, geo: geo, mirror: m)
+    return h == HymHit.none ? nil : h
   }
 
   private static func unit(_ v: CGFloat) -> Double { Hym.clamp(Double(v)) }
@@ -47,9 +62,11 @@ enum HymTouch {
     switch z {
     case .cloud: return .cloudDrag(x: unit((to.x - cr.minX) / cr.width), y: unit(1 - (to.y - cr.minY) / (cr.height * CGFloat(echoStrip))))
     case .echo: return .echoDrag(x: unit((to.x - cr.minX) / cr.width))
+    case .mix: return .mixDrag(geo.mixValue(to.x))
     case .ring(let r, _): return .ringAxes(ring: r, bright: Hym.clamp(base.bright - Double(dy / dragRing)), damp: Hym.clamp(base.damp + Double(dx / dragRing)))
     case .clasp(let t): return .claspDrag(thread: t, Hym.clamp(base.dejavu + Double(dx / dragThread)))
     case .pearl(let t, let i): return .pearlPitch(thread: t, i, Hym.clamp(base.pitch - Double(dy / dragPearl)))
+    case .stave, .seal, .none: return nil
     }
   }
 
@@ -65,9 +82,12 @@ enum HymTouch {
     case .cloudDrag: return "positio · granum"
     case .cloudHold: return "glacies · freeze"
     case .echoDrag: return "echo"
+    case .mixDrag: return "sicca · umida"
     case .ringStrike, .ringAxes, .ringPinch: return "anuli"
     case .claspDrag: return "déjà vu"
     case .pearlTap, .pearlPitch: return "margaritae"
+    case .sealTap: return "loca"
+    case .staveDice(let t): return Hym.ringNames[t]
     }
   }
 }
