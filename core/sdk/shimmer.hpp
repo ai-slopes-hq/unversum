@@ -46,6 +46,13 @@ public:
     fresh_ = true;
   }
 
+  void flush() {
+    std::fill(buf_.begin(), buf_.end(), 0.f);
+    loop_ = 0; lp_ = 0;
+    dcOut_.previousInput = dcOut_.previousOutput = 0;
+    dcLoop_.previousInput = dcLoop_.previousOutput = 0;
+  }
+
   void set(float amount, float decay, float tone, float mix) {
     auto c01 = [](float v) { return v == v ? std::min(1.f, std::max(0.f, v)) : 0.f; };
     tAmount_ = c01(amount);
@@ -65,7 +72,9 @@ public:
       mix_ += (tMix_ - mix_) * smoothK_;
       lpA_ += (tLp_ - lpA_) * smoothK_;
 
-      const float in = 0.5f * (inL[i] + inR[i]);
+      const float l = std::isfinite(inL[i]) ? inL[i] : 0.f, r = std::isfinite(inR[i]) ? inR[i] : 0.f;
+      const float in = 0.5f * (l + r);
+      if (!std::isfinite(loop_) || !std::isfinite(lp_)) flush();   // страховка: состояние не должно залипать
       buf_[static_cast<size_t>(wpos_)] = in + std::min(fb_, kMaxFb) * loop_ * amount_;
 
       // две точки: задержка = win·(1 − фаза), вес = Hann(фаза)

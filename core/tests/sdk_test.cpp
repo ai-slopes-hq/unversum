@@ -5064,7 +5064,7 @@ static void shimmerImpulseDecays() {
   CHECK(peak < 1.0f);
   CHECK(tail < 1e-3f);
 }
-static void shimmerPeakBounded() {
+static void shimmerFullScaleFinite() {
   sdk::Shimmer s; s.prepare(48000, 512); s.set(1, 1, 1, 1);
   sdk::Rng r(7);
   std::vector<float> in(960000), out;
@@ -5072,7 +5072,33 @@ static void shimmerPeakBounded() {
   shimmerRun(s, in, out, 512);
   bool ok = true;
   for (float v : out) if (!std::isfinite(v) || std::fabs(v) > 1.0f) ok = false;
+  CHECK(ok);                                            // только конечность и колпак клипа
+}
+static void shimmerSoftPathBelowClip() {
+  sdk::Shimmer s; s.prepare(48000, 512); s.set(1, 1, 1, 1);
+  sdk::Rng r(11);
+  std::vector<float> in(960000), out;
+  for (auto& v : in) v = 0.5f * static_cast<float>(r.next() * 2 - 1);
+  shimmerRun(s, in, out, 512);
+  float peak = 0; bool ok = true;
+  for (float v : out) { if (!std::isfinite(v)) ok = false; peak = std::max(peak, std::fabs(v)); }
   CHECK(ok);
+  CHECK(peak < 1.0f);                                   // до жёсткого клипа не доходит
+}
+static void shimmerRecoversFromNaN() {
+  sdk::Shimmer s; s.prepare(48000, 512); s.set(1, 1, 1, 1);
+  std::vector<float> bad(512, std::nanf("")), out(512), r(512);
+  bad[5] = INFINITY;
+  s.process(bad.data(), bad.data(), out.data(), r.data(), 512);
+  std::vector<float> in(512);
+  float mx = 0; bool ok = true;
+  for (int b = 0; b < 400; b++) {
+    for (int i = 0; i < 512; i++) in[i] = 0.3f * static_cast<float>(std::sin(2 * M_PI * 440.0 * (b * 512 + i) / 48000.0));
+    s.process(in.data(), in.data(), out.data(), r.data(), 512);
+    for (float v : out) { if (!std::isfinite(v)) ok = false; mx = std::max(mx, std::fabs(v)); }
+  }
+  CHECK(ok);
+  CHECK(mx > 0.f);
 }
 static void shimmerOctave() {
   const double sr = 48000;
@@ -5108,7 +5134,7 @@ static void shimmerBlockSizes() {
   float d = 0; for (size_t i = 0; i < a.size(); i++) d = std::max(d, std::fabs(a[i] - b[i]));
   CHECK(d <= 1e-6f);
 }
-static void shimmer() { shimmerImpulseDecays(); shimmerPeakBounded(); shimmerOctave(); shimmerSilenceAndDc(); shimmerBlockSizes(); }
+static void shimmer() { shimmerImpulseDecays(); shimmerFullScaleFinite(); shimmerSoftPathBelowClip(); shimmerRecoversFromNaN(); shimmerOctave(); shimmerSilenceAndDc(); shimmerBlockSizes(); }
 
 int main(int argc, char** argv) {
   if (argc > 1 && std::string(argv[1]) == "--scale") { scaleTable(); return 0; }
