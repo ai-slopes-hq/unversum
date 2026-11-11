@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sidera errantia · эскиз</title>
+<style>
+  html, body { margin: 0; background: #050607; }
+  body { display: flex; justify-content: center; }
+  svg { display: block; width: 100%; max-width: 430px; height: auto; }
+</style>
+</head>
+<body>
+<svg id="s" viewBox="0 0 380 640" role="img"><title>Sidera errantia</title></svg>
+<script>
+// Sidera errantia (рабочее имя Gendyn) — статичный макет мира XIV на месте Hymenaeus: без звука, не подключён к приложению. Спека — docs/superpowers/specs/2026-11-11-gendyn-design.md
+const FONT = "'IM Fell English', Georgia, serif";
+const BG='#0a0a0b', INK='237,237,237';
+const k=a=>`rgba(${INK},${a})`;
+let o=`<rect width="380" height="640" rx="12" fill="${BG}"/>`;
+let sd=5;const rn=()=>(sd=(sd*16807)%2147483647)/2147483647;
+const c=(x,y,r,s,w,fl='none')=>{o+=`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r}" fill="${fl}" stroke="${s}" stroke-width="${w}"/>`};
+const l=(a,b,d,e,s,w,dash)=>{o+=`<line x1="${a.toFixed(1)}" y1="${b.toFixed(1)}" x2="${d.toFixed(1)}" y2="${e.toFixed(1)}" stroke="${s}" stroke-width="${w}" stroke-linecap="round"${dash?` stroke-dasharray="${dash}"`:''}/>`};
+const t=(s,x,y,z,a,p)=>{o+=`<text x="${x}" y="${y}" text-anchor="${a}" style="fill:rgb(${INK});font:italic ${z}px ${FONT};opacity:${p}">${s}</text>`};
+const bar=()=>{c(26,34,13,k(.6),1);o+=`<path d="M28.5 28.5L23 34l5.5 5.5" fill="none" stroke="${k(.85)}" stroke-width="1.3"/>`;t('Sidera errantia',47,40,19,'start',.9);for(const x of[284,318,352])c(x,34,15,k(.5),1)};
+const star=(x,y,r,s,w)=>{l(x-r,y,x+r,y,s,w);l(x,y-r,x,y+r,s,w);l(x-r*.45,y-r*.45,x+r*.45,y+r*.45,s,w);l(x-r*.45,y+r*.45,x+r*.45,y-r*.45,s,w)};
+
+o+='<defs>';
+const V=[{n:8,note:'A1',wx:14,wy:34,cy:150,A:36,u:4.6,len:2.5},{n:12,note:'E2',wx:9,wy:40,cy:300,A:40,u:7.3,len:3},{n:6,note:'A2',wx:24,wy:46,cy:450,A:44,u:3.8,len:2}];
+const geo=[];
+V.forEach(v=>{
+  const ds=[];let tot=0;for(let i=0;i<v.n;i++){const d=1+(rn()-.5)*.7;ds.push(d);tot+=d}
+  let c0=0;const P=[];
+  for(let i=0;i<v.n;i++){const hx=30+320*c0/tot;c0+=ds[i];const hy=v.cy-(rn()*2-1)*v.A*.8;P.push({hx,hy,x:hx+(rn()-.5)*v.wx*.8,y:hy+(rn()-.5)*v.wy*.8})}
+  const trail=P.map(p=>[0,1,2,3].map(j=>[p.hx+(rn()-.5)*v.wx*.9,p.hy+(rn()-.5)*v.wy*.9]));
+  const pt=u=>{const i=Math.min(Math.floor(u),v.n-2),f=u-i;return{x:P[i].x+(P[i+1].x-P[i].x)*f,y:P[i].y+(P[i+1].y-P[i].y)*f}};
+  const a=v.u-v.len,tail=pt(a),head=pt(v.u),mid=[];
+  for(let i=Math.ceil(a);i<=Math.floor(v.u);i++)mid.push(P[i]);
+  v.P=P;v.trail=trail;v.tail=tail;v.head=head;v.mid=mid;v.a=a;
+  geo.push(v);
+});
+V.forEach((v,i)=>{
+  o+=`<linearGradient id="g${i}" gradientUnits="userSpaceOnUse" x1="${v.tail.x.toFixed(1)}" y1="0" x2="${v.head.x.toFixed(1)}" y2="0"><stop offset="0" stop-color="rgb(${INK})" stop-opacity="0"/><stop offset=".45" stop-color="rgb(${INK})" stop-opacity=".22"/><stop offset=".8" stop-color="rgb(${INK})" stop-opacity=".7"/><stop offset="1" stop-color="rgb(${INK})" stop-opacity="1"/></linearGradient>`;
+});
+
+const MC=[336,96,15,.25];
+const mpath=(cx,cy,R,f)=>`M${cx} ${cy-R}A${R} ${R} 0 0 1 ${cx} ${cy+R}A${(R*(1-2*f)).toFixed(1)} ${R} 0 0 0 ${cx} ${cy-R}Z`;
+o+=`<clipPath id="mc"><path d="${mpath(...MC)}"/></clipPath>`;
+o+='</defs>';
+
+bar();
+for(let i=0;i<46;i++)c(14+rn()*352,66+rn()*504,rn()<.12?.9:.55,'none',0,k(.1+rn()*.28));
+o+=`<rect x="10" y="60" width="360" height="520" rx="4" fill="none" stroke="${k(.28)}" stroke-width="1"/><rect x="15" y="65" width="350" height="510" rx="3" fill="none" stroke="${k(.15)}" stroke-width=".8"/>`;
+
+V.forEach((v,vi)=>{
+  const P=v.P;
+  l(30,v.cy,350,v.cy,k(.16),.8,'1 5');
+  t(v.note+' · '+v.n,30,v.cy-v.A-16,12,'start',.8);
+  P.forEach((p,i)=>{
+    o+=`<rect x="${(p.hx-v.wx/2).toFixed(1)}" y="${(p.hy-v.wy/2).toFixed(1)}" width="${v.wx}" height="${v.wy}" fill="none" stroke="${k(.2)}" stroke-width=".7" stroke-dasharray="2 2"/>`;
+    v.trail[i].forEach(([x,y],j)=>c(x,y,.9,'none',0,k(.1+j*.07)));
+  });
+  const pts=[v.tail,...v.mid,v.head];
+  const d='M'+pts.map(p=>p.x.toFixed(1)+' '+p.y.toFixed(1)).join('L');
+  o+=`<path d="${d}" fill="none" stroke="url(#g${vi})" stroke-width="6" stroke-opacity=".16" stroke-linejoin="round" stroke-linecap="round"/>`;
+  o+=`<path d="${d}" fill="none" stroke="url(#g${vi})" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>`;
+  c(v.head.x,v.head.y,2.4,'none',0,`rgb(${INK})`);c(v.head.x,v.head.y,5.5,k(.5),.8);
+  const last=P[P.length-1];
+  l(last.x,last.y,350,P[0].y,k(.14),.8,'3 3');c(350,P[0].y,2,k(.35),.8,BG);
+  P.forEach((p,i)=>{
+    const inWin=v.mid.includes(p);
+    if(vi===1&&i===5){o+=`<rect x="${(p.hx-v.wx/2).toFixed(1)}" y="${(p.hy-v.wy/2).toFixed(1)}" width="${v.wx}" height="${v.wy}" fill="none" stroke="${k(.8)}" stroke-width=".9"/>`;c(p.x,p.y,10,k(.7),.9);star(p.x,p.y,5.8,k(1),1.2);c(p.x,p.y,1.6,k(1),0,k(1));t('limes ±0.7',p.x-12,p.y-16,11,'end',.9)}
+    else if(inWin){star(p.x,p.y,5.4,k(1),1.1);c(p.x,p.y,1.5,k(1),0,k(1));c(p.x,p.y,8.5,k(.28),.8)}
+    else{star(p.x,p.y,4.2,k(.5),1);c(p.x,p.y,1.2,k(.5),0,k(.5))}
+  });
+});
+
+{const [cx,cy,R,f]=MC;
+ c(cx,cy,R+13,k(.05),6);c(cx,cy,R+7,k(.08),5);
+ c(cx,cy,R,k(.28),.8);
+ o+='<g clip-path="url(#mc)">';
+ for(let j=-R*2;j<R*2;j+=2.3)l(cx-R,cy+j+R,cx+R,cy+j-R,k(.55),.7);
+ o+='</g>';
+ o+=`<path d="${mpath(cx,cy,R,f)}" fill="none" stroke="${k(.95)}" stroke-width="1.1" stroke-linejoin="round"/>`;
+ for(const [dx,dy,r] of [[-26,12,.9],[-16,-18,.7],[22,26,.8]])c(cx+dx,cy+dy,r,'none',0,k(.5));
+}
+c(190,606,17,k(.6),1,BG);o+=`<rect x="182" y="598" width="16" height="16" rx="2" fill="none" stroke="${k(.85)}" stroke-width="1"/>`;for(const[a,b]of[[-4,-4],[4,-4],[0,0],[-4,4],[4,4]])c(190+a,606+b,1.3,k(.85),0,k(.85));
+document.getElementById('s').insertAdjacentHTML('beforeend',o);
+</script>
+</body>
+</html>
