@@ -27,6 +27,7 @@
 #include "../sdk/reverb.hpp"
 #include "../sdk/rng.hpp"
 #include "../sdk/shaper.hpp"
+#include "../sdk/shimmer.hpp"
 #include "../sdk/smooth.hpp"
 #include "../sdk/stepclock.hpp"
 #include "../sdk/world.hpp"
@@ -5044,13 +5045,78 @@ static void appHostMaster() {
   CHECK(lo * 2 < hi);
 }
 
+// Shimmer: октава вверх, обратная связь под колпаком 0.55
+static void shimmerRun(sdk::Shimmer& s, const std::vector<float>& in, std::vector<float>& out, int block) {
+  out.assign(in.size(), 0.f);
+  std::vector<float> r(static_cast<size_t>(block));
+  for (size_t i = 0; i < in.size(); i += static_cast<size_t>(block)) {
+    const int n = static_cast<int>(std::min(in.size() - i, static_cast<size_t>(block)));
+    s.process(&in[i], &in[i], &out[i], r.data(), n);
+  }
+}
+static void shimmerImpulseDecays() {
+  sdk::Shimmer s; s.prepare(48000, 512); s.set(1, 1, 1, 1);
+  std::vector<float> in(480000, 0.f), out; in[0] = 1.f;
+  shimmerRun(s, in, out, 512);
+  float peak = 0, tail = 0;
+  for (size_t i = 0; i < out.size(); i++) peak = std::max(peak, std::fabs(out[i]));
+  for (size_t i = out.size() - 48000; i < out.size(); i++) tail = std::max(tail, std::fabs(out[i]));
+  CHECK(peak < 1.0f);
+  CHECK(tail < 1e-3f);
+}
+static void shimmerPeakBounded() {
+  sdk::Shimmer s; s.prepare(48000, 512); s.set(1, 1, 1, 1);
+  sdk::Rng r(7);
+  std::vector<float> in(960000), out;
+  for (auto& v : in) v = static_cast<float>(r.next() * 2 - 1);
+  shimmerRun(s, in, out, 512);
+  bool ok = true;
+  for (float v : out) if (!std::isfinite(v) || std::fabs(v) > 1.0f) ok = false;
+  CHECK(ok);
+}
+static void shimmerOctave() {
+  const double sr = 48000;
+  sdk::Shimmer s; s.prepare(sr, 512); s.set(1, 0, 1, 1);
+  std::vector<float> in(96000), out;
+  for (size_t i = 0; i < in.size(); i++) in[i] = 0.5f * static_cast<float>(std::sin(2 * M_PI * 440.0 * static_cast<double>(i) / sr));
+  shimmerRun(s, in, out, 512);
+  int zc = 0; size_t first = 0, last = 0;
+  for (size_t i = out.size() - 48000 + 1; i < out.size(); i++)
+    if (out[i - 1] < 0 && out[i] >= 0) { if (!zc) first = i; last = i; zc++; }
+  const double f = zc > 1 ? (zc - 1) * sr / static_cast<double>(last - first) : 0;
+  CHECK(std::fabs(f - 880.0) < 8.8);
+}
+static void shimmerSilenceAndDc() {
+  sdk::Shimmer s; s.prepare(48000, 512); s.set(1, 1, 1, 1);
+  std::vector<float> in(48000, 0.f), out;
+  shimmerRun(s, in, out, 512);
+  float m = 0; for (float v : out) m = std::max(m, std::fabs(v));
+  CHECK(m == 0.f);
+  s.reset(); s.set(1, 1, 1, 1);
+  std::vector<float> dc(240000, 0.5f);
+  shimmerRun(s, dc, out, 512);
+  double sum = 0; for (size_t i = out.size() - 48000; i < out.size(); i++) sum += out[i];
+  CHECK(std::fabs(sum / 48000) < 0.01);
+}
+static void shimmerBlockSizes() {
+  sdk::Rng r(3);
+  std::vector<float> in(48000), a, b;
+  for (auto& v : in) v = static_cast<float>(r.next() * 2 - 1) * 0.5f;
+  sdk::Shimmer s1; s1.prepare(48000, 512); s1.set(0.7f, 0.8f, 0.5f, 0.6f);
+  sdk::Shimmer s2; s2.prepare(48000, 512); s2.set(0.7f, 0.8f, 0.5f, 0.6f);
+  shimmerRun(s1, in, a, 1); shimmerRun(s2, in, b, 512);
+  float d = 0; for (size_t i = 0; i < a.size(); i++) d = std::max(d, std::fabs(a[i] - b[i]));
+  CHECK(d <= 1e-6f);
+}
+static void shimmer() { shimmerImpulseDecays(); shimmerPeakBounded(); shimmerOctave(); shimmerSilenceAndDc(); shimmerBlockSizes(); }
+
 int main(int argc, char** argv) {
   if (argc > 1 && std::string(argv[1]) == "--scale") { scaleTable(); return 0; }
   rng(); onepole(); dc(); clip(); pan(); delay(); echo(); biquad(); json(); reverb(); scaleBasics(); host(); masterClockRebase(); masterBpmClamp(); hostGridSelect(); hostVolSmooth(); hostVolGuard(); snapshotBudget(); firm(); firmSend(); firmIds(); knee(); resonator(); stepclock(); cymWorld(); cymModel(); pingpongAd(); pingpongPortus(); saw(); portusModel(); portusWorld(); chorusMono(); tapeGlide(); glideBlock(); naturaWave(); naturaWorld(); naturaModel(); naturaDice();
   tenebraeTone(); tenebraeWaves(); tenebraeWavesNyquist(); tenebraeMorph(); tenebraeShifter();
   tenebraeVoiceSilent(); tenebraeVoiceExtremes(); tenebraeVoiceNoise(); tenebraeVoiceRelive();
   tenebraeWorldBus(); tenebraeTzfmFollows(); tenebraeLinksClear(); tenebraeMirror(); tenebraeModelPick(); tenebraeActionNan(); tenebraeCycleSafe(); tenebraeStrikeClear(); tenebraeScaleRetune();
-  shaper(); shaperOs4(); shaperChromium2(); bpbank(); noise(); infernoModel(); infernoSound(); bridgeNative(); bridgeHymenaeus(); mixWebUntouched(); mixSum(); mixMaster();
+  shimmer(); shaper(); shaperOs4(); shaperChromium2(); bpbank(); noise(); infernoModel(); infernoSound(); bridgeNative(); bridgeHymenaeus(); mixWebUntouched(); mixSum(); mixMaster();
   appSpscThreads(); appTripleThreads(); appChunking(); appVsBridge(); appHeardAccumulates(); appMidiClock(); appMidiTime(); appMidiOverflow(); appOverflow(); appLatency(); appReinitRate();
   appHostOrder(); appSnapRoundtrip(); appRestoreGarbage(); appHeavyOnePerBlock(); appStrOverflow(); appHostVolScale(); appStrCap();
   lfoForms(); lfoRandom(); hostLfo(); lfoApply(); lfoUnits(); lfoOff(); lfoOrder(); lfoDeadObj(); lfoSpecNan(); lfoForeign(); oceanLfo(); oceanLfoIgnores(); monoLfo(); monoLfoIgnores(); monoDice(); horoLfo(); horoFilterMap(); horoFilterAudio(); horoFilterTail(); horoFilterExtremes(); horoModelFltGarbage(); horoLfoFlt(); horoDiceFlt(); horoModelInst(); horoModelLen(); horoModelDefaults(); horoModelGarbage(); horoSoundGarbage(); horoModelPitch(); horoModelPitchGarbage(); drumVoices(); drumGlitch(); horoLfoIgnores(); sdkEuclid(); horoOnsets(); horoBackward(); horoBackwardJump(); horoRot(); horoLenSwitch(); horoNonFiniteTempo(); horoConcursus(); horoAttacksPerTurn(); horoCeiling(); horoKitPeak(); horoKitRms(); horoTailOff(); horoInstSwitch(); horoDice(); horoRetiredActions(); horoLockNeedsRunOnly(); hostTwoWorldsSamePhase(); hostMasterBpmChange(); horoLockNoMidi(); cymaticaGridNoLock(); cymaticaLockOverriddenByGrid(); arcLfo(); arcLfoIgnores(); triaLfo(); triaLfoIgnores(); infLfo(); infLfoIgnores(); portusLfo(); portusLfoIgnores(); portusDice(); arcPicSame(); arcPicMeta(); arcPicRiverName(); arcName(); arcRouteSame(); arcPicFixture(); appScaleSteps(); appLfo(); appLevels(); appLevelsPreFader(); appHostFader(); appHostFaderSmooth(); appHostMaster();
