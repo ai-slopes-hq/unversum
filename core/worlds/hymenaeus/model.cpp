@@ -9,7 +9,7 @@ namespace hymenaeus {
 
 namespace {
 constexpr double CLOUD_DEF[NCK] = {0.5, 0.4, 0.4, 0.5, 0, 0.3, 0.6, 0.35};   // POS SIZE DENS PITCH FREEZE ECHO CLEVEL SEND
-constexpr double RING_DEF[NRK] = {0.5, 0.5, 0.5, 0.8};               // STRUCT BRIGHT DAMP LVL
+constexpr double RING_DEF[NRK] = {0.5, 0.5, 0.5, 0.8, 0, 0};          // STRUCT BRIGHT DAMP LVL MODE POLY
 
 bool finite(double v) { return std::isfinite(v); }
 double clamp01(double v) { return v < 0 ? 0 : v > 1 ? 1 : v; }

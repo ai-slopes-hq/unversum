@@ -62,7 +62,7 @@ void World::process(const sdk::Out& out, int n) {
   const double now = clk_ ? clk_->now : now_, end = now + n / sr_;
   now_ = end;
   for (int i = 0; i < NR; i++)
-    sound_.setRing(i, model_.ring(i, STRUCT), model_.ring(i, BRIGHT), model_.ring(i, DAMP), model_.ring(i, LVL));
+    sound_.setRing(i, model_.ring(i, STRUCT), model_.ring(i, BRIGHT), model_.ring(i, DAMP), model_.ring(i, LVL), model_.ring(i, MODE), model_.ring(i, POLY));
   double cl[NCK]; for (int k = 0; k < NCK; k++) cl[k] = model_.cloud(k);
   sound_.setCloud(cl);
 
@@ -102,6 +102,7 @@ int World::mirror(double* buf, int cap) const {
   for (int i = 0; i < PEARL_MAX; i++) { const Pearl q = model_.pearl(i); *p++ = q.pitch; *p++ = q.rest; }
   for (int r = 0; r < NR; r++) {
     *p++ = model_.ring(r, STRUCT); *p++ = model_.ring(r, BRIGHT); *p++ = model_.ring(r, DAMP); *p++ = model_.ring(r, LVL);
+    *p++ = model_.ring(r, MODE); *p++ = model_.ring(r, POLY);
     *p++ = sound_.ringEnergy(r);
   }
   for (int k = 0; k < NCK; k++) *p++ = model_.cloud(k);

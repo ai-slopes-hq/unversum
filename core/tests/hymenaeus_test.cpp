@@ -3,6 +3,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdio>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -12,6 +13,7 @@
 #include "../worlds/hymenaeus/world.hpp"
 #include "../worlds/hymenaeus/rings/plucker.hpp"
 #include "../worlds/hymenaeus/rings/resonator.hpp"
+#include "../worlds/hymenaeus/sound.hpp"
 
 static int checks = 0, fails = 0;
 #define CHECK(c) do { checks++; if (!(c)) { fails++; std::printf("FAIL %s:%d  %s\n", __FILE__, __LINE__, #c); } } while (0)
@@ -473,6 +475,158 @@ static void worldRingsByPitch() {
   CHECK(rings[0] > 3 && rings[1] > 3 && rings[2] > 3);                     // по кругу бьют все три кольца
 }
 
+
+// ---------- Task 4b: режимы колец и полифония ----------
+
+static void modelRingModePoly() {
+  Scale sc; Model m(sc);
+  CHECK(NRK == 6); CHECK(m.ring(0, MODE) == 0); CHECK(m.ring(2, POLY) == 0);
+  m.setRing(1, MODE, 1); m.setRing(1, POLY, 0.5);
+  CHECK(m.ring(1, MODE) == 1); CHECK(m.ring(1, POLY) == 0.5);
+  m.setRing(1, MODE, 7); CHECK(m.ring(1, MODE) == 1);
+  m.setRing(1, POLY, -3); CHECK(m.ring(1, POLY) == 0);
+  m.setRing(1, POLY, NAN); CHECK(m.ring(1, POLY) == 0);
+  m.setRing(1, MODE, INFINITY); CHECK(m.ring(1, MODE) == 1);
+  CHECK(modeOf(0) == 0 && modeOf(1) == 1 && modeOf(0.49) == 0 && modeOf(0.5) == 1);
+  CHECK(polyOf(0) == 1 && polyOf(0.5) == 2 && polyOf(1) == 4 && polyOf(0.3) == 1 && polyOf(0.34) == 2 && polyOf(0.67) == 4);
+  m.setRing(0, MODE, 1); m.setRing(0, POLY, 1);
+  Model b(sc); b.restore(m.snapshot());
+  CHECK(b.snapshot() == m.snapshot()); CHECK(b.ring(0, MODE) == 1 && b.ring(0, POLY) == 1);
+  Model g(sc); g.restore("{\"rings\":[[0.5,0.5,0.5,0.8],[1,2,3,4,5,6,7,8],\"x\"]}");   // старый снимок (4 ключа) и лишние ключи
+  CHECK(g.ring(0, MODE) == 0 && g.ring(1, MODE) == 1 && g.ring(1, POLY) == 1);
+}
+
+static hymenaeus::Sound& theSound(uint32_t seed = 1) { static hymenaeus::Sound s; s.prepare(48000, seed); return s; }   // кольца и струны — сотни КБ
+
+struct SRun { std::vector<float> l; bool finite = true; double peak = 0; };
+static SRun renderSound(hymenaeus::Sound& s, int samples, const std::function<void(int)>& perBlock = nullptr) {
+  SRun r; float L[128], R[128], sL[128], sR[128];
+  for (int done = 0; done < samples; done += 128) {
+    if (perBlock) perBlock(done / 128);
+    s.render(L, R, sL, sR, 128);
+    for (int i = 0; i < 128; i++) {
+      if (!std::isfinite(L[i]) || !std::isfinite(R[i])) r.finite = false;
+      r.l.push_back(L[i]); r.peak = std::max(r.peak, double(std::max(std::fabs(L[i]), std::fabs(R[i]))));
+    }
+  }
+  return r;
+}
+static double goertzel(const std::vector<float>& x, size_t from, size_t to, double hz) {
+  const double w = 2 * 3.14159265358979 * hz / 48000; double s1 = 0, s2 = 0, c = 2 * std::cos(w);
+  for (size_t i = from; i < to; i++) { const double s0 = x[i] + c * s1 - s2; s2 = s1; s1 = s0; }
+  return (s1 * s1 + s2 * s2 - c * s1 * s2) / double(to - from);
+}
+// максимальный скачок между соседними сэмплами на границах блоков и внутри блоков
+static void jumps(const std::vector<float>& x, double& boundary, double& inner) {
+  boundary = inner = 0;
+  for (size_t i = 1; i < x.size(); i++) { const double d = std::fabs(x[i] - x[i - 1]); (i % 128 == 0 ? boundary : inner) = std::max(i % 128 == 0 ? boundary : inner, d); }
+}
+
+static void soundStringsSound() {
+  auto& s = theSound();
+  s.setRing(0, 0.5, 0.5, 0.5, 0.8, 1, 0);
+  s.strike(0, 220, 0.3, 0.8);
+  const SRun a = renderSound(s, 48000 * 3 / 10);
+  CHECK(a.finite); CHECK(a.peak > 0.01); CHECK(a.peak <= 1.0001);
+  CHECK(s.sounding());
+  const SRun b = renderSound(s, 48000 * 120);
+  CHECK(b.finite); CHECK(!s.sounding());
+  s.setRing(0, 0.5, 0.5, 0.0, 1.0, 1, 0);                  // damp 0 — самый долгий звон: всё равно гаснет
+  s.strike(0, 110, 0.3, 1.0);
+  renderSound(s, 48000 * 150);
+  CHECK(!s.sounding());
+}
+
+// «частота» окна: sqrt(E[Δx²]/E[x²]) ∝ спектральный центр
+static double centroidOf(const std::vector<float>& x, size_t a, size_t b) {
+  double e = 0, d = 0;
+  for (size_t i = a + 1; i < b; i++) { e += double(x[i]) * x[i]; const double dx = x[i] - x[i - 1]; d += dx * dx; }
+  return std::sqrt(d / std::max(e, 1e-12));
+}
+
+static void soundStructureGlide() {
+  auto& s = theSound();
+  double cen[4];                                           // структура 0…1 при одном ударе: строй сочувственных струн, значит и центр, поднимается
+  for (int k = 0; k < 4; k++) {
+    s.prepare(48000, 1);
+    s.setRing(0, k / 3.0, 0.7, 0.2, 0.8, 1, 0);
+    s.strike(0, 196, 0.3, 0.9);
+    const SRun r = renderSound(s, 48000);
+    CHECK(r.finite);
+    cen[k] = centroidOf(r.l, 4800, 48000);
+  }
+  std::printf("  structure centre: %.3f %.3f %.3f %.3f\n", cen[0], cen[1], cen[2], cen[3]);
+  CHECK(cen[3] > cen[0] * 1.2);
+  for (int k = 1; k < 4; k++) CHECK(cen[k] > cen[k - 1] * 0.95);
+  // развёртка 0→1 за 2 с на звенящем кольце: звук идёт без щелчков на границах блоков
+  s.prepare(48000, 1);
+  s.setRing(0, 0.0, 0.7, 0.2, 0.8, 1, 0);
+  s.strike(0, 196, 0.3, 0.9);
+  renderSound(s, 4800);
+  const int blocks = 48000 * 2 / 128;
+  const SRun r = renderSound(s, blocks * 128, [&](int b) { s.setRing(0, double(b) / blocks, 0.7, 0.2, 0.8, 1, 0); });
+  CHECK(r.finite); CHECK(r.peak > 0.01);
+  double bo, in; jumps(r.l, bo, in);
+  CHECK(bo <= in * 1.5 + 1e-4);
+}
+
+static void soundPolyVoices() {
+  const double f[5] = {200, 273, 351, 467, 613};
+  for (int p : {0, 1}) {                                    // 0 — одно кольцо-голос, 1 — четыре
+    auto& s = theSound();
+    s.setRing(1, 0.5, 0.5, 0.2, 0.8, 0, p);
+    std::vector<float> all;
+    for (int k = 0; k < 4; k++) { s.strike(1, f[k], 0.3, 0.8); const SRun r = renderSound(s, 48000 / 4); all.insert(all.end(), r.l.begin(), r.l.end()); }
+    const size_t n = all.size(), w = 48000 / 8;
+    const double p1 = goertzel(all, n - w, n, f[0]), p4 = goertzel(all, n - w, n, f[3]);
+    if (p == 0) CHECK(p1 < p4 * 1e-3); else CHECK(p1 > p4 * 0.005);      // 4 голоса держат первый тон, 1 голос — перебивает
+    if (p == 1) {
+      s.strike(1, f[4], 0.3, 0.8);                                   // пятый забирает самый старый
+      const SRun r = renderSound(s, 48000 / 4); const size_t m = r.l.size();
+      const double q1 = goertzel(r.l, m - w, m, f[0]), q3 = goertzel(r.l, m - w, m, f[2]), q5 = goertzel(r.l, m - w, m, f[4]);
+      CHECK(q5 > 0); CHECK(q1 < q3 * 0.05);
+    }
+  }
+}
+
+static void soundPolyStrings() {
+  auto& s = theSound();
+  s.setRing(2, 0.5, 0.5, 0.4, 0.8, 1, 1.0);                // strings, poly 4 (по 2 струны)
+  float mx = 0;
+  for (int k = 0; k < 6; k++) { s.strike(2, 300 + 40 * k, 0.3, 0.8); const SRun r = renderSound(s, 4800); CHECK(r.finite); mx = std::max(mx, float(r.peak)); }
+  CHECK(mx > 0.01); CHECK(mx <= 1.0001);
+  s.setRing(2, 0.5, 0.5, 0.4, 0.8, 1, 0.5);                // смена полифонии на ходу
+  s.strike(2, 330, 0.3, 0.8);
+  const SRun r = renderSound(s, 48000); CHECK(r.finite); CHECK(r.peak > 0.01);
+}
+
+static void soundModeSwitchLive() {
+  auto& s = theSound();
+  s.setRing(0, 0.5, 0.5, 0.3, 0.8, 0, 0);
+  s.strike(0, 220, 0.3, 0.9);
+  SRun r = renderSound(s, 48000 / 5);
+  for (int k = 0; k < 6; k++) {
+    s.setRing(0, 0.5, 0.5, 0.3, 0.8, k & 1 ? 0 : 1, 0);     // режим меняется на звенящем кольце
+    const SRun x = renderSound(s, 4800); r.l.insert(r.l.end(), x.l.begin(), x.l.end()); r.finite = r.finite && x.finite;
+    if (k == 2) s.strike(0, 330, 0.3, 0.9);
+  }
+  CHECK(r.finite);
+  double bo, in; jumps(r.l, bo, in);
+  CHECK(bo <= in * 1.5 + 1e-4);
+}
+
+static void worldMirrorSize() {
+  CHECK(MIRROR_RING == 7); CHECK(MIRROR_N == 5 + 32 + NR * 7 + NCK + 1); CHECK(MIRROR_N == 67);
+  Scale sc; auto& w = theWorld(sc);
+  act(w, hymenaeus::RING, 1, {4, 1}); act(w, hymenaeus::RING, 1, {5, 0.5});
+  double m[MIRROR_N]; CHECK(w.mirror(m, MIRROR_N) == MIRROR_N);
+  const int base = 5 + 32 + 1 * 7;
+  CHECK(m[base + 4] == 1); CHECK(m[base + 5] == 0.5); CHECK(m[base + 6] == 0);          // mode, poly, energy
+  act(w, hymenaeus::RING, 1, {6, 1}); CHECK(w.mirror(m, MIRROR_N) == MIRROR_N); CHECK(m[base + 4] == 1);   // ключ 6 вне диапазона
+  act(w, sdk::ACT_LFO, -1, {double(NRK + 4), 0.75});                                  // LFO-ключ кольца 1, MODE
+  w.mirror(m, MIRROR_N); CHECK(m[base + 4] == 0.75);
+}
+
 int main() {
   modelSeedDeterministic(); modelDejaVuOneRepeats(); modelDejaVuZeroVaries(); modelRestsSilent();
   modelRingBands(); modelPitchToRing(); modelScaleSnap(); modelClamps(); modelLenOne();
@@ -481,6 +635,7 @@ int main() {
   cloudSilentIn(); cloudEchoesInput(); cloudFreezeHolds(); cloudFreezeEmpty(); cloudNoNan(); cloudDensityBounded(); cloudSleepsAgain();
   worldSilentWhenStopped(); worldStepsInTime(); worldStrikeSounds(); worldNoStepFlood(); worldStopNoStuck(); worldSnapshotRoundTrip();
   worldGarbageActions(); worldBudget(); worldRingsByPitch();
+  modelRingModePoly(); soundStringsSound(); soundStructureGlide(); soundPolyVoices(); soundPolyStrings(); soundModeSwitchLive(); worldMirrorSize();
   std::printf("hymenaeus-test: %d checks, %d failed\n", checks, fails);
   return fails ? 1 : 0;
 }

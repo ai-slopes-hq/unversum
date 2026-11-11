@@ -12,9 +12,11 @@
 
 namespace hymenaeus {
 
-constexpr int NR = 3, PEARL_MAX = 16, PEARL_DEF = 11, NRK = 4;
-enum RingKey { STRUCT, BRIGHT, DAMP, LVL };
+constexpr int NR = 3, PEARL_MAX = 16, PEARL_DEF = 11, NRK = 6;
+enum RingKey { STRUCT, BRIGHT, DAMP, LVL, MODE, POLY };   // MODE 0 modal | 1 strings; POLY 0…1 → 1 / 2 / 4 голоса
 enum CloudKey { POS, SIZE, DENS, PITCH, FREEZE, ECHO, CLEVEL, SEND, NCK };   // SEND — посыл в общий ревербер
+inline int modeOf(double v) { return v >= 0.5 ? 1 : 0; }
+inline int polyOf(double v) { return v < 1.0 / 3 ? 1 : v < 2.0 / 3 ? 2 : 4; }
 constexpr double REST_P = 0.15;                         // шанс паузы у перебрасываемой жемчужины
 
 struct Pearl { double pitch = 0.5; bool rest = false; };

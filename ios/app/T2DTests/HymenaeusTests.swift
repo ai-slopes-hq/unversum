@@ -20,12 +20,14 @@ final class HymenaeusTests: XCTestCase {
   }
 
   func testMirrorParse() {
-    XCTAssertEqual(Hym.mirrorN, 61)
+    XCTAssertEqual(Hym.mirrorN, 67)
     let m = HymMirror(vector())
     XCTAssertTrue(m.run); XCTAssertEqual(m.bpm, 96); XCTAssertEqual(m.dejavu, 0.7, accuracy: 1e-9)
     XCTAssertEqual(m.len, 11); XCTAssertEqual(m.cursor, 3); XCTAssertEqual(m.playedIndex, 2)
     XCTAssertEqual(m.pearls[5].pitch, 5.0 / 16, accuracy: 1e-9); XCTAssertTrue(m.pearls[4].rest); XCTAssertFalse(m.pearls[5].rest)
-    XCTAssertEqual(m.rings[1].structure, 0.11, accuracy: 1e-9); XCTAssertEqual(m.rings[1].energy, 0.15, accuracy: 1e-9)
+    XCTAssertEqual(m.rings[1].structure, 0.11, accuracy: 1e-9); XCTAssertEqual(m.rings[1].energy, 0.17, accuracy: 1e-9)
+    XCTAssertEqual(m.rings[1].mode, 0.15, accuracy: 1e-9); XCTAssertEqual(m.rings[1].poly, 0.16, accuracy: 1e-9)
+    XCTAssertFalse(m.rings[1].strings); XCTAssertEqual(m.rings[1].voices, 1)
     XCTAssertEqual(m.rings[2].lvl, 0.24, accuracy: 1e-9)
     XCTAssertEqual(m.cloud[Hym.Cloud.echo], 0.6, accuracy: 1e-9); XCTAssertEqual(m.cloudEnergy, 0.5)
     let z = HymMirror(Array(vector().prefix(30)))                 // короче — не падает, нули

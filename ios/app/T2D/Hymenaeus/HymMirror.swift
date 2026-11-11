@@ -1,21 +1,25 @@
 import Foundation
 
-// зеркало Hymenaeus (MIRROR_N = 61) — core/worlds/hymenaeus/world.hpp:
-// run, bpm, dejavu, len, cursor; 16 × (pitch, rest); 3 × (struct, bright, damp, lvl, energy); 8 значений облаков; энергия облаков
+// зеркало Hymenaeus (MIRROR_N = 67) — core/worlds/hymenaeus/world.hpp:
+// run, bpm, dejavu, len, cursor; 16 × (pitch, rest); 3 × (struct, bright, damp, lvl, mode, poly, energy); 8 значений облаков; энергия облаков
 enum Hym {
-  static let nr = 3, pearlMax = 16, nck = 8, head = 5, ringN = 5
-  static let mirrorN = head + 2 * pearlMax + nr * ringN + nck + 1   // 61
+  static let nr = 3, pearlMax = 16, nck = 8, head = 5, ringN = 7
+  static let mirrorN = head + 2 * pearlMax + nr * ringN + nck + 1   // 67
   static let ink: RGB = (44, 38, 30), gold: RGB = (168, 124, 48), ivory: RGB = (242, 237, 226)
   static let roman = ["I", "II", "III"]
   enum Cloud { static let pos = 0, size = 1, dens = 2, pitch = 3, freeze = 4, echo = 5, level = 6, send = 7 }   // CloudKey ядра
-  enum Ring { static let structure = 0, bright = 1, damp = 2, lvl = 3 }                                           // RingKey ядра
+  enum Ring { static let structure = 0, bright = 1, damp = 2, lvl = 3, mode = 4, poly = 5 }                                           // RingKey ядра
   static func clamp(_ v: Double, _ lo: Double = 0, _ hi: Double = 1) -> Double { v.isFinite ? min(hi, max(lo, v)) : lo }
 }
 
 // действия ядра — те же номера, что enum Act в world.hpp (сверяет HymenaeusTests)
 enum HymAct: Int { case ring, cloud, pearl, strike, thread, dice, clear, run, bpm }
 
-struct HymRing { var structure = 0.5, bright = 0.5, damp = 0.5, lvl = 0.8, energy = 0.0 }
+struct HymRing {
+  var structure = 0.5, bright = 0.5, damp = 0.5, lvl = 0.8, mode = 0.0, poly = 0.0, energy = 0.0   // mode 0 modal | 1 strings; poly 0…1 → 1/2/4
+  var strings: Bool { mode >= 0.5 }
+  var voices: Int { poly < 1.0 / 3 ? 1 : poly < 2.0 / 3 ? 2 : 4 }
+}
 
 struct HymMirror {
   var run = false
@@ -30,7 +34,7 @@ struct HymMirror {
   static let zero: HymMirror = {
     var z = HymMirror()
     z.pearls = z.pearls.map { _ in (0, false) }
-    z.rings = z.rings.map { _ in HymRing(structure: 0, bright: 0, damp: 0, lvl: 0, energy: 0) }
+    z.rings = z.rings.map { _ in HymRing(structure: 0, bright: 0, damp: 0, lvl: 0, mode: 0, poly: 0, energy: 0) }
     return z
   }()
   init(_ m: [Double]) { load(m, n: m.count) }
@@ -45,7 +49,7 @@ struct HymMirror {
     var o = Hym.head
     for i in 0..<Hym.pearlMax { pearls[i] = (Hym.clamp(m[o]), m[o + 1] != 0); o += 2 }
     for r in 0..<Hym.nr {
-      rings[r] = HymRing(structure: Hym.clamp(m[o]), bright: Hym.clamp(m[o + 1]), damp: Hym.clamp(m[o + 2]), lvl: Hym.clamp(m[o + 3]), energy: Hym.clamp(m[o + 4], 0, 4))
+      rings[r] = HymRing(structure: Hym.clamp(m[o]), bright: Hym.clamp(m[o + 1]), damp: Hym.clamp(m[o + 2]), lvl: Hym.clamp(m[o + 3]), mode: Hym.clamp(m[o + 4]), poly: Hym.clamp(m[o + 5]), energy: Hym.clamp(m[o + 6], 0, 4))
       o += Hym.ringN
     }
     for k in 0..<Hym.nck { cloud[k] = Hym.clamp(m[o + k]) }

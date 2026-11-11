@@ -2,11 +2,11 @@
 // Шаги нити — восьмые от своего темпа (bpm 20…300, по умолчанию 90) или по сетке MIDI-часов хоста; не больше MAX_EV шагов за блок.
 //
 // action(kind, i, a, n):
-//   RING i = кольцо, a = [RingKey, v];  CLOUD a = [CloudKey, v];  PEARL i = жемчужина, a = [0 высота | 1 пауза, v];
+//   RING i = кольцо, a = [RingKey (STRUCT BRIGHT DAMP LVL MODE POLY), v];  CLOUD a = [CloudKey, v];  PEARL i = жемчужина, a = [0 высота | 1 пауза, v];
 //   STRIKE i = кольцо, a = [место удара 0…1, сила 0…1] (по умолчанию 1) — ручной удар;  THREAD a = [0 déjà vu | 1 длина, v];
 //   DICE, CLEAR;  RUN a = [on];  BPM a = [bpm];
 //   ACT_LFO (i == -1) a = [key, v]: key 0…NR·NRK−1 — кольцо key / NRK, ключ key % NRK; затем CloudKey (key − NR·NRK)
-// Зеркало (MIRROR_N): run, bpm, dejavu, len, cursor; PEARL_MAX × (высота, пауза); NR × (struct, bright, damp, lvl, энергия); NCK облаков; энергия облаков.
+// Зеркало (MIRROR_N): run, bpm, dejavu, len, cursor; PEARL_MAX × (высота, пауза); NR × (struct, bright, damp, lvl, mode, poly, энергия); NCK облаков; энергия облаков.
 // heard: [k, (кольцо, жемчужина) × k]; жемчужина −1 — ручной удар.
 #pragma once
 #include "../../sdk/transport.hpp"
@@ -17,7 +17,7 @@
 namespace hymenaeus {
 
 enum Act { RING, CLOUD, PEARL, STRIKE, THREAD, DICE, CLEAR, RUN, BPM };
-constexpr int MIRROR_HEAD = 5, MIRROR_RING = 5, MIRROR_N = MIRROR_HEAD + 2 * PEARL_MAX + NR * MIRROR_RING + NCK + 1;
+constexpr int MIRROR_HEAD = 5, MIRROR_RING = 7, MIRROR_N = MIRROR_HEAD + 2 * PEARL_MAX + NR * MIRROR_RING + NCK + 1;
 constexpr int MAX_EV = 4, HEARD_MAX = 32;
 
 class World : public sdk::World {

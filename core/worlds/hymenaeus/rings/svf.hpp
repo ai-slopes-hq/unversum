@@ -40,6 +40,14 @@ class DelayLine {
  public:
   void reset() { for (size_t i = 0; i < N; i++) line_[i] = 0; wp_ = 0; }
   void write(float x) { line_[wp_] = x; wp_ = (wp_ + N - 1) % N; }
+  float readHermite(float delay) const {                // 1 ≤ delay < N − 2, кубическая интерполяция (stmlib DelayLine::ReadHermite)
+    const size_t d = static_cast<size_t>(delay);
+    const float f = delay - static_cast<float>(d);
+    const size_t t = wp_ + d + N;
+    const float xm1 = line_[(t - 1) % N], x0 = line_[t % N], x1 = line_[(t + 1) % N], x2 = line_[(t + 2) % N];
+    const float c = (x1 - xm1) * 0.5f, v = x0 - x1, w = c + v, a = w + v + (x2 - x0) * 0.5f, bNeg = w + a;
+    return (((a * f) - bNeg) * f + c) * f + x0;
+  }
   float read(float delay) const {                        // delay в сэмплах, 0 ≤ delay < N − 1, линейная интерполяция
     const size_t d = static_cast<size_t>(delay);
     const float f = delay - static_cast<float>(d);
