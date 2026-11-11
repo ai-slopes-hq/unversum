@@ -39,7 +39,10 @@ void Model::reset(uint32_t seed) {
 double Model::tonic() const { return 110.0 * std::pow(2.0, (scale_.on ? scale_.root : 0) / 12.0); }
 double Model::hzOf(const Angel& a) const {
   static const double R[3] = {0.5, 1, 2};
-  return tonic() * harm(a.k) * R[a.reg < 0 ? 0 : a.reg > 2 ? 2 : a.reg];
+  const double hz = tonic() * harm(a.k) * R[a.reg < 0 ? 0 : a.reg > 2 ? 2 : a.reg];
+  if (!scale_.on) return hz;
+  const double s = 12.0 * std::log2(hz / 55.0);          // полутоны от 55 Гц, как в Scale; гармоника квантуется к ближайшей ноте лада
+  return 55.0 * std::pow(2.0, scale_.snapSemi(s) / 12.0);
 }
 double Model::vEff(const Angel& a) const {
   if (!a.pinned) return a.v;

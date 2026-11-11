@@ -76,7 +76,13 @@ static void hzOfScaleOff() {
     }
   }
   sc.root = 3; m.touch(0, 4, 0); m.setAngel(0, REG, 0.9); CHECK(m.hzOf(m.angel(0)) == 110 * 5 * 2);
-  sc.on = true; CHECK(std::fabs(m.hzOf(m.angel(0)) - 110 * std::pow(2.0, 3 / 12.0) * 10) < 1e-9);
+  sc.on = true;
+  {
+    const double raw = 110 * std::pow(2.0, 3 / 12.0) * 10, hz = m.hzOf(m.angel(0));
+    const int n = static_cast<int>(std::lround(12.0 * std::log2(hz / 55.0)));
+    CHECK(std::fabs(12.0 * std::log2(hz / 55.0) - n) < 1e-9 && sc.inScale(n));     // высота — нота лада
+    CHECK(std::fabs(12.0 * std::log2(hz / raw)) <= 1.0 + 1e-9);                    // не дальше полутона от исходной
+  }
   for (int root = 0; root < 12; root++) { sc.root = root; for (int k = 0; k < NSPH; k++) { m.touch(0, k, 0); const double hz = m.hzOf(m.angel(0)); CHECK(hz >= 20 && hz <= 8000); } }
 }
 

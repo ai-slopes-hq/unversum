@@ -399,7 +399,7 @@ final class HostTests: XCTestCase {
 
   func testTapOtherCardPeeks() {
     host = makeHost(); tick(1)
-    tapCell(1, 0)                                            // клетка без мира (рубашка)
+    tapCell(2, 3)                                            // клетка без мира (рубашка)
     XCTAssertNotNil(host.nav.peek); XCTAssertEqual(host.nav.view, .map); XCTAssertNil(host.nav.anim)
     tick(2)
     XCTAssertNil(host.nav.peek, "peek 420 мс")
