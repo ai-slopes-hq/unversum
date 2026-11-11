@@ -39,7 +39,7 @@
 | III | Laboratorium | `laboratorium.js` | выключен |
 | IV | Natura | ядро, слот 4 | |
 | V | Inferno | ядро, слот 5 | |
-| VI | Paradisus | `worlds/paradisus/` | в архиве |
+| VI | Paradisus | ядро, слот 6 | только iOS: вернулся 11.11 (хор + шиммер), ждёт приёмки автора на iPhone; веб — в архиве (`worlds/paradisus/`) |
 | VII | Monochordum | ядро, слот 7 | в нативе вернулся 11.11 (был выключен 05.11), принят автором на iPhone 11.11 |
 | VIII | Oceanus | ядро, слот 8 | |
 | IX | Horologium (Nova) | ядро, слот 9 | ударные, кольца по Евклиду, длина кольца, пэды и фильтр на голос, без маятника и tempus (05.11, принят автором на iPhone; `docs/worlds/horologium.md`) |
