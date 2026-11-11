@@ -264,4 +264,28 @@ final class HymenaeusTests: XCTestCase {
     v.down(fin(k, c.x + R, c.y, 0, 0)); v.tick(now: 1.6, dt: 0.016); v.up(fin(k, c.x + R, c.y, 0, 0))
     XCTAssertEqual(opened, ["anulus III"]); XCTAssertTrue(acts(rec, .strike).isEmpty)
   }
+
+  // ---------- ревью: правки ----------
+  func testPinchUsesCurrentPositionsOfBothFingers() {
+    let (v, rec) = make(), a = NSObject(), b = NSObject(), c = v.geo.ringCenter(0), R = v.geo.ringRadius(0), S = v.geo.S
+    let s0 = v.mirror.rings[0].structure
+    v.down(fin(a, c.x, c.y - R, 0, 0)); v.down(fin(b, c.x, c.y + R, 0, 0))
+    v.move(fin(a, c.x, c.y - R - 15 * S, 0, 0)); v.move(fin(b, c.x, c.y + R + 15 * S, 0, 0))     // оба разошлись на 15 — вместе на 30
+    let want = s0 + Double(30 * S / S / HymTouch.pinchSpan)
+    XCTAssertEqual(acts(rec, .ring).last?.a[1] ?? 0, want, accuracy: 1e-6)
+  }
+
+  func testEnterStartsOnlyOnce() {
+    let (v, rec) = make()
+    v.enter(); v.enter()
+    XCTAssertEqual(acts(rec, .run).count, 1)                                                  // остановили — повторный вход не будит
+    let (w, rec2) = make(); w.restored(); w.enter()
+    XCTAssertTrue(acts(rec2, .run).isEmpty)                                                   // после restore run решает снимок
+  }
+
+  func testLenRowClampedBelowMin() throws {
+    var m = vector(); m[3] = 2
+    let (v, _) = make(m), fx = try XCTUnwrap(v.fx)
+    XCTAssertEqual(fx.get("len"), 0)
+  }
 }

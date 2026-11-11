@@ -32,8 +32,8 @@ extension HymenaeusView {
   }
 
   // облако — объединение кругов: контур только там, где дуга не внутри соседа; снизу — штриховка-тень (макет cloud())
-  private func cloud(_ g: CGContext, _ cx: CGFloat, _ cy: CGFloat, _ scale: CGFloat, _ a: CGFloat, hatch: Bool = true, frozen: Bool = false) {
-    var rnd = HymRnd(Int((cx * 7 + cy).rounded()))
+  private func cloud(_ g: CGContext, _ cx: CGFloat, _ cy: CGFloat, _ scale: CGFloat, _ a: CGFloat, hatch: Bool = true, frozen: Bool = false, seed: Int? = nil) {
+    var rnd = HymRnd(seed ?? Int((cx * 7 + cy).rounded()))
     var C: [(x: CGFloat, y: CGFloat, r: CGFloat)] = []
     let n = 7
     for i in 0..<n {
@@ -138,8 +138,8 @@ extension HymenaeusView {
     let echo = CGFloat(m.cloud[Hym.Cloud.echo]), e = CGFloat(min(1, m.cloudEnergy))
     if echo > 0.03 {                                     // призраки эха — правее и бледнее
       let p = G.pt(285, 250)
-      cloud(g, p.x + 25 * S * echo * 2, p.y + 4 * S, 1.15 * S, 0.16 * echo * 2, hatch: false)
-      cloud(g, p.x + 50 * S * echo * 2, p.y + 8 * S, 1.15 * S, 0.07 * echo * 2, hatch: false)
+      cloud(g, p.x + 25 * S * echo * 2, p.y + 4 * S, 1.15 * S, 0.16 * echo * 2, hatch: false, seed: Int((p.x * 7 + p.y).rounded()) + 31)
+      cloud(g, p.x + 50 * S * echo * 2, p.y + 8 * S, 1.15 * S, 0.07 * echo * 2, hatch: false, seed: Int((p.x * 7 + p.y).rounded()) + 37)
     }
     if m.cloud[Hym.Cloud.freeze] > 0.5 { let p = G.pt(140, 335); cloud(g, p.x, p.y, 0.85 * S, 0.65, frozen: true) }
     let px = G.pt(40 + pos * 310, 0).x, y0 = G.pt(0, 120).y, y1 = G.pt(0, 300).y

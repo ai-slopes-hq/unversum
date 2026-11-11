@@ -314,6 +314,16 @@ static void cloudFreezeHolds() {
   CHECK(c.sleeping());
 }
 
+static void cloudEchoDecays() {                             // echo = 1 на плотном облаке: обратная связь затухает, облако засыпает
+  for (double dens : {0.5, 1.0}) for (double size : {0.3, 1.0}) {
+    auto& c = theCloud(); c.set(0.0, size, dens, 0.5, false, 1);
+    runCloud(c, 2000, 0.8f);                               // короткий всплеск
+    runCloud(c, 20 * 48000, 0);
+    const CloudRun tail = runCloud(c, 48000, 0);
+    CHECK(tail.energy < 1e-3); CHECK(c.sleeping());
+  }
+}
+
 static void cloudFreezeEmpty() {
   auto& c = theCloud(); c.set(0.5, 0.5, 1, 0.5, true, 1);
   const CloudRun r = runCloud(c, 48000, 0);
@@ -632,7 +642,7 @@ int main() {
   modelRingBands(); modelPitchToRing(); modelScaleSnap(); modelClamps(); modelLenOne();
   modelSnapshotRoundTrip(); modelRestoreGarbage(); modelRollAndClear(); modelCloudSend();
   ringsRingsDown(); ringsDampingMonotone(); ringsBrightnessCentroid(); ringsStable(); ringsIdleCheap(); ringsNoAlloc(); ringsPluckerBurst();
-  cloudSilentIn(); cloudEchoesInput(); cloudFreezeHolds(); cloudFreezeEmpty(); cloudNoNan(); cloudDensityBounded(); cloudSleepsAgain();
+  cloudSilentIn(); cloudEchoesInput(); cloudFreezeHolds(); cloudFreezeEmpty(); cloudEchoDecays(); cloudNoNan(); cloudDensityBounded(); cloudSleepsAgain();
   worldSilentWhenStopped(); worldStepsInTime(); worldStrikeSounds(); worldNoStepFlood(); worldStopNoStuck(); worldSnapshotRoundTrip();
   worldGarbageActions(); worldBudget(); worldRingsByPitch();
   modelRingModePoly(); soundStringsSound(); soundStructureGlide(); soundPolyVoices(); soundPolyStrings(); soundModeSwitchLive(); worldMirrorSize();

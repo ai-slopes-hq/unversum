@@ -31,7 +31,8 @@ void Cloud::set(double pos, double size, double dens, double pitch, bool freeze,
 
 void Cloud::write(float l, float r) {
   if (frozen_) return;
-  float vl = l + soft(echo_ * 0.7f * fbL_), vr = r + soft(echo_ * 0.7f * fbR_);
+  const float fk = echo_ * 0.7f * gain_;                  // gain_ = 1/√перекрытия; ещё раз — когерентные копии складываются линейно, петля < 1
+  float vl = l + soft(fk * fbL_), vr = r + soft(fk * fbR_);
   if (!(std::fabs(vl) > 1e-9f)) vl = 0;                  // NaN тоже сюда: в буфер не попадает
   if (!(std::fabs(vr) > 1e-9f)) vr = 0;
   if (!hasSound_ && vl == 0 && vr == 0) return;           // спим: в буфере и так ноль

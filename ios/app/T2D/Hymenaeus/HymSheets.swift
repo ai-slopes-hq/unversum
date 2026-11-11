@@ -36,7 +36,7 @@ extension HymenaeusView {
         let r = row(k)
         switch r.kind {
         case .cloud: return mirror.cloud[r.idx]
-        case .thread: return r.idx == 0 ? mirror.dejavu : Double(mirror.len - HymenaeusView.lenMin) / Double(HymenaeusView.lenMax - HymenaeusView.lenMin)
+        case .thread: return r.idx == 0 ? mirror.dejavu : Hym.clamp(Double(mirror.len - HymenaeusView.lenMin) / Double(HymenaeusView.lenMax - HymenaeusView.lenMin))
         case .ring: return 0
         }
       },
