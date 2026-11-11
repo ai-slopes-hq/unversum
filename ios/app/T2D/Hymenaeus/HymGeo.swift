@@ -2,12 +2,12 @@ import CoreGraphics
 import Foundation
 
 // геометрия Hymenaeus по макету mockups/hymenaeus-v2.html (вариант C): сцена 390×844, масштаб S = min(W/390, H/844), по центру на широком экране.
-// Сверху вниз: облака (с линзой пересечения) · mix · два стана (resonans, chorda) · переплетённые кольца · печати-локации.
+// Сверху вниз: облака (с линзой пересечения) · mix · две нити (resonans, chorda: тонкая линия с бегунком, удержание — перебросить) · переплетённые кольца · печати-локации.
 struct HymGeo {
   let W, H, S, ox, oy: CGFloat
   let sun: (x: CGFloat, y: CGFloat, r: CGFloat)
-  // станы: верхняя линия, 5 линий с шагом staveStep; жемчужины от staveX0 до staveX1, застёжка справа
-  static let staveTop: [CGFloat] = [352, 446], staveStep: CGFloat = 16, staveX0: CGFloat = 42, staveX1: CGFloat = 332, staveL: CGFloat = 22, staveR: CGFloat = 370, claspX: CGFloat = 356
+  // нити: y линии каждой нити; бегунок идёт от staveX0 до staveX1 (по шагам петли), застёжка справа; зона касания — ±staveHit
+  static let staveLine: [CGFloat] = [384, 478], staveX0: CGFloat = 42, staveX1: CGFloat = 332, staveL: CGFloat = 22, staveR: CGFloat = 370, claspX: CGFloat = 356, staveHit: CGFloat = 22
   // кольца: нить t играет кольцо t; центры по одной горизонтали, обода пересекаются
   static let ringCY: CGFloat = 640, ringX: [CGFloat] = [158, 232], ringRad: CGFloat = 50, ringW: CGFloat = 11
   static let mixY: CGFloat = 298, mixX0: CGFloat = 70, mixX1: CGFloat = 320
@@ -26,8 +26,8 @@ struct HymGeo {
   var lensRect: CGRect { rect(150, 150, 232, 214) }                          // линза пересечения двух облаков — внутри cloudsRect
   var mixTrack: CGRect { rect(HymGeo.mixX0 - 10, HymGeo.mixY - 12, HymGeo.mixX1 + 10, HymGeo.mixY + 12) }
   func mixValue(_ x: CGFloat) -> Double { Hym.clamp(Double((x - pt(HymGeo.mixX0, 0).x) / ((HymGeo.mixX1 - HymGeo.mixX0) * S))) }
-  func staveY(_ t: Int) -> CGFloat { pt(0, HymGeo.staveTop[t]).y }          // верхняя линия стана нити t
-  func staveRect(_ t: Int) -> CGRect { rect(HymGeo.staveL - 4, HymGeo.staveTop[t] - 16, HymGeo.staveR + 4, HymGeo.staveTop[t] + 4 * HymGeo.staveStep + 12) }
+  func staveY(_ t: Int) -> CGFloat { pt(0, HymGeo.staveLine[t]).y }         // линия нити t
+  func staveRect(_ t: Int) -> CGRect { rect(HymGeo.staveL - 4, HymGeo.staveLine[t] - HymGeo.staveHit, HymGeo.staveR + 4, HymGeo.staveLine[t] + HymGeo.staveHit) }
   var ringsRect: CGRect { rect(HymGeo.ringX[0] - HymGeo.ringRad - HymGeo.ringW, HymGeo.ringCY - HymGeo.ringRad - HymGeo.ringW, HymGeo.ringX[1] + HymGeo.ringRad + HymGeo.ringW, HymGeo.ringCY + HymGeo.ringRad + HymGeo.ringW) }
   func sealRect(_ loc: Int) -> CGRect {                                       // кружок печати и римская цифра под ним
     let x = HymGeo.sealX0 + CGFloat(loc) * HymGeo.sealDX
@@ -51,13 +51,11 @@ struct HymGeo {
     return (i, a)
   }
 
-  // жемчужины на стане нити t: x — равномерно, y — по высоте (полутона мерой в полшага линейки, 9 позиций от нижней линии)
-  func staveRow(_ pitch: Double) -> Int { Int((Hym.clamp(pitch) * 8).rounded()) }
-  func pearlPoint(_ t: Int, _ i: Int, n: Int, pitch: Double) -> CGPoint {
-    let x = HymGeo.staveX0 + (n > 1 ? CGFloat(i) / CGFloat(n - 1) : 0.5) * (HymGeo.staveX1 - HymGeo.staveX0)
-    return pt(x, HymGeo.staveTop[t] + (4 - CGFloat(staveRow(pitch)) / 2) * HymGeo.staveStep)
-  }
-  func claspPoint(_ t: Int, lastPitch: Double) -> CGPoint { pt(HymGeo.claspX, HymGeo.staveTop[t] + (4 - CGFloat(staveRow(lastPitch)) / 2) * HymGeo.staveStep) }
+  // бегунок на нити t: шаг i из n — x равномерно от staveX0 до staveX1 (u 0…1), y — на линии; высота ноты — только у летящей звёздочки (pitchOffset)
+  func playU(_ i: Int, n: Int) -> Double { n > 1 ? Double(i) / Double(n - 1) : 0.5 }
+  func playheadPoint(_ t: Int, u: Double) -> CGPoint { pt(HymGeo.staveX0 + CGFloat(u) * (HymGeo.staveX1 - HymGeo.staveX0), HymGeo.staveLine[t]) }
+  func pitchOffset(_ pitch: Double) -> CGFloat { -CGFloat(Hym.clamp(pitch) - 0.5) * 22 * S }   // выше нота — выше звёздочка над линией
+  func claspPoint(_ t: Int) -> CGPoint { pt(HymGeo.claspX, HymGeo.staveLine[t]) }
 
   func cornerHit(_ x: CGFloat, _ y: CGFloat) -> Bool {              // солнце-четверть слева сверху ведёт на карту
     y > sun.y && hypot(x - sun.x, y - sun.y) < sun.r + 6

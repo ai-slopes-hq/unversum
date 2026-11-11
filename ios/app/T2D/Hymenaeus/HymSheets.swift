@@ -18,22 +18,8 @@ extension HymenaeusView {
     HymRow(key: "structure", label: "structura", kind: .ring, idx: Hym.Ring.structure), HymRow(key: "bright", label: "claritas", kind: .ring, idx: Hym.Ring.bright),
     HymRow(key: "damp", label: "damping", kind: .ring, idx: Hym.Ring.damp), HymRow(key: "lvl", label: "level", kind: .ring, idx: Hym.Ring.lvl),
     HymRow(key: "poly", label: "voces", kind: .ring, idx: Hym.Ring.poly),
-    HymRow(key: "lo", label: "ima", kind: .thread, idx: Hym.Thread.lo), HymRow(key: "hi", label: "summa", kind: .thread, idx: Hym.Thread.hi),   // диапазон высоты своей нити, ноты MIDI
     HymRow(key: "len", label: "margaritae", kind: .thread, idx: Hym.Thread.len),
   ]
-  static let midiMin = 24, midiMax = 96, rangeGap = 5                                   // границы lo/hi и наименьшая ширина диапазона, полутонов
-
-  // слайдер 0…1 ↔ нота 24…96; ручка не уходит за границу и не сближается с другой ближе rangeGap
-  static func noteFrom(_ v: Double) -> Int { midiMin + Int((Hym.clamp(v) * Double(midiMax - midiMin)).rounded()) }
-  static func noteUnit(_ n: Int) -> Double { Hym.clamp(Double(n - midiMin) / Double(midiMax - midiMin)) }
-  static func rangeSet(isLo: Bool, _ v: Double, lo: Int, hi: Int) -> Int {
-    let n = noteFrom(v)
-    return isLo ? min(n, min(hi, midiMax) - rangeGap) : max(n, max(lo, midiMin) + rangeGap)
-  }
-  static func noteName(_ n: Int) -> String {
-    let names = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"], m = min(127, max(0, n))
-    return "\(names[m % 12])\(m / 12 - 1)"
-  }
 
   private func pct(_ v: Double) -> String { "\(v.isFinite ? Int((Hym.clamp(v) * 100).rounded()) : 0)%" }
   static func lenFrom(_ v: Double) -> Int { min(lenMax, max(lenMin, Int((Double(lenMin) + Hym.clamp(v) * Double(lenMax - lenMin)).rounded()))) }
@@ -89,13 +75,7 @@ extension HymenaeusView {
       rows: rows.map { r in SheetRow(key: r.key, label: r.label, code: r.kind == .ring && r.idx < Hym.Ring.poly ? i * HymenaeusView.ringNK + r.idx : -1) },
       get: { [unowned self] k in
         let q = mirror.rings[i], r = row(k)
-        if r.kind == .thread {
-          switch r.idx {
-          case Hym.Thread.lo: return HymenaeusView.noteUnit(mirror.lo[i])
-          case Hym.Thread.hi: return HymenaeusView.noteUnit(mirror.hi[i])
-          default: return Hym.clamp(Double(mirror.len[i] - HymenaeusView.lenMin) / Double(HymenaeusView.lenMax - HymenaeusView.lenMin))
-          }
-        }
+        if r.kind == .thread { return Hym.clamp(Double(mirror.len[i] - HymenaeusView.lenMin) / Double(HymenaeusView.lenMax - HymenaeusView.lenMin)) }
         switch r.idx {
         case Hym.Ring.structure: return q.structure
         case Hym.Ring.bright: return q.bright
@@ -106,27 +86,13 @@ extension HymenaeusView {
       },
       set: { [unowned self] k, v in
         let r = row(k)
-        if r.kind == .thread {
-          switch r.idx {
-          case Hym.Thread.lo, Hym.Thread.hi:
-            let n = HymenaeusView.rangeSet(isLo: r.idx == Hym.Thread.lo, v, lo: mirror.lo[i], hi: mirror.hi[i])
-            core.action(Act.thread.rawValue, i, [Double(r.idx), Double(n)], touchTime: 0)
-          default: core.action(Act.thread.rawValue, i, [Double(Hym.Thread.len), Double(HymenaeusView.lenFrom(v))], touchTime: 0)
-          }
-          return
-        }
+        if r.kind == .thread { core.action(Act.thread.rawValue, i, [Double(Hym.Thread.len), Double(HymenaeusView.lenFrom(v))], touchTime: 0); return }
         let val = r.idx == Hym.Ring.poly ? [0.0, 0.5, 1.0][min(2, Int(Hym.clamp(v) * 3))] : Hym.clamp(v)
         core.action(Act.ring.rawValue, i, [Double(r.idx), val], touchTime: 0)
       },
       text: { [unowned self] k in
         let q = mirror.rings[i], r = row(k)
-        if r.kind == .thread {
-          switch r.idx {
-          case Hym.Thread.lo: return HymenaeusView.noteName(mirror.lo[i])
-          case Hym.Thread.hi: return HymenaeusView.noteName(mirror.hi[i])
-          default: return "\(mirror.len[i]) pearls"
-          }
-        }
+        if r.kind == .thread { return "\(mirror.len[i]) pearls" }
         switch r.idx {
         case Hym.Ring.poly: return "\(q.voices)"
         case Hym.Ring.structure: return pct(q.structure)

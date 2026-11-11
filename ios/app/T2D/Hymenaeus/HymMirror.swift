@@ -12,7 +12,7 @@ enum Hym {
   static let locN = 4
   enum Cloud { static let pos = 0, size = 1, dens = 2, pitch = 3, freeze = 4, echo = 5, level = 6, send = 7 }   // CloudKey ядра
   enum Ring { static let structure = 0, bright = 1, damp = 2, lvl = 3, poly = 4 }                                // RingKey ядра (NRK = 5)
-  enum Thread { static let dejavu = 0, len = 1, lo = 2, hi = 3 }                                                 // ключи THREAD
+  enum Thread { static let dejavu = 0, len = 1 }                                                                 // ключи THREAD (lo/hi интерфейс не шлёт)
   static func clamp(_ v: Double, _ lo: Double = 0, _ hi: Double = 1) -> Double { v.isFinite ? min(hi, max(lo, v)) : lo }
 }
 

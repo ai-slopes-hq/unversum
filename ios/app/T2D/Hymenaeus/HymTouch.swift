@@ -2,44 +2,33 @@ import CoreGraphics
 import Foundation
 
 // жесты Hymenaeus по зонам: облака (X — positio, Y — granum), полоса echo внизу облаков, mix, кольца (↕ яркость, ↔ затухание, щипок — structure),
-// застёжка нити (déjà vu), жемчужины (тап — пауза, ↕ — высота), стан (удержание — перебросить эту нить), печати (тап — локация).
+// застёжка нити (déjà vu), нить (удержание — перебросить эту нить), печати (тап — локация). Жемчужин пальцем не правят — ни высоту, ни паузу, ни диапазон.
 // Чистые функции: вид только вызывает их и шлёт действие в ядро.
 enum HymGesture: Equatable {
   case cloudDrag(x: Double, y: Double), cloudHold, echoDrag(x: Double), mixDrag(Double)
   case ringStrike(ring: Int, pos: Double), ringAxes(ring: Int, bright: Double, damp: Double), ringPinch(ring: Int, structure: Double)
-  case claspDrag(thread: Int, Double), pearlTap(thread: Int, Int), pearlPitch(thread: Int, Int, Double), sealTap(Int), staveDice(thread: Int)
+  case claspDrag(thread: Int, Double), sealTap(Int), staveDice(thread: Int)
 }
 
-// что под пальцем (первое совпадение сверху вниз по приоритету: жемчужина, застёжка, кольцо, печать, mix, облака, стан)
+// что под пальцем (первое совпадение сверху вниз по приоритету: застёжка, печать, кольцо, mix, облака, нить)
 enum HymHit: Equatable {
-  case pearl(Int, Int), clasp(Int), stave(Int), seal(Int), ring(Int, pos: Double), cloud, echo, mix, none
+  case clasp(Int), stave(Int), seal(Int), ring(Int, pos: Double), cloud, echo, mix, none
 }
 typealias HymZone = HymHit
 
 // исходные значения, от которых отсчитывается относительный жест
-struct HymBase { var bright = 0.5, damp = 0.5, structure = 0.5, dejavu = 0.5, pitch = 0.5 }
+struct HymBase { var bright = 0.5, damp = 0.5, structure = 0.5, dejavu = 0.5 }
 
 enum HymTouch {
   static let echoStrip = 0.9                              // нижняя десятая облаков — полоса echo
-  static let dragRing: CGFloat = 130, dragThread: CGFloat = 130, dragPearl: CGFloat = 110, pinchSpan: CGFloat = 120   // пальцем на всю шкалу, в пунктах макета
+  static let dragRing: CGFloat = 130, dragThread: CGFloat = 130, pinchSpan: CGFloat = 120   // пальцем на всю шкалу, в пунктах макета
 
   static func ok(_ p: CGPoint) -> Bool { p.x.isFinite && p.y.isFinite }
 
-  static func hit(_ p: CGPoint, geo: HymGeo, mirror m: HymMirror) -> HymHit {
+  static func hit(_ p: CGPoint, geo: HymGeo) -> HymHit {
     guard ok(p) else { return .none }
-    let hit = 14 * geo.S
-    var best: (t: Int, i: Int, d: CGFloat)?               // ближайшая жемчужина в радиусе — соседи на len 16 стоят в ~19 пт
     for t in 0..<Hym.nr {
-      let n = max(1, m.len[t])
-      for i in 0..<n {
-        let q = geo.pearlPoint(t, i, n: n, pitch: m.pearls[t][i].pitch), d = hypot(p.x - q.x, p.y - q.y)
-        if d < hit && d < (best?.d ?? .infinity) { best = (t, i, d) }
-      }
-    }
-    if let b = best { return .pearl(b.t, b.i) }
-    for t in 0..<Hym.nr {
-      let n = max(1, m.len[t])
-      let c = geo.claspPoint(t, lastPitch: m.pearls[t][n - 1].pitch)
+      let c = geo.claspPoint(t)
       if hypot(p.x - c.x, p.y - c.y) < 16 * geo.S { return .clasp(t) }
     }
     for l in 0..<Hym.locN where geo.sealRect(l).contains(p) { return .seal(l) }
@@ -52,8 +41,8 @@ enum HymTouch {
   }
 
   // как hit, но nil вместо .none
-  static func zone(at p: CGPoint, geo: HymGeo, mirror m: HymMirror) -> HymZone? {
-    let h = hit(p, geo: geo, mirror: m)
+  static func zone(at p: CGPoint, geo: HymGeo) -> HymZone? {
+    let h = hit(p, geo: geo)
     return h == HymHit.none ? nil : h
   }
 
@@ -70,7 +59,6 @@ enum HymTouch {
     case .mix: return .mixDrag(geo.mixValue(to.x))
     case .ring(let r, _): return .ringAxes(ring: r, bright: Hym.clamp(base.bright - Double(dy / dragRing)), damp: Hym.clamp(base.damp + Double(dx / dragRing)))
     case .clasp(let t): return .claspDrag(thread: t, Hym.clamp(base.dejavu + Double(dx / dragThread)))
-    case .pearl(let t, let i): return .pearlPitch(thread: t, i, Hym.clamp(base.pitch - Double(dy / dragPearl)))
     case .stave, .seal, .none: return nil
     }
   }
@@ -90,7 +78,6 @@ enum HymTouch {
     case .mixDrag: return "sicca · umida"
     case .ringStrike, .ringAxes, .ringPinch: return "anuli"
     case .claspDrag: return "déjà vu"
-    case .pearlTap, .pearlPitch: return "margaritae"
     case .sealTap: return "loca"
     case .staveDice(let t): return Hym.ringNames[t]
     }

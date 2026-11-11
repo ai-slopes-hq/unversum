@@ -126,7 +126,7 @@ struct T2DApp: App {
         let a: CGPoint, b: CGPoint
         switch T2DApp.shotName {
         case "hymenaeus-ring": a = CGPoint(x: g.ringCenter(0).x + g.ringR(0), y: g.ringCenter(0).y); b = CGPoint(x: a.x + 20 * g.S, y: a.y - 30 * g.S)
-        case "hymenaeus-clasp": a = g.claspPoint(0, lastPitch: v.mirror.pearls[0][max(0, v.mirror.len[0] - 1)].pitch); b = CGPoint(x: a.x + 30 * g.S, y: a.y)
+        case "hymenaeus-clasp": a = g.claspPoint(0); b = CGPoint(x: a.x + 30 * g.S, y: a.y)
         default: a = CGPoint(x: g.cloudsRect.minX + 80 * g.S, y: g.cloudsRect.midY); b = CGPoint(x: a.x + 120 * g.S, y: a.y - 40 * g.S)
         }
         v.down(f(a, a)); v.move(f(a, b))

@@ -129,6 +129,24 @@ final class HymenaeusTests: XCTestCase {
     XCTAssertEqual(v.notes.first { $0.born == 5 && $0.ring == 1 }?.pearl, -1, "ручной удар — без жемчужины")
   }
 
+  // нота стартует от бегунка в момент удара: u — место шага на нити, pitch — высота из зеркала; ручной удар без полёта и привязки
+  func testStrikeAnchoredToPlayhead() {
+    let mir = vector()
+    var q: [[Double]] = [[2, 0, 4, 1, 0]]
+    let v = HymenaeusView(core: HymRec(), readMirror: { b in b.replaceSubrange(0..<mir.count, with: mir); return mir.count }, readHeard: { b in
+      guard !q.isEmpty else { return 0 }
+      let r = q.removeFirst(); b.replaceSubrange(0..<r.count, with: r); return r.count
+    })
+    v.tick(now: 3, dt: 0.016)
+    let a = v.notes.first { $0.born == 3 && $0.ring == 0 }, b = v.notes.first { $0.born == 3 && $0.ring == 1 }
+    XCTAssertEqual(a?.u ?? -1, v.geo.playU(4, n: v.mirror.len[0]), accuracy: 1e-9)
+    XCTAssertEqual(a?.pitch ?? -1, v.mirror.pearls[0][4].pitch, accuracy: 1e-9)
+    XCTAssertEqual(b?.u ?? -1, v.geo.playU(0, n: v.mirror.len[1]), accuracy: 1e-9)
+    let p0 = v.geo.playheadPoint(0, u: a?.u ?? 0)
+    XCTAssertEqual(p0.y, v.geo.staveY(0), accuracy: 1e-9, "бегунок лежит на линии нити")
+    XCTAssertGreaterThan(v.geo.pitchOffset(0.1), v.geo.pitchOffset(0.9), "выше нота — выше звёздочка (меньше y)")
+  }
+
   // ---------- жесты по осям ----------
   private func make(_ mv: [Double]? = nil) -> (HymenaeusView, HymRec) {
     let rec = HymRec(); let mir = mv ?? vector()
@@ -205,7 +223,7 @@ final class HymenaeusTests: XCTestCase {
   }
 
   func testClaspDragDejaVu() {
-    let (v, rec) = make(), k = NSObject(), p = v.geo.claspPoint(0, lastPitch: v.mirror.pearls[0][v.mirror.len[0] - 1].pitch)
+    let (v, rec) = make(), k = NSObject(), p = v.geo.claspPoint(0)
     v.down(fin(k, p.x, p.y, 0, 0))
     v.move(fin(k, p.x + 39 * v.geo.S, p.y, 0, 0))
     XCTAssertEqual(acts(rec, .thread).last?.i, 0); XCTAssertEqual(acts(rec, .thread).last?.a[0], 0)
@@ -213,37 +231,39 @@ final class HymenaeusTests: XCTestCase {
     XCTAssertEqual(v.activeLabels.first?.text, "déjà vu")
   }
 
-  func testPearlTapTogglesRest() {
-    let (v, rec) = make(), k = NSObject()
-    for (t, i, want) in [(0, 0, 1.0), (0, 4, 0.0), (1, 1, 0.0)] {                          // пауза в векторе: нить 0 жемчужина 4, нить 1 жемчужина 1
-      let n = v.mirror.len[t], p = v.geo.pearlPoint(t, i, n: n, pitch: v.mirror.pearls[t][i].pitch)
-      v.down(fin(k, p.x, p.y, 0, 0)); v.up(fin(k, p.x, p.y, 0, 0))
-      XCTAssertEqual(acts(rec, .pearl).last?.i, i)
-      XCTAssertEqual(acts(rec, .pearl).last?.a, [Double(t), 1, want], "\(t) \(i)")
+  // жемчужин нет: ни тап, ни перетаскивание на месте бывших жемчужин не шлёт PEARL; тап по нити — ничего, удержание — кубик этой нити
+  func testPearlGesturesGone() {
+    let (v, rec) = make(), k = NSObject(), g = v.geo
+    for t in 0..<Hym.nr {
+      let p = g.playheadPoint(t, u: 0.3)
+      v.down(fin(k, p.x, p.y, 0, 0)); v.up(fin(k, p.x, p.y, 0, 0))                           // тап
+      v.down(fin(k, p.x, p.y, 0, 0)); v.move(fin(k, p.x, p.y - 30 * g.S, 0, 0)); v.up(fin(k, p.x, p.y - 30 * g.S, 0, 0))   // вертикальный жест
     }
+    XCTAssertTrue(acts(rec, .pearl).isEmpty); XCTAssertTrue(acts(rec, .thread).isEmpty); XCTAssertTrue(rec.acts.isEmpty)
+    XCTAssertTrue(v.activeLabels.isEmpty)
   }
 
-  func testPearlVerticalPitch() {
-    let (v, rec) = make(), k = NSObject(), n = v.mirror.len[1], p0 = v.mirror.pearls[1][2].pitch, p = v.geo.pearlPoint(1, 2, n: n, pitch: p0)
-    v.down(fin(k, p.x, p.y, 0, 0))
-    v.move(fin(k, p.x, p.y - 22 * v.geo.S, 0, 0))                                          // вверх — выше
-    XCTAssertEqual(acts(rec, .pearl).last?.i, 2); XCTAssertEqual(acts(rec, .pearl).last?.a[0], 1); XCTAssertEqual(acts(rec, .pearl).last?.a[1], 0)
-    XCTAssertEqual(acts(rec, .pearl).last?.a[2] ?? 0, p0 + 0.2, accuracy: 0.01)
-    v.up(fin(k, p.x, p.y - 22 * v.geo.S, 0, 0))
-    XCTAssertTrue(acts(rec, .pearl).allSatisfy { $0.a[1] == 0 })                            // перетащил — пауза не переключилась
+  func testHoldOnPearlSpotRerollsThatThread() {
+    for t in 0..<Hym.nr {
+      let (v, rec) = make(), k = NSObject(), p = v.geo.playheadPoint(t, u: 0.55)
+      v.down(fin(k, p.x, p.y, 0, 0))
+      XCTAssertEqual(v.holds.values.first?.zone, .stave(t))
+      v.tick(now: 1.6, dt: 0.016); v.up(fin(k, p.x, p.y, 0, 0))
+      XCTAssertEqual(acts(rec, .dice).map { $0.a }, [[Double(t)]]); XCTAssertTrue(acts(rec, .pearl).isEmpty)
+    }
   }
 
   func testDragOutsideZonesIgnored() {
     let (v, rec) = make(), k = NSObject(), g = v.geo
     let p = g.pt(20, 560)                                                                  // между станами и кольцами
-    XCTAssertNil(HymTouch.zone(at: p, geo: g, mirror: v.mirror))
+    XCTAssertNil(HymTouch.zone(at: p, geo: g))
     v.down(fin(k, p.x, p.y, 0, 0)); v.move(fin(k, p.x + 80, p.y - 80, 0, 0)); v.up(fin(k, p.x, p.y, 0, 0))
     XCTAssertTrue(rec.acts.isEmpty)
   }
 
   func testNaNPointIgnored() {
     let (v, rec) = make(), k = NSObject(), cr = v.geo.cloudsRect
-    XCTAssertNil(HymTouch.zone(at: CGPoint(x: CGFloat.nan, y: 100), geo: v.geo, mirror: v.mirror))
+    XCTAssertNil(HymTouch.zone(at: CGPoint(x: CGFloat.nan, y: 100), geo: v.geo))
     v.down(fin(k, CGFloat.nan, CGFloat.nan, 0, 0)); v.up(fin(k, CGFloat.nan, CGFloat.nan, 0, 0))
     v.down(fin(k, cr.midX, cr.midY, 0, 0)); v.move(fin(k, CGFloat.nan, 50, 0, 0)); v.move(fin(k, 50, CGFloat.infinity, 0, 0))
     XCTAssertTrue(rec.acts.isEmpty)
@@ -260,8 +280,8 @@ final class HymenaeusTests: XCTestCase {
     XCTAssertEqual(Set(fx.rows.map(\.key)), ["pos", "size", "dens", "pitch", "freeze", "echo", "level", "send", "mix"])
     XCTAssertEqual(HymenaeusView.cloudRows.filter { $0.kind == .cloud }.map(\.idx).sorted(), Array(0..<Hym.nck))
     let ring = v.ringSpec(1)
-    XCTAssertEqual(ring.rows.map(\.key), ["structure", "bright", "damp", "lvl", "poly", "lo", "hi", "len"])
-    XCTAssertEqual(ring.rows.map(\.code), [5, 6, 7, 8, -1, -1, -1, -1])                              // LFO кольца 1: ring·NRK + ключ
+    XCTAssertEqual(ring.rows.map(\.key), ["structure", "bright", "damp", "lvl", "poly", "len"])
+    XCTAssertEqual(ring.rows.map(\.code), [5, 6, 7, 8, -1, -1])                              // LFO кольца 1: ring·NRK + ключ
     XCTAssertEqual(fx.rows.first { $0.key == "echo" }?.code, 10 + Hym.Cloud.echo)            // облака — после NR·NRK колец
     XCTAssertEqual(fx.rows.first { $0.key == "freeze" }?.code, -1)
     for k in ring.rows.map(\.key) { XCTAssertFalse(ring.text(k).isEmpty); XCTAssertTrue((0.0...1.0).contains(ring.get(k))) }
@@ -324,12 +344,12 @@ final class HymenaeusTests: XCTestCase {
   // ---------- Task 6: вид C, зоны, кнопки ----------
   func testHitZones() {
     let (v, _) = make(), g = v.geo, m = v.mirror
-    func hit(_ p: CGPoint) -> HymHit { HymTouch.hit(p, geo: g, mirror: m) }
+    func hit(_ p: CGPoint) -> HymHit { HymTouch.hit(p, geo: g) }
     for t in 0..<Hym.nr {
-      let n = m.len[t]
-      XCTAssertEqual(hit(g.pearlPoint(t, 3, n: n, pitch: m.pearls[t][3].pitch)), .pearl(t, 3))
-      XCTAssertEqual(hit(g.claspPoint(t, lastPitch: m.pearls[t][n - 1].pitch)), .clasp(t))
-      XCTAssertEqual(hit(CGPoint(x: g.pt(30, 0).x, y: g.staveY(t) + 2 * HymGeo.staveStep * g.S)), .stave(t))
+      XCTAssertEqual(hit(g.claspPoint(t)), .clasp(t))
+      for u in [0.0, 0.3, 0.5, 1.0] { XCTAssertEqual(hit(g.playheadPoint(t, u: u)), .stave(t), "нить \(t) u \(u)") }   // на месте бывших жемчужин — нить
+      XCTAssertEqual(hit(CGPoint(x: g.pt(30, 0).x, y: g.staveY(t) + 15 * g.S)), .stave(t))
+      XCTAssertEqual(hit(CGPoint(x: g.pt(30, 0).x, y: g.staveY(t) + 30 * g.S)), HymHit.none)
     }
     for l in 0..<Hym.locN { XCTAssertEqual(hit(CGPoint(x: g.sealRect(l).midX, y: g.sealRect(l).minY + 3)), .seal(l)) }
     for i in 0..<Hym.nr { let c = g.ringCenter(i); if case .ring(let r, _) = hit(CGPoint(x: c.x, y: c.y - g.ringR(i))) { XCTAssertEqual(r, i) } else { XCTFail("ring \(i)") } }
@@ -340,37 +360,13 @@ final class HymenaeusTests: XCTestCase {
     XCTAssertEqual(hit(CGPoint(x: CGFloat.nan, y: 1)), HymHit.none)
   }
 
-  func testHitPicksNearestPearl() {
-    var mv = vector(); mv[6] = 16                                                        // len 16: соседи ~19 пт друг от друга
-    let (v, _) = make(mv), g = v.geo, m = v.mirror
-    let n = m.len[0]
-    XCTAssertEqual(n, 16)
-    let a = g.pearlPoint(0, 4, n: n, pitch: m.pearls[0][4].pitch), b = g.pearlPoint(0, 5, n: n, pitch: m.pearls[0][5].pitch)
-    let p = CGPoint(x: a.x + (b.x - a.x) * 0.6, y: a.y + (b.y - a.y) * 0.6)              // ближе к 5-й, но обе в радиусе 14·S
-    XCTAssertLessThan(hypot(p.x - a.x, p.y - a.y), 14 * g.S, "обе жемчужины в радиусе — тест имеет смысл")
-    XCTAssertEqual(HymTouch.hit(p, geo: g, mirror: m), .pearl(0, 5))
-  }
-
-  func testPitchGestureSendsAct() {
-    let (v, rec) = make(), k = NSObject(), n = v.mirror.len[0], p0 = v.mirror.pearls[0][5].pitch, p = v.geo.pearlPoint(0, 5, n: n, pitch: p0)
-    v.down(fin(k, p.x, p.y, 0, 0)); v.move(fin(k, p.x, p.y - 22 * v.geo.S, 0, 0))
-    let a = acts(rec, .pearl).last
-    XCTAssertEqual(a?.i, 5); XCTAssertEqual(a?.a[0], 0); XCTAssertEqual(a?.a[1], 0); XCTAssertEqual(a?.a[2] ?? 0, p0 + 0.2, accuracy: 0.01)
-    XCTAssertTrue(v.activeLabels.first?.text.hasPrefix("margaritae · ") == true)          // подпись с нотой — пока тянешь
-  }
-
-  func testRangeSliderClamps() {
-    XCTAssertEqual(HymenaeusView.noteFrom(0), 24); XCTAssertEqual(HymenaeusView.noteFrom(1), 96); XCTAssertEqual(HymenaeusView.noteFrom(.nan), 24)
-    XCTAssertEqual(HymenaeusView.rangeSet(isLo: true, 1, lo: 45, hi: 69), 64)              // lo не ближе 5 к hi
-    XCTAssertEqual(HymenaeusView.rangeSet(isLo: false, 0, lo: 45, hi: 69), 50)             // hi не ближе 5 к lo
-    XCTAssertEqual(HymenaeusView.rangeSet(isLo: true, -3, lo: 45, hi: 69), 24)
-    XCTAssertEqual(HymenaeusView.rangeSet(isLo: false, 9, lo: 45, hi: 69), 96)
-    XCTAssertEqual(HymenaeusView.noteName(45), "A2"); XCTAssertEqual(HymenaeusView.noteName(60), "C4")
-    let (v, rec) = make(), ring = v.ringSpec(1)                                            // вектор: нить 1 lo 55, hi 84
-    ring.set("hi", 0); ring.set("lo", 1)
-    XCTAssertEqual(acts(rec, .thread).map { $0.a }, [[3, 60], [2, 79]])
-    XCTAssertEqual(ring.text("lo"), "G3"); XCTAssertEqual(ring.text("hi"), "C6")
-    XCTAssertEqual(ring.get("lo"), HymenaeusView.noteUnit(55), accuracy: 1e-9)
+  func testNoRangeNoPearlUi() {
+    let (v, rec) = make(), ring = v.ringSpec(1)
+    XCTAssertEqual(HymenaeusView.ringRows.map(\.key), ["structure", "bright", "damp", "lvl", "poly", "len"], "ни ima, ни summa")
+    ring.set("len", 0.5)
+    XCTAssertEqual(acts(rec, .thread).map { $0.a }, [[1, 10]])
+    XCTAssertEqual(rec.acts.filter { $0.kind == HymAct.pearl.rawValue }.count, 0)
+    XCTAssertEqual(HymAct.pearl.rawValue, 2)                                                // номер в ядре остался, интерфейс его не шлёт
   }
 
   func testSealTapSendsLoc() {
@@ -392,7 +388,7 @@ final class HymenaeusTests: XCTestCase {
   }
 
   func testStaveHoldRerollsOneThread() {
-    let (v, rec) = make(), k = NSObject(), p = CGPoint(x: v.geo.pt(30, 0).x, y: v.geo.staveY(1) + 2 * HymGeo.staveStep * v.geo.S)
+    let (v, rec) = make(), k = NSObject(), p = CGPoint(x: v.geo.pt(30, 0).x, y: v.geo.staveY(1))
     v.down(fin(k, p.x, p.y, 0, 0)); v.tick(now: 1.6, dt: 0.016); v.tick(now: 1.7, dt: 0.016); v.up(fin(k, p.x, p.y, 0, 0))
     XCTAssertEqual(acts(rec, .dice).map { $0.a }, [[1]])                                    // одна нить, один раз
   }
