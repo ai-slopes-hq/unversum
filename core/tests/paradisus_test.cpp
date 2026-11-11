@@ -1,15 +1,25 @@
-// Тесты мира Paradisus (VI): модель. Сборка и запуск — core/build.sh → core/build/paradisus-test.
+// Тесты мира Paradisus (VI): модель и мир (звук). Сборка и запуск — core/build.sh → core/build/paradisus-test.
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <new>
 #include <string>
+#include <vector>
 
 #include "../host/scale.hpp"
 #include "../worlds/paradisus/model.hpp"
+#include "../worlds/paradisus/world.hpp"
 
 static int checks = 0, fails = 0;
 #define CHECK(c) do { checks++; if (!(c)) { fails++; std::printf("FAIL %s:%d  %s\n", __FILE__, __LINE__, #c); } } while (0)
 
 using namespace paradisus;
+
+static long gAllocs = 0; static bool gCount = false;      // считает new в аудио-блоке
+void* operator new(std::size_t n) { if (gCount) gAllocs++; void* p = std::malloc(n ? n : 1); if (!p) throw std::bad_alloc(); return p; }
+void operator delete(void* p) noexcept { std::free(p); }
+void operator delete(void* p, std::size_t) noexcept { std::free(p); }
 
 static void harmMapping() {
   Scale sc; Model m(sc);
@@ -156,9 +166,227 @@ static void miscClamps() {
   m.clear(); CHECK(m.count() == 0 && !m.sounding());
 }
 
+// ---------- мир (звук) ----------
+
+struct Bufs { std::vector<float> L, R, sL, sR; explicit Bufs(int n = 512) : L(n), R(n), sL(n), sR(n) {} sdk::Out out() { return sdk::Out{L.data(), R.data(), sL.data(), sR.data()}; } };
+struct Stat { double pk = 0, spk = 0, e = 0; long n = 0; bool finite = true; };
+static void eat(Stat& s, const Bufs& b, int n) {
+  for (int i = 0; i < n; i++) {
+    for (float x : {b.L[i], b.R[i], b.sL[i], b.sR[i]}) if (!std::isfinite(x)) s.finite = false;
+    s.pk = std::fmax(s.pk, std::fmax(std::fabs(b.L[i]), std::fabs(b.R[i]))); s.spk = std::fmax(s.spk, std::fmax(std::fabs(b.sL[i]), std::fabs(b.sR[i])));
+    s.e += double(b.L[i]) * b.L[i] + double(b.R[i]) * b.R[i]; s.n += 2;
+  }
+}
+static void run(World& w, Bufs& b, double sec, int blk, double sr, Stat& st) {
+  const long total = long(sec * sr);
+  for (long done = 0; done < total; done += blk) { const int n = int(std::min<long>(blk, total - done)); w.process(b.out(), n); eat(st, b, n); }
+}
+static void act(World& w, int kind, int i, std::initializer_list<double> a) { std::vector<double> v(a); w.action(kind, i, v.data(), int(v.size())); }
+static void pinFour(World& w) {
+  const double ks[4] = {0, 2, 5, 8}, vs[4] = {0.3, 1.6, 2.9, 4.2};
+  for (int i = 0; i < 4; i++) { act(w, TOUCH, i, {ks[i], vs[i]}); act(w, PIN, i, {}); }
+}
+
+static void worldPeakBounded() {
+  for (double sr : {48000.0, 44100.0}) {
+    Scale sc; World w(sc); w.prepare(sr, 3); Bufs b; Stat st;
+    pinFour(w);
+    for (int a = 0; a < 4; a++) {                         // у каждого закреплённого — всё на максимум
+      const int id = w.model().angel(a).id;
+      act(w, ANGEL, id, {0, 1}); act(w, ANGEL, id, {1, 1}); act(w, ANGEL, id, {2, 1}); act(w, ANGEL, id, {3, 1});
+    }
+    for (int k = 0; k < NFX; k++) act(w, FX, 0, {double(k), 1});
+    double pre = 0;
+    for (int s = 0; s < 30; s++) {
+      if (s % 3 == 0) act(w, ROSE, 0, {});
+      run(w, b, 1.0, 128, sr, st);
+      pre = std::fmax(pre, w.sound().prePeak());
+    }
+    CHECK(st.finite); CHECK(st.pk < 1.0 && st.spk < 1.0); CHECK(st.pk > 0.05);
+    CHECK(pre < 1.6);                                     // колено не должно быть основным лимитом: до него — не выше ~1.6 (измерено, см. отчёт)
+    std::printf("  peak sr=%.0f: out %.3f send %.3f pre-knee %.3f rms %.3f\n", sr, st.pk, st.spk, pre, std::sqrt(st.e / st.n));
+  }
+}
+
+static void worldBlocksAnySize() {
+  Scale sc; World w(sc); w.prepare(48000, 5); Bufs b(512); Stat st;
+  pinFour(w); act(w, FX, 0, {double(SHIMMER), 1}); act(w, FX, 0, {double(DECAY), 1});
+  const int sizes[] = {1, 2, 3, 7, 31, 64, 127, 128, 129, 255, 300, 512};
+  for (int rep = 0; rep < 60; rep++) { for (int n : sizes) { w.process(b.out(), n); eat(st, b, n); } act(w, ROSE, 0, {}); }
+  CHECK(st.finite); CHECK(st.pk < 1.0 && st.spk < 1.0); CHECK(st.pk > 0.05);
+  w.process(b.out(), 0); w.process(b.out(), -5);          // нулевой и отрицательный блок не ломают
+}
+
+static void worldSilentWhenIdle() {
+  Scale sc; World w(sc); w.prepare(48000, 1); Bufs b; Stat st;
+  run(w, b, 2.0, 128, 48000, st);
+  CHECK(std::sqrt(st.e / st.n) < 1e-4); CHECK(st.pk == 0); CHECK(!w.sounding());
+  double h[8]; CHECK(w.heard(h, 8) == 0);
+}
+
+static double centroid(const std::vector<float>& x) {     // спектральный центроид, 40…6000 Гц, по DFT окна 8192
+  const int N = 8192; double num = 0, den = 0;
+  for (int k = 1; k < 1000; k++) {
+    const double f = k * 48000.0 / N; if (f < 40 || f > 6000) continue;
+    double re = 0, im = 0;
+    for (int i = 0; i < N; i++) { const double ph = 2 * M_PI * k * i / N, win = 0.5 - 0.5 * std::cos(2 * M_PI * i / N); re += x[i] * win * std::cos(ph); im -= x[i] * win * std::sin(ph); }
+    const double m = std::sqrt(re * re + im * im); num += f * m; den += m;
+  }
+  return num / den;
+}
+static double vowelCentroid(double v) {
+  Scale sc; World w(sc); w.prepare(48000, 2); Bufs b; Stat st;
+  act(w, FX, 0, {double(GLORIA), 0}); act(w, FX, 0, {double(SHIMMER), 0}); act(w, FX, 0, {double(MIX), 0});
+  act(w, TOUCH, 0, {6, v});                               // сфера 6 → гармоника 3 (330 Гц), все певцы
+  run(w, b, 3.0, 128, 48000, st);
+  std::vector<float> x; x.reserve(8192);
+  while (int(x.size()) < 8192) { w.process(b.out(), 128); for (int i = 0; i < 128; i++) x.push_back(b.L[i]); }
+  return centroid(x);
+}
+static void worldVowelChangesSpectrum() {
+  const double a = vowelCentroid(0), i = vowelCentroid(2);
+  CHECK(a > 0 && i > 0); CHECK(std::fabs(a - i) / std::fmin(a, i) >= 0.10);
+  std::printf("  centroid a=%.0f Hz i=%.0f Hz\n", a, i);
+}
+
+static void worldDeterministic() {
+  Scale sc; World w1(sc), w2(sc); w1.prepare(48000, 9); w2.prepare(48000, 9); Bufs b1, b2;
+  for (World* w : {&w1, &w2}) { act(*w, DICE, 0, {}); act(*w, TOUCH, 7, {3, 2.5}); act(*w, ROSE, 0, {}); act(*w, FX, 0, {double(GLORIA), 0.8}); }
+  bool same = true;
+  for (int blk = 0; blk < 600; blk++) {
+    w1.process(b1.out(), 128); w2.process(b2.out(), 128);
+    same = same && !std::memcmp(b1.L.data(), b2.L.data(), 128 * 4) && !std::memcmp(b1.R.data(), b2.R.data(), 128 * 4) && !std::memcmp(b1.sL.data(), b2.sL.data(), 128 * 4);
+  }
+  CHECK(same);
+  World w3(sc); w3.prepare(48000, 10); Bufs b3; act(w3, DICE, 0, {}); w3.process(b3.out(), 128);
+  double d = 0; for (int i = 0; i < 128; i++) d += std::fabs(b3.L[i] - b1.L[i]); CHECK(d >= 0);   // другое зерно — просто не падает
+}
+
+static void worldSnapshotRoundTrip() {
+  Scale sc; World w(sc); w.prepare(48000, 4); Bufs b; Stat st;
+  act(w, DICE, 0, {}); act(w, FX, 0, {double(SHIMMER), 0.9}); act(w, FX, 0, {double(CATHEDRAL), 0.2});
+  act(w, ANGEL, w.model().angel(0).id, {0, 0.2});
+  run(w, b, 0.5, 128, 48000, st);
+  const std::string js = w.snapshot();
+  World w2(sc); w2.prepare(48000, 77); w2.restore(js);
+  CHECK(w2.snapshot() == js); CHECK(w2.model().pinnedCount() == 3); CHECK(w2.model().fx().shimmer == 0.9);
+  CHECK(js.find("\"model\"") != std::string::npos);
+  Stat s2; run(w2, b, 1.0, 128, 48000, s2); CHECK(s2.finite && s2.pk > 0.01); CHECK(w2.sound().voicesUsed() == 3);
+}
+
+static void worldRestoreAnyInput() {
+  Scale sc; Bufs b;
+  const char* in[] = {"", "{", "null", "[]", "мусор", "{\"model\":5}", "{\"model\":{\"angels\":[{\"k\":99,\"v\":-1e9,\"singers\":-3}],\"fx\":{\"shimmer\":1e99}}}",
+                      "{\"angels\":[{\"k\":4,\"v\":1,\"singers\":3,\"detune\":0.4,\"vib\":0.5,\"breath\":0.2,\"reg\":1}],\"fx\":{\"shimmer\":0.5,\"gloria\":0.3,\"aether\":0.7,\"vibrato\":0.4,\"orbits\":0.3}}"};
+  for (const char* js : in) {
+    World w(sc); w.prepare(48000, 1); act(w, TOUCH, 0, {1, 1});
+    w.restore(js);
+    Stat st; run(w, b, 1.0, 128, 48000, st);
+    CHECK(st.finite && st.pk < 1.0);
+    act(w, TOUCH, 5, {4, 2}); run(w, b, 1.0, 128, 48000, st);   // мир после restore рабочий: новый ангел поёт
+    CHECK(st.finite && st.pk > 0.01 && w.sounding());
+    double m[MIRROR_N]; CHECK(w.mirror(m, MIRROR_N) == MIRROR_N);
+  }
+  World w(sc); w.prepare(48000, 1); w.restore(in[7]);
+  CHECK(w.model().count() == 1 && w.model().angel(0).pinned && w.model().fx().shimmer == 0.5 && w.model().angel(0).singers == 3);
+}
+
+static void worldPinKeepsVoice() {
+  Scale sc; World w(sc); w.prepare(48000, 6); Bufs b; Stat st;
+  act(w, TOUCH, 4, {3, 1}); run(w, b, 1.0, 128, 48000, st);
+  CHECK(w.sound().voicesUsed() == 1);
+  act(w, PIN, 4, {}); CHECK(w.model().pinnedCount() == 1);
+  act(w, RELEASE, 4, {}); run(w, b, 3.0, 128, 48000, st);
+  CHECK(w.sound().voicesUsed() == 1);                     // тот же голос: новый не родился, старый не ушёл в затухание
+  CHECK(w.model().angel(0).sung && w.model().angel(0).lvl > 0.99);
+  act(w, PIN, w.model().angel(0).id, {}); CHECK(w.model().count() == 0);   // снят — исчез
+  run(w, b, 8.0, 128, 48000, st); CHECK(w.sound().voicesUsed() == 0);
+}
+
+static void worldReleaseFades() {
+  Scale sc; World w(sc); w.prepare(48000, 8); Bufs b; Stat st;
+  act(w, FX, 0, {double(GLORIA), 0});
+  act(w, TOUCH, 0, {2, 3}); run(w, b, 2.0, 128, 48000, st);
+  CHECK(w.sounding() && w.sound().level() > 0.01);
+  act(w, RELEASE, 0, {}); CHECK(w.model().count() == 0);
+  Stat tail; run(w, b, 10.0, 128, 48000, tail);
+  CHECK(!w.sounding()); CHECK(w.sound().level() < 1e-4);
+  Stat quiet; run(w, b, 0.5, 128, 48000, quiet); CHECK(quiet.pk == 0);
+}
+
+static void worldHeardEvents() {
+  Scale sc; World w(sc); w.prepare(48000, 11); Bufs b; Stat st;
+  act(w, ROSE, 0, {}); run(w, b, 1.0, 128, 48000, st);
+  double h[100]; const int k = w.heard(h, 100);
+  CHECK(k == 1 + 2 * 12 && h[0] == 12);
+  for (int i = 0; i < 12; i++) CHECK(h[1 + 2 * i] == H_GRAIN && std::fabs(h[2 + 2 * i]) <= 0.8);
+  CHECK(w.heard(h, 100) == 0);                            // очищено
+  Scale sc2; World c(sc2); c.prepare(48000, 12);
+  act(c, FX, 0, {double(ORBITS), 1}); act(c, FX, 0, {double(GLORIA), 0}); act(c, TOUCH, 0, {5, 2.3}); act(c, PIN, 0, {});
+  int chimes = 0; double hh[100];
+  for (int s = 0; s < 30; s++) { run(c, b, 1.0, 128, 48000, st); const int n = c.heard(hh, 100); for (int j = 0; j < (n ? int(hh[0]) : 0); j++) chimes += hh[1 + 2 * j] == H_CHIME; }
+  CHECK(chimes >= 1);
+  double none[1]; CHECK(w.heard(none, 0) == 0); CHECK(w.heard(nullptr, 5) == 0);
+}
+
+static void worldGloria() {
+  Scale sc; World w(sc); w.prepare(48000, 13); Bufs b; Stat st;
+  act(w, FX, 0, {double(GLORIA), 1}); act(w, TOUCH, 0, {4, 1});
+  run(w, b, 0.5, 128, 48000, st);
+  double h[200]; w.heard(h, 200);                         // сброс
+  run(w, b, 4.0, 128, 48000, st);
+  const int n = w.heard(h, 200); const int cnt = n ? int(h[0]) : 0;
+  CHECK(cnt >= 24 && cnt <= 32);                          // ≈ 24 зерна/с на 4 с, но событий между опросами ≤ 32 (лишние теряются)
+  act(w, FX, 0, {double(GLORIA), 0}); run(w, b, 1.0, 128, 48000, st); w.heard(h, 200);
+  run(w, b, 2.0, 128, 48000, st); CHECK(w.heard(h, 200) == 0);
+}
+
+static void worldMirrorLayout() {
+  Scale sc; World w(sc); w.prepare(48000, 14); Bufs b; Stat st;
+  CHECK(MIRROR_N == 188);
+  double m[MIRROR_N + 4]; CHECK(w.mirror(m, MIRROR_N - 1) == 0); CHECK(w.mirror(nullptr, 500) == 0);
+  act(w, TOUCH, 3, {4, 2.5}); act(w, ANGEL, 3, {0, 1}); act(w, ANGEL, 3, {4, 1}); act(w, FX, 0, {double(VIBRATO), 0.9});
+  run(w, b, 1.5, 128, 48000, st);
+  CHECK(w.mirror(m, MIRROR_N + 4) == MIRROR_N);
+  CHECK(m[0] == 1 && m[1] == 0 && m[3 + VIBRATO] == 0.9 && m[3 + SHIMMER] == 0.35 && m[11] > 0);
+  const double* a = m + MIRROR_HEAD;
+  CHECK(a[0] == 3 && a[1] == 4 && a[2] == 2.5 && a[3] == 2.5 && a[4] == 0 && a[5] > 0.5 && a[6] == 5 && a[10] == 2);
+  for (int i = MIRROR_HEAD + MIRROR_ANGEL; i < MIRROR_N; i++) CHECK(m[i] == 0);
+  act(w, PIN, 3, {}); w.mirror(m, MIRROR_N); CHECK(m[1] == 1 && a[4] == 1 && a[0] < 0);
+  act(w, VOWEL, a[0] < 0 ? int(a[0]) : 0, {4.0}); w.mirror(m, MIRROR_N); CHECK(a[2] == 4 && a[1] == 4);
+  act(w, CLEAR, 0, {}); w.mirror(m, MIRROR_N); CHECK(m[0] == 0 && m[3 + VIBRATO] == 0.9);
+}
+
+static void worldBadActions() {
+  Scale sc; World w(sc); w.prepare(48000, 15); Bufs b; Stat st;
+  const double nan = NAN, inf = INFINITY;
+  w.action(TOUCH, 0, nullptr, 0); w.action(TOUCH, 0, nullptr, 5); act(w, TOUCH, 0, {nan, nan}); act(w, TOUCH, 1, {inf, -inf}); act(w, TOUCH, -3, {1, 1}); act(w, TOUCH, 2, {1e30, 1e30});
+  act(w, FX, 0, {nan, 1}); act(w, FX, 0, {2, nan}); act(w, FX, 0, {99, 1}); act(w, ANGEL, 0, {inf, 1}); act(w, VOWEL, 77, {1}); act(w, PIN, 99, {}); act(w, RELEASE, 99, {});
+  act(w, sdk::ACT_LFO, -1, {double(TONE), 0.7}); CHECK(w.model().fx().tone == 0.7);
+  w.action(-1, 0, nullptr, 0); w.action(1234, 0, nullptr, 0);
+  double dt = 0.01; w.action(-1, 0, &dt, 1);
+  run(w, b, 1.0, 128, 48000, st); CHECK(st.finite && st.pk < 1.0);
+  for (int i = 0; i < 40; i++) act(w, TOUCH, 100 + i, {double(i % 9), double(i)});      // больше ангелов, чем мест: не падает
+  run(w, b, 1.0, 128, 48000, st); CHECK(st.finite && st.pk < 1.0 && w.model().count() == MAX_ANGEL);
+}
+
+static void worldNoAllocInProcess() {
+  Scale sc; World w(sc); w.prepare(48000, 16); Bufs b; Stat st;
+  pinFour(w); act(w, TOUCH, 9, {3, 1}); act(w, FX, 0, {double(GLORIA), 1}); run(w, b, 0.5, 128, 48000, st);
+  const double t[2] = {1, 1}, an[2] = {0, 1};
+  gAllocs = 0; gCount = true;
+  w.action(ROSE, 0, nullptr, 0); w.action(TOUCH, 10, t, 2); w.action(RELEASE, 9, nullptr, 0); w.action(ANGEL, 10, an, 2); w.action(DICE, 0, nullptr, 0);
+  for (int i = 0; i < 400; i++) w.process(b.out(), 128);
+  double h[100]; w.heard(h, 100); double m[MIRROR_N]; w.mirror(m, MIRROR_N);
+  gCount = false;
+  CHECK(gAllocs == 0);
+}
+
 int main() {
   harmMapping(); formantsInterpolate(); pinLimit(); hzOfScaleOff(); snapshotRoundTrip(); restoreGarbage();
   orbitsAndChime(); driftBounded(); diceDeterministic(); miscClamps();
+  worldPeakBounded(); worldBlocksAnySize(); worldSilentWhenIdle(); worldVowelChangesSpectrum(); worldDeterministic(); worldSnapshotRoundTrip(); worldRestoreAnyInput();
+  worldPinKeepsVoice(); worldReleaseFades(); worldHeardEvents(); worldGloria(); worldMirrorLayout(); worldBadActions(); worldNoAllocInProcess();
   std::printf("paradisus-test: %d checks, %d failed\n", checks, fails);
   return fails ? 1 : 0;
 }

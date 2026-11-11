@@ -13,13 +13,13 @@ clang++ -std=c++17 -O2 -ffp-contract=off -Wall -Wextra -pthread -o core/build/sd
   core/worlds/monochord/model.cpp core/worlds/monochord/world.cpp core/worlds/monochord/sound.cpp core/worlds/cymatica/model.cpp core/worlds/cymatica/plate.cpp core/worlds/cymatica/world.cpp core/worlds/portus/model.cpp core/worlds/portus/world.cpp core/worlds/natura/model.cpp core/worlds/natura/world.cpp core/worlds/inferno/model.cpp core/worlds/inferno/world.cpp core/worlds/inferno/sound.cpp core/worlds/tenebrae/waves.cpp core/worlds/tenebrae/voice.cpp core/worlds/tenebrae/model.cpp core/worlds/tenebrae/world.cpp \
   core/worlds/oceanus/model.cpp core/worlds/oceanus/world.cpp core/worlds/oceanus/ocean.cpp core/worlds/goetia/model.cpp core/worlds/goetia/world.cpp core/worlds/goetia/goetia.cpp \
   core/worlds/horologium/model.cpp core/worlds/horologium/world.cpp core/worlds/horologium/sound.cpp core/worlds/horologium/drums.cpp core/worlds/hymenaeus/model.cpp core/worlds/hymenaeus/world.cpp core/worlds/hymenaeus/sound.cpp core/worlds/hymenaeus/cloud.cpp core/worlds/arcadia/land.cpp core/worlds/arcadia/model.cpp core/worlds/arcadia/world.cpp core/worlds/arcadia/sound.cpp \
-  core/worlds/tria/model.cpp core/worlds/tria/world.cpp core/worlds/paradisus/model.cpp
+  core/worlds/tria/model.cpp core/worlds/tria/world.cpp core/worlds/paradisus/model.cpp core/worlds/paradisus/sound.cpp core/worlds/paradisus/world.cpp
 echo "core/build/sdk-test"
 clang++ -std=c++17 -O2 -ffp-contract=off -Wall -Wextra -o core/build/param-cli core/tests/param_cli.cpp
 echo "core/build/param-cli"
 clang++ -std=c++17 -O2 -ffp-contract=off -Wall -Wextra -o core/build/hymenaeus-test core/tests/hymenaeus_test.cpp core/worlds/hymenaeus/model.cpp core/worlds/hymenaeus/cloud.cpp core/worlds/hymenaeus/sound.cpp core/worlds/hymenaeus/world.cpp core/host/scale.cpp core/sdk/reverb.cpp
 echo "core/build/hymenaeus-test"
-clang++ -std=c++17 -O2 -ffp-contract=off -Wall -Wextra -o core/build/paradisus-test core/tests/paradisus_test.cpp core/worlds/paradisus/model.cpp core/host/scale.cpp
+clang++ -std=c++17 -O2 -ffp-contract=off -Wall -Wextra -o core/build/paradisus-test core/tests/paradisus_test.cpp core/worlds/paradisus/model.cpp core/worlds/paradisus/sound.cpp core/worlds/paradisus/world.cpp core/host/scale.cpp core/sdk/reverb.cpp
 echo "core/build/paradisus-test"
 clang++ -std=c++17 -O2 -ffp-contract=off -Wall -Wextra -o core/build/portus-cli core/tests/portus_cli.cpp core/worlds/portus/model.cpp core/worlds/portus/world.cpp core/host/scale.cpp
 echo "core/build/portus-cli"
@@ -32,9 +32,9 @@ clang++ -std=c++17 -O2 -ffp-contract=off -Wall -Wextra -o core/build/mix-cli cor
   core/worlds/monochord/model.cpp core/worlds/monochord/world.cpp core/worlds/monochord/sound.cpp core/worlds/cymatica/model.cpp core/worlds/cymatica/plate.cpp core/worlds/cymatica/world.cpp core/worlds/portus/model.cpp core/worlds/portus/world.cpp core/worlds/natura/model.cpp core/worlds/natura/world.cpp core/worlds/inferno/model.cpp core/worlds/inferno/world.cpp core/worlds/inferno/sound.cpp core/worlds/tenebrae/waves.cpp core/worlds/tenebrae/voice.cpp core/worlds/tenebrae/model.cpp core/worlds/tenebrae/world.cpp \
   core/worlds/oceanus/model.cpp core/worlds/oceanus/world.cpp core/worlds/oceanus/ocean.cpp core/worlds/goetia/model.cpp core/worlds/goetia/world.cpp core/worlds/goetia/goetia.cpp \
   core/worlds/horologium/model.cpp core/worlds/horologium/world.cpp core/worlds/horologium/sound.cpp core/worlds/horologium/drums.cpp core/worlds/hymenaeus/model.cpp core/worlds/hymenaeus/world.cpp core/worlds/hymenaeus/sound.cpp core/worlds/hymenaeus/cloud.cpp core/worlds/arcadia/land.cpp core/worlds/arcadia/model.cpp core/worlds/arcadia/world.cpp core/worlds/arcadia/sound.cpp \
-  core/worlds/tria/model.cpp core/worlds/tria/world.cpp core/worlds/paradisus/model.cpp
+  core/worlds/tria/model.cpp core/worlds/tria/world.cpp core/worlds/paradisus/model.cpp core/worlds/paradisus/sound.cpp core/worlds/paradisus/world.cpp
 echo "core/build/mix-cli"
-# t2d.wasm — хост SDK и все миры SDK (Tenebrae, Monochordum, Oceanus, Horologium, Firmamentum, Tria, Arcadia, Goetia, Cymatica, Portus, Natura, Inferno) одним модулем (core/bridge/api.cpp + wasm.cpp); хост ~1.2 МБ статики — память 16 МБ (линии эха Cymatica ~7 МБ); em++ — нужен libc++ (std::string снимка)
+# t2d.wasm — хост SDK и все миры SDK (Tenebrae, Monochordum, Oceanus, Horologium, Hymenaeus, Firmamentum, Tria, Arcadia, Goetia, Cymatica, Portus, Natura, Inferno, Paradisus) одним модулем (core/bridge/api.cpp + wasm.cpp); хост ~1.2 МБ статики — память 16 МБ (линии эха Cymatica ~7 МБ); em++ — нужен libc++ (std::string снимка)
 em++ -O3 -std=c++17 -ffp-contract=off -fno-exceptions -Wall -sSTANDALONE_WASM --no-entry \
   -sEXPORTED_FUNCTIONS=_t2d_init,_t2d_args,_t2d_action,_t2d_process,_t2d_dry,_t2d_ret,_t2d_ext,_t2d_mbuf,_t2d_mirror,_t2d_heard,_t2d_str_buf,_t2d_str_cap,_t2d_snapshot,_t2d_restore,_t2d_fader,_t2d_scale,_t2d_master_bpm,_t2d_master_bpm_get,_t2d_vol,_t2d_time,_t2d_midi_byte,_t2d_midi_msg,_t2d_hmirror,_t2d_hevents,_t2d_arc_land,_t2d_master_lpf,_t2d_master_comp,_t2d_master_ceil,_t2d_sum,_t2d_master_run,_t2d_mix,_t2d_model_tick \
   -sFILESYSTEM=0 -sINITIAL_MEMORY=16MB -s$STACK=64KB -sALLOW_MEMORY_GROWTH=0 \
@@ -46,6 +46,7 @@ em++ -O3 -std=c++17 -ffp-contract=off -fno-exceptions -Wall -sSTANDALONE_WASM --
   core/worlds/horologium/model.cpp core/worlds/horologium/world.cpp core/worlds/horologium/sound.cpp core/worlds/horologium/drums.cpp core/worlds/hymenaeus/model.cpp core/worlds/hymenaeus/world.cpp core/worlds/hymenaeus/sound.cpp core/worlds/hymenaeus/cloud.cpp \
   core/worlds/arcadia/land.cpp core/worlds/arcadia/model.cpp core/worlds/arcadia/world.cpp core/worlds/arcadia/sound.cpp \
   core/worlds/tria/model.cpp core/worlds/tria/world.cpp \
+  core/worlds/paradisus/model.cpp core/worlds/paradisus/sound.cpp core/worlds/paradisus/world.cpp \
   core/worlds/cymatica/model.cpp core/worlds/cymatica/plate.cpp core/worlds/cymatica/world.cpp \
   core/worlds/portus/model.cpp core/worlds/portus/world.cpp \
   core/worlds/natura/model.cpp core/worlds/natura/world.cpp \

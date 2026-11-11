@@ -53,6 +53,7 @@
 #include "../worlds/horologium/sound.hpp"
 #include "../worlds/horologium/world.hpp"
 #include "../worlds/hymenaeus/world.hpp"
+#include "../worlds/paradisus/world.hpp"
 #include "../worlds/tenebrae/tone.hpp"
 #include "../worlds/tenebrae/waves.hpp"
 #include "../worlds/tenebrae/shifter.hpp"
@@ -2888,6 +2889,29 @@ static void bridgeHymenaeus() {
   CHECK(t2d_mbuf()[1] == 90);                                             // bpm по умолчанию
 }
 
+// Paradisus (VI) в слоте 6 общего моста: ангел поёт — зеркало нужной длины, звук в dry, посыл в собор; ретурн конечен и без перегруза при максимуме
+static void bridgeParadisus() {
+  t2d_init(48000, 1);
+  double* a = t2d_args();
+  a[0] = 5; a[1] = 1.5; t2d_action(6, paradisus::TOUCH, 0, a, 2);
+  for (int k = 0; k < paradisus::NFX; k++) { a[0] = k; a[1] = 1; t2d_action(6, paradisus::FX, 0, a, 2); }
+  float peak = 0, rpk = 0; bool fin = true;
+  for (int b = 0; b < 600; b++) {
+    t2d_process(128);
+    const float* d = t2d_dry(6, 0);
+    for (int ch = 0; ch < 2; ch++) { const float* r = t2d_ret(ch); for (int k = 0; k < 128; k++) { rpk = std::max(rpk, std::fabs(r[k])); fin = fin && std::isfinite(r[k]); } }
+    for (int k = 0; k < 128; k++) { peak = std::max(peak, std::fabs(d[k])); fin = fin && std::isfinite(d[k]); }
+  }
+  CHECK(fin); CHECK(peak > 0.02f); CHECK(peak < 1.0f); CHECK(rpk > 0.001f); CHECK(rpk < 2.0f);   // возврат до мастера (у него компрессор и потолок), замер при всех fx = 1
+  CHECK(t2d_mirror(6) == paradisus::MIRROR_N);
+  CHECK(t2d_mbuf()[0] == 1);                                              // один ангел
+  t2d_action(6, paradisus::RELEASE, 0, a, 0);
+  CHECK(t2d_mirror(6) == paradisus::MIRROR_N && t2d_mbuf()[0] == 0);
+  const int k = t2d_snapshot(6); CHECK(k > 0);
+  t2d_restore(6, k); CHECK(t2d_mirror(6) == paradisus::MIRROR_N);
+  std::printf("  bridge Paradisus: dry peak %.3f, ret peak %.3f\n", peak, rpk);
+}
+
 // Веб не меняется: FNV-1a по байтам dry(10) и ret за 200 блоков сцены «3 звезды, seed 1» (константа снята до правки host.cpp)
 static void mixWebUntouched() {
   t2d_init(48000, 1);
@@ -5142,7 +5166,7 @@ int main(int argc, char** argv) {
   tenebraeTone(); tenebraeWaves(); tenebraeWavesNyquist(); tenebraeMorph(); tenebraeShifter();
   tenebraeVoiceSilent(); tenebraeVoiceExtremes(); tenebraeVoiceNoise(); tenebraeVoiceRelive();
   tenebraeWorldBus(); tenebraeTzfmFollows(); tenebraeLinksClear(); tenebraeMirror(); tenebraeModelPick(); tenebraeActionNan(); tenebraeCycleSafe(); tenebraeStrikeClear(); tenebraeScaleRetune();
-  shimmer(); shaper(); shaperOs4(); shaperChromium2(); bpbank(); noise(); infernoModel(); infernoSound(); bridgeNative(); bridgeHymenaeus(); mixWebUntouched(); mixSum(); mixMaster();
+  shimmer(); shaper(); shaperOs4(); shaperChromium2(); bpbank(); noise(); infernoModel(); infernoSound(); bridgeNative(); bridgeHymenaeus(); bridgeParadisus(); mixWebUntouched(); mixSum(); mixMaster();
   appSpscThreads(); appTripleThreads(); appChunking(); appVsBridge(); appHeardAccumulates(); appMidiClock(); appMidiTime(); appMidiOverflow(); appOverflow(); appLatency(); appReinitRate();
   appHostOrder(); appSnapRoundtrip(); appRestoreGarbage(); appHeavyOnePerBlock(); appStrOverflow(); appHostVolScale(); appStrCap();
   lfoForms(); lfoRandom(); hostLfo(); lfoApply(); lfoUnits(); lfoOff(); lfoOrder(); lfoDeadObj(); lfoSpecNan(); lfoForeign(); oceanLfo(); oceanLfoIgnores(); monoLfo(); monoLfoIgnores(); monoDice(); horoLfo(); horoFilterMap(); horoFilterAudio(); horoFilterTail(); horoFilterExtremes(); horoModelFltGarbage(); horoLfoFlt(); horoDiceFlt(); horoModelInst(); horoModelLen(); horoModelDefaults(); horoModelGarbage(); horoSoundGarbage(); horoModelPitch(); horoModelPitchGarbage(); drumVoices(); drumGlitch(); horoLfoIgnores(); sdkEuclid(); horoOnsets(); horoBackward(); horoBackwardJump(); horoRot(); horoLenSwitch(); horoNonFiniteTempo(); horoConcursus(); horoAttacksPerTurn(); horoCeiling(); horoKitPeak(); horoKitRms(); horoTailOff(); horoInstSwitch(); horoDice(); horoRetiredActions(); horoLockNeedsRunOnly(); hostTwoWorldsSamePhase(); hostMasterBpmChange(); horoLockNoMidi(); cymaticaGridNoLock(); cymaticaLockOverriddenByGrid(); arcLfo(); arcLfoIgnores(); triaLfo(); triaLfoIgnores(); infLfo(); infLfoIgnores(); portusLfo(); portusLfoIgnores(); portusDice(); arcPicSame(); arcPicMeta(); arcPicRiverName(); arcName(); arcRouteSame(); arcPicFixture(); appScaleSteps(); appLfo(); appLevels(); appLevelsPreFader(); appHostFader(); appHostFaderSmooth(); appHostMaster();

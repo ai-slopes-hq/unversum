@@ -22,6 +22,7 @@
 #include "../worlds/monochord/world.hpp"
 #include "../worlds/horologium/world.hpp"
 #include "../worlds/hymenaeus/world.hpp"
+#include "../worlds/paradisus/world.hpp"
 #include "../worlds/arcadia/world.hpp"
 #include "../worlds/tria/world.hpp"
 #include "../worlds/portus/world.hpp"
@@ -36,6 +37,7 @@ static oceanus::Oceanus ocean(host.scale());
 static goetia::World goe(host.scale());
 static monochord::World mono(host.scale());
 static horologium::World horo(host.scale());
+static paradisus::World par(host.scale());             // только нативный мир (VI, вернулся 11.11): в вебе слот 6 никто не открывает
 static hymenaeus::World hym(host.scale());             // только нативный мир (XIV): в вебе слот 14 никто не открывает
 static arcadia::World arc(host.scale());
 static tria::World tria3(host.scale());
@@ -63,6 +65,7 @@ T2D_API void t2d_init(double sr, unsigned seed) {
     {2, &cym},                                          // Cymatica: шанс удара и шум смычка — от зерна
     {8, &ocean},                                        // Oceanus
     {15, &goe},                                         // Goetia
+    {6, &par},                                          // Paradisus: фазы, дыхание и зёрна — от зерна
     {7, &mono},                                         // Monochordum
     {9, &horo},                                         // Horologium
     {12, &arc},                                         // Arcadia
