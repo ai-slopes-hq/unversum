@@ -139,7 +139,11 @@ void Model::toss(Thread& th, int i, const Thread* lead) {
     for (int o : OFF) { const int c = gl + o; if (c >= gLo && c <= gHi) cand[n++] = c; }
     if (n == 0) g = prev;
     else {
-      std::stable_sort(cand, cand + n, [&](int a, int b) { return std::abs(a - prev) < std::abs(b - prev); });
+      for (int a = 1; a < n; a++) {                     // вставками по близости к prev (устойчиво, без аллокаций)
+        const int v = cand[a]; int b = a - 1;
+        while (b >= 0 && std::abs(cand[b] - prev) > std::abs(v - prev)) { cand[b + 1] = cand[b]; b--; }
+        cand[b + 1] = v;
+      }
       const double r = rng_.next();
       g = cand[(r < 0.85 || n == 1) ? 0 : 1];
     }
@@ -211,8 +215,15 @@ void Model::setLen(int t, double n) {
   if (t < 0 || t >= NR || !finite(n)) return;
   Thread& th = thr_[t];
   const long v = std::lround(n);
-  th.len = v < 1 ? 1 : v > PEARL_MAX ? PEARL_MAX : static_cast<int>(v);
+  const int len = v < 1 ? 1 : v > PEARL_MAX ? PEARL_MAX : static_cast<int>(v);
+  const bool changed = len != th.len;
+  th.len = len;
   th.cur %= th.len;
+  if (changed) {                                        // новая длина — новые концы петли: жемчужина 0 (I/III/V) и последняя (I/V) бросаются заново, даже при dejavu 1
+    const Thread* lead = t == 1 ? &thr_[0] : nullptr;
+    toss(th, 0, lead);
+    if (th.len > 1) toss(th, th.len - 1, lead);
+  }
 }
 
 void Model::setRange(int t, double lo, double hi) {

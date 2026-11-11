@@ -128,7 +128,7 @@ extension HymenaeusView {
     g.translateBy(x: 0, y: CGFloat(g.height)); g.scaleBy(x: sc, y: -sc)
     g.setFillColor(theme.bg.cgColor); g.fill(CGRect(x: 0, y: 0, width: G.W, height: G.H))
     var rnd = HymRnd(11)
-    for _ in 0..<50 {                                                  // звёзды — только над станами (в облаках и кольцах их не видно)
+    for _ in 0..<50 {                                                  // звёзды — только над нитями (в облаках и кольцах их не видно)
       let x = rnd.next() * G.W, y = 70 * G.S + rnd.next() * (G.H * 0.3), r: CGFloat = rnd.next() < 0.1 ? 0.9 : 0.5
       g.setFillColor(col(Hym.ink, 0.12 + rnd.next() * 0.28)); disc(g, x, y, r)
     }

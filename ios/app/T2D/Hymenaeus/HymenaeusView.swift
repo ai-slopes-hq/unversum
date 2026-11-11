@@ -1,7 +1,7 @@
 import UIKit
 import T2DCore
 
-// Hymenaeus (XIV) — касания и состояние: жемчужная нить играет сама, кольца звенят, звон уходит в облака.
+// Hymenaeus (XIV) — касания и состояние: две нити играют сами, кольца звенят, звон уходит в облака.
 // Модель и звук — в ядре (core/worlds/hymenaeus), картинка — Hym*.swift. Только нативный мир: в вебе его нет.
 final class HymenaeusView: World {
   static let slotN = 14
@@ -104,7 +104,7 @@ final class HymenaeusView: World {
     for (k, h) in holds where !h.moved && !h.pinching && now - h.downAt > Touch.holdMs / 1000 {     // удержание на кольце — его плашка
       if case .ring(let r, _)? = h.zone { holds[k]?.moved = true; openSheet?(ringSpec(r)) }
     }
-    for (k, h) in holds where !h.moved && !h.pinching && now - h.downAt > Touch.holdMs / 1000 {     // удержание на стане — перебросить только эту нить
+    for (k, h) in holds where !h.moved && !h.pinching && now - h.downAt > Touch.holdMs / 1000 {     // удержание на нити — перебросить только эту мелодию
       if case .stave(let t)? = h.zone { holds[k]?.moved = true; holds[k]?.last = .staveDice(thread: t); core.action(Act.dice.rawValue, 0, [Double(t)], touchTime: 0) }
     }
     for _ in 0..<4 {                                      // heard: [k, (кольцо, жемчужина) × k]; читаем до пустого, но не бесконечно
