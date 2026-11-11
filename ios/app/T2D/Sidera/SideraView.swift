@@ -1,0 +1,57 @@
+import UIKit
+import T2DCore
+
+// Sidera (XIV) — связка ядра и Swift: три голоса GENDYN, звёзды — точки излома формы волны. Модель и звук — в ядре
+// (core/worlds/sidera), картинка и касания — Sid*.swift. Только нативный мир: в вебе его нет.
+final class SideraView: World {
+  static let slotN = 14
+  typealias Act = SidAct
+
+  let slot = SideraView.slotN
+  let theme = Worlds.info(SideraView.slotN)?.theme ?? .base
+  let title = "Sidera", sub = "stellae · luna"
+  var fx: SheetSpec? { nil }                              // веера нет: плашка голоса — удержанием
+  var openSheet: ((SheetSpec) -> Void)?
+  var objGone: ((Int) -> Void)?
+  var rowLfoOff: ((Int) -> Void)?
+  var goMap: (() -> Void)?
+
+  let legend: [LegendRow] = []                            // жесты — в Task 6
+
+  let core: Core
+  private(set) var geo: SidGeo
+  private(set) var mirror = SidMirror()
+  typealias Reader = (inout [Double]) -> Int
+  private let readMirror: Reader
+  private var mbuf = [Double](repeating: 0, count: 256)
+  private(set) var now = 0.0
+  private var started = false
+
+  init(core: Core, readMirror: Reader? = nil) {
+    self.core = core
+    geo = SidGeo(W: 390, H: 844, topY: 59, safeBot: 34)
+    self.readMirror = readMirror ?? { b in Int(t2d_app_mirror(Int32(SideraView.slotN), &b, Int32(b.count))) }
+  }
+
+  func layout(W: CGFloat, H: CGFloat, topY: CGFloat, safeBot: CGFloat) { geo = SidGeo(W: W, H: H, topY: topY, safeBot: safeBot) }
+  func cornerHit(_ x: CGFloat, _ y: CGFloat) -> Bool { false }   // луна сама ведёт касание: тап — карта, тянешь — фаза
+  func dice() { core.action(Act.dice.rawValue, 0, [], touchTime: 0) }
+  func clear() { core.action(Act.clear.rawValue, 0, [], touchTime: 0) }
+  func enter() {                                          // звук начинается со входа; остановленный и восстановленный не будим
+    guard !started else { return }
+    started = true; core.action(Act.run.rawValue, 0, [1], touchTime: 0)
+  }
+  func scale(pcs: [Int]?, root: Int) {}                   // лад читает ядро
+  func restored() { started = true }
+  func idle() {}
+  func tick(now: Double, dt: Double) { self.now = now; pullMirror() }
+  func pullMirror() {
+    let len = min(max(0, readMirror(&mbuf)), mbuf.count)
+    mirror.load(mbuf, n: len)
+  }
+  func draw(_ d: Draw, now: Double) {}
+  func down(_ f: Finger) {}
+  func move(_ f: Finger) {}
+  func up(_ f: Finger) {}
+  func cancel(_ f: Finger) {}
+}

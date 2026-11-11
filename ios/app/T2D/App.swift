@@ -54,7 +54,7 @@ struct T2DApp: App {
     case InfernoView.slotN: return InfernoView(core: AppCore(slot: slot))
     case NaturaView.slotN: return NaturaView(core: AppCore(slot: slot))
     case PortusView.slotN: return PortusView(core: AppCore(slot: slot))
-    case HymenaeusView.slotN: return HymenaeusView(core: AppCore(slot: slot))
+    case SideraView.slotN: return SideraView(core: AppCore(slot: slot))
     case CymaticaView.slotN: return CymaticaView(core: AppCore(slot: slot))
     default: return nil
     }

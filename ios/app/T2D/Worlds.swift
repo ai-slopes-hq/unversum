@@ -29,13 +29,12 @@ enum Worlds {
     WorldInfo(slot: 11, title: "Tria corpora", roman: "XI", theme: th((222, 198, 152), (19, 15, 10), (19, 15, 10)), col: 3, row: 0, view: true),
     WorldInfo(slot: 12, title: "Arcadia", roman: "XII", theme: th((40, 46, 32), (224, 221, 198), (224, 221, 198)), col: 0, row: 3, view: true),
     WorldInfo(slot: 13, title: "Portus", roman: "XIII", theme: th((196, 208, 216), (6, 9, 13), (6, 9, 13)), col: 3, row: 3, view: true),
-    // XIV Hymenaeus выключен из релиза (11.11, автор): код и ядро на месте; вернуть — раскомментировать и убрать (1, 2) из backs
-    // WorldInfo(slot: 14, title: "Hymenaeus", roman: "XIV", theme: th((44, 38, 30), (242, 237, 226), (242, 237, 226)), col: 1, row: 2, view: true),   // только нативный (11.11)
+    WorldInfo(slot: 14, title: "Sidera", roman: "XIV", theme: .base, col: 1, row: 2, view: true),   // только нативный (11.11); заменил Hymenaeus (его код на месте, не подключён)
     // XV Goetia выключен (04.11, автор): клетка (2, 3) свободна (Paradisus переехал в (1, 0), 11.11); вернуть Goetia — выбрать ей другую
     // WorldInfo(slot: 15, title: "Goetia", roman: "XV", theme: th((226, 214, 190), (12, 8, 7), (12, 8, 7)), col: 2, row: 3, view: false),
   ]
   // рубашки — клетки без открытого мира (III и XV выключены)
-  static let backs: [(col: Int, row: Int)] = [(0, 0), (0, 1), (2, 3), (1, 2)]
+  static let backs: [(col: Int, row: Int)] = [(0, 0), (0, 1), (2, 3)]
 
   static func at(col: Int, row: Int) -> WorldInfo? { all.first { $0.col == col && $0.row == row } }
   static func info(_ slot: Int) -> WorldInfo? { all.first { $0.slot == slot } }
