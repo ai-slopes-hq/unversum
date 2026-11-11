@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 
 #include "../../sdk/json.hpp"
 
@@ -11,7 +12,7 @@ namespace hymenaeus {
 namespace {
 constexpr double CLOUD_DEF[NCK] = {0.5, 0.4, 0.4, 0.5, 0, 0.3, 0.6, 0.35};   // POS SIZE DENS PITCH FREEZE ECHO CLEVEL SEND
 constexpr double RING_DEF[NRK] = {0.5, 0.5, 0.5, 0.8, 0};             // STRUCT BRIGHT DAMP LVL POLY
-constexpr int LO_DEF[NR] = {45, 57}, HI_DEF[NR] = {69, 81};             // резонатор A2…A4, струна A3…A5
+constexpr int LO_DEF[NR] = {47, 59}, HI_DEF[NR] = {67, 79};             // резонатор B2…G4 (тоника A3 в середине), струна B3…G5 (тоника A4); ~1,7 октавы
 
 bool finite(double v) { return std::isfinite(v); }
 double clamp01(double v) { return v < 0 ? 0 : v > 1 ? 1 : v; }
@@ -63,9 +64,108 @@ sdk::Json notesJson(const Thread& th) {
 }
 }  // namespace
 
-void Model::toss(Thread& th, int i) {
-  th.p[i].pitch = rng_.next();
-  th.p[i].rest = rng_.next() < REST_P;
+namespace {
+// Лад как ступени: абсолютная ступень g = 7·октава + номер ступени 0…6 (0 — тоника, 2 — терция, 4 — квинта).
+struct Deg {
+  int root; const int* st;
+  static int fdiv(int a, int b) { return a >= 0 ? a / b : -((-a + b - 1) / b); }
+  int noteOf(int g) const { const int o = fdiv(g, 7); return 33 + root + 12 * o + st[g - 7 * o]; }
+  int degOf(int note) const {                           // нота вне лада — ступень не выше неё
+    const int s = note - 33 - root, o = fdiv(s, 12), pc = s - 12 * o;
+    int k = 0; for (int j = 0; j < 7; j++) if (st[j] <= pc) k = j;
+    return 7 * o + k;
+  }
+};
+int mod7(int g) { return ((g % 7) + 7) % 7; }
+bool chordTone(int g) { const int k = mod7(g); return k == 0 || k == 2 || k == 4; }
+bool consonant(int d) { const int a = std::abs(d) % 7; return a == 0 || a == 2 || a == 4; }   // терция, квинта, октава (с составными)
+
+// Шанс паузы по месту жемчужины: сильные места (0 и середина петли, чётные) — реже, слабые (нечётные) — чаще; в среднем ~19…22%.
+double restP(int i, int len) {
+  const int k = i % len;
+  if (k == 0) return 0.03;
+  if (len > 1 && k == len / 2) return 0.06;
+  return (k & 1) ? 0.32 : 0.14;
+}
+constexpr double LEAP_P = 0.08, CONS_P = 0.7;            // шанс скачка 3…5 ступеней; шанс аккорда с нитью 0 у нити 1
+}  // namespace
+
+// Бросок жемчужины i нити th (lead — нить 0 того же слота для нити 1, иначе nullptr). Мелодия идёт по ступеням лада хоста
+// (мажор от root, если лад выключен), высота хранится как прежде 0…1 в lo…hi (нота → (нота − lo)/(hi − lo), hzOf возвращает ту же ноту).
+//  - жемчужина 0 — тоника/квинта/терция (I .5, V .3, III .2) ближе всего к тонике диапазона (ступень root, ближайшая к середине lo…hi);
+//  - последняя в петле (len − 1) — I (.6) или V (.4), ближайшая к предыдущей и к жемчужине 0: петля замыкается;
+//  - остальные — шаг от предыдущей: ±1 (44%), ±2 (42%), повтор (6%), скачок 3…5 (8%); тянет к тонике, после скачка — назад,
+//    на чётных местах 35% сдвига на ближайший звук аккорда; у краёв lo…hi — отражение;
+//  - нить 1 с шансом 70% берёт терцию, квинту или октаву (±2, ±4, ±7 ступеней) от жемчужины нити 0 с тем же номером (по модулю её длины),
+//    ближайшую к своей предыдущей; если у нити 0 пауза — свой ход. Паузу бросает restP; у нити 1 она реже при паузе нити 0.
+void Model::toss(Thread& th, int i, const Thread* lead) {
+  const Deg D{scale_.root, Scale::stepsOf(scale_.idx)};
+  int gLo = D.degOf(th.lo); if (D.noteOf(gLo) < th.lo) gLo++;
+  int gHi = std::max(D.degOf(th.hi), gLo);
+  const auto cl = [&](int g) { return std::min(std::max(g, gLo), gHi); };
+  const auto gOf = [&](const Thread& t, int k) { return D.degOf(static_cast<int>(std::lround(t.lo + t.p[k].pitch * (t.hi - t.lo)))); };
+  const int gC = D.degOf((th.lo + th.hi) / 2);
+  int gT = 7 * Deg::fdiv(gC + 3, 7);                    // тоника, ближайшая к середине диапазона
+  while (gT < gLo) gT += 7;
+  while (gT > gHi) gT -= 7;
+  if (gT < gLo) gT = gC;
+  const int len = th.len;
+  const bool first = i == 0, last = !first && i == len - 1;
+  int gl = 0; bool leadPlays = false, leadRests = false;
+  if (lead) { const int q = i % lead->len; leadRests = lead->p[q].rest; leadPlays = !leadRests; if (leadPlays) gl = gOf(*lead, q); }
+  const int prev = first ? gT : cl(gOf(th, i > 0 ? i - 1 : len - 1));
+  int g = prev;
+
+  if (first || last) {                                  // якорь: звук аккорда
+    static const int ROLE[3] = {0, 4, 2};
+    const double r = rng_.next();
+    const int pick = first ? (r < 0.5 ? 0 : r < 0.8 ? 1 : 2) : (r < 0.6 ? 0 : 1);
+    const int g0 = first ? gT : cl(gOf(th, 0));
+    bool found = false; double best = 1e9;
+    for (int a = 0; a < 3 && !found; a++) {
+      const int role = ROLE[(pick + a) % 3];
+      if (!first && role == 2) continue;                // замыкаем на I или V
+      for (int c = gLo; c <= gHi; c++) {
+        if (mod7(c) != role) continue;
+        double sc = first ? std::abs(c - gT) : 2.0 * std::abs(c - prev) + 0.5 * std::abs(c - g0);
+        if (leadPlays && !consonant(c - gl)) sc += 50;  // нить 1: звук, созвучный нити 0, если есть
+        if (sc < best) { best = sc; g = c; found = true; }
+      }
+    }
+    if (!found) g = gT;
+  } else if (leadPlays && rng_.next() < CONS_P) {       // нить 1: терция, квинта или октава от нити 0
+    static const int OFF[6] = {2, -2, 4, -4, 7, -7};
+    int cand[6], n = 0;
+    for (int o : OFF) { const int c = gl + o; if (c >= gLo && c <= gHi) cand[n++] = c; }
+    if (n == 0) g = prev;
+    else {
+      std::stable_sort(cand, cand + n, [&](int a, int b) { return std::abs(a - prev) < std::abs(b - prev); });
+      const double r = rng_.next();
+      g = cand[(r < 0.85 || n == 1) ? 0 : 1];
+    }
+  } else {                                              // шаг по ступеням
+    double up = std::min(std::max(0.5 + 0.07 * (gT - prev), 0.2), 0.8);
+    if (i >= 2) { const int back = prev - cl(gOf(th, i - 2)); if (std::abs(back) >= 3) up = back > 0 ? 0.15 : 0.85; }
+    const int dir = rng_.next() < up ? 1 : -1;
+    const double r = rng_.next();
+    const int mag = r < 0.06 ? 0 : r < 0.50 ? 1 : r < 1 - LEAP_P ? 2 : (r < 0.96 ? 3 : r < 0.985 ? 4 : 5);
+    g = prev + dir * mag;
+    if (g > gHi) g = 2 * gHi - g;
+    if (g < gLo) g = 2 * gLo - g;
+    g = cl(g);
+    if ((i & 1) == 0 && !chordTone(g) && rng_.next() < 0.35) {
+      const int a = g - 1, b = g + 1;
+      const bool oa = a >= gLo && chordTone(a) && std::abs(a - prev) <= 5, ob = b <= gHi && chordTone(b) && std::abs(b - prev) <= 5;
+      if (oa && ob) g = std::abs(a - prev) <= std::abs(b - prev) ? a : b;
+      else if (oa) g = a;
+      else if (ob) g = b;
+    }
+  }
+
+  th.p[i].pitch = clamp01(static_cast<double>(D.noteOf(g) - th.lo) / (th.hi - th.lo));
+  double rp = restP(i, len);
+  if (lead) rp *= leadRests ? 0.3 : 1.1;
+  th.p[i].rest = rng_.next() < rp;
 }
 
 void Model::reset(uint32_t seed) {
@@ -77,13 +177,13 @@ void Model::reset(uint32_t seed) {
   }
   for (int r = 0; r < NR; r++) for (int k = 0; k < NRK; k++) ring_[r][k] = RING_DEF[k];
   for (int k = 0; k < NCK; k++) cloud_[k] = CLOUD_DEF[k];
-  for (int t = 0; t < NR; t++) for (int i = 0; i < PEARL_MAX; i++) toss(thr_[t], i);
+  for (int t = 0; t < NR; t++) for (int i = 0; i < PEARL_MAX; i++) toss(thr_[t], i, t == 1 ? &thr_[0] : nullptr);
   curLoc_ = 0; mix_ = 0.5;
   for (int l = 0; l < NLOC; l++) for (int t = 0; t < NR; t++) {   // слот 0 — копия нитей, 1–3 — другие мелодии из того же rng
     Thread& s = loc_[l][t];
     if (l == 0) { copyNotes(thr_[t], s); continue; }
     s = Thread(); s.lo = LO_DEF[t]; s.hi = HI_DEF[t];
-    for (int i = 0; i < PEARL_MAX; i++) toss(s, i);
+    for (int i = 0; i < PEARL_MAX; i++) toss(s, i, t == 1 ? &loc_[l][0] : nullptr);
   }
 }
 
@@ -138,7 +238,7 @@ void Model::setCloud(int key, double v) {
 }
 
 void Model::roll(int t) {
-  for (int k = 0; k < NR; k++) if (t < 0 || t == k) for (int i = 0; i < PEARL_MAX; i++) toss(thr_[k], i);
+  for (int k = 0; k < NR; k++) if (t < 0 || t == k) for (int i = 0; i < PEARL_MAX; i++) toss(thr_[k], i, k == 1 ? &thr_[0] : nullptr);   // сначала нить 0, затем 1 — она ложится на новую
 }
 
 void Model::clearAll() {
@@ -160,7 +260,7 @@ Step Model::next(int t) {
   Thread& th = thr_[t];
   th.cur %= th.len;
   const int i = th.cur;
-  if (rng_.next() >= th.dejavu) toss(th, i);            // dejavu 1: never; 0: always
+  if (rng_.next() >= th.dejavu) toss(th, i, t == 1 ? &thr_[0] : nullptr);            // dejavu 1: never; 0: always
   th.cur = (i + 1) % th.len;
   const Pearl& p = th.p[i];
   return Step{!p.rest, t, hzOf(t, p.pitch), 0.8, i};
