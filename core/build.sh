@@ -19,6 +19,8 @@ clang++ -std=c++17 -O2 -ffp-contract=off -Wall -Wextra -o core/build/param-cli c
 echo "core/build/param-cli"
 clang++ -std=c++17 -O2 -ffp-contract=off -Wall -Wextra -o core/build/hymenaeus-test core/tests/hymenaeus_test.cpp core/worlds/hymenaeus/model.cpp core/worlds/hymenaeus/cloud.cpp core/worlds/hymenaeus/sound.cpp core/worlds/hymenaeus/world.cpp core/host/scale.cpp core/sdk/reverb.cpp
 echo "core/build/hymenaeus-test"
+clang++ -std=c++17 -O2 -ffp-contract=off -Wall -Wextra -o core/build/sidera-test core/tests/sidera_test.cpp core/worlds/sidera/model.cpp core/worlds/sidera/voice.cpp core/host/scale.cpp
+echo "core/build/sidera-test"
 clang++ -std=c++17 -O2 -ffp-contract=off -Wall -Wextra -o core/build/paradisus-test core/tests/paradisus_test.cpp core/worlds/paradisus/model.cpp core/worlds/paradisus/sound.cpp core/worlds/paradisus/world.cpp core/host/scale.cpp core/sdk/reverb.cpp
 echo "core/build/paradisus-test"
 clang++ -std=c++17 -O2 -ffp-contract=off -Wall -Wextra -o core/build/portus-cli core/tests/portus_cli.cpp core/worlds/portus/model.cpp core/worlds/portus/world.cpp core/host/scale.cpp
