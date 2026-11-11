@@ -60,8 +60,9 @@ final class ParadisusView: World {
 
   func layout(W: CGFloat, H: CGFloat, topY: CGFloat, safeBot: CGFloat) { geo = ParGeo(size: CGSize(width: W, height: H), safeBot: safeBot, topY: topY) }
   func cornerHit(_ x: CGFloat, _ y: CGFloat) -> Bool { hypot(x - geo.light.x, y - geo.light.y) < geo.light.r }   // божественный свет — карта
-  func dice() { core.action(Act.dice.rawValue, 0, [], touchTime: 0) }
-  func clear() { core.action(Act.clear.rawValue, 0, [], touchTime: 0) }
+  // кубик и корзина убирают всех ангелов: живые пальцы забываем — иначе move послал бы TOUCH с мёртвым id, и ядро родило бы ангела заново
+  func dice() { holds.removeAll(); lastTap = nil; pinChecks.removeAll(); core.action(Act.dice.rawValue, 0, [], touchTime: 0) }
+  func clear() { holds.removeAll(); lastTap = nil; pinChecks.removeAll(); core.action(Act.clear.rawValue, 0, [], touchTime: 0) }
   func restored() {
     holds.removeAll(); lastTap = nil; pinChecks.removeAll(); prevPinned.removeAll()
     dr.flashes.removeAll(); dr.glitter.removeAll()

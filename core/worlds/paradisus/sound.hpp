@@ -50,7 +50,7 @@ class Sound {
     sdk::Saw saw[NSAW]; double g[NSAW] = {}, ratio[NSAW] = {}, tRatio[NSAW] = {}, tg[NSAW] = {}; bool on[NSAW] = {};
     sdk::BpBank<4> bank; sdk::Biquad body, air;
     double hz = 110, tHz = 110, bodyHz = 550, tBodyHz = 550, vibK = 0, tVibK = 0, breath = 0, tBreath = 0;
-    double env = 0; bool releasing = false;
+    double env = 0; bool releasing = false, fast = false;   // fast — пул полон: уходящий голос гасим быстро, чтобы освободить место без щелчка
     double vph = 0, vinc = 0, sph = 0, sinc = 0;
     sdk::Rng rng{1};
   };

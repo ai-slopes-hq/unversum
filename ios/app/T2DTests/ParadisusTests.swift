@@ -223,6 +223,22 @@ final class ParadisusTests: XCTestCase {
     w.tick(now: 1.6, dt: 0.5); XCTAssertEqual(rw.acts.count, 4)
   }
 
+  // CLEAR и DICE убирают ангелов: палец, что держал временного, больше не шлёт TOUCH с мёртвым id
+  func testClearAndDiceDropLiveHolds() {
+    for useDice in [false, true] {
+      let (v, rec, _) = make()
+      let p = v.geo.angelPos(3, 1)
+      v.down(finger(p))
+      XCTAssertEqual(rec.acts.count, 1)
+      useDice ? v.dice() : v.clear()
+      XCTAssertEqual(rec.acts.last?.kind, (useDice ? ParAct.dice : ParAct.clear).rawValue)
+      let n = rec.acts.count
+      v.move(finger(v.geo.angelPos(5, 2), from: p)); v.up(finger(p))
+      XCTAssertEqual(rec.acts.count, n, useDice ? "dice" : "clear")                          // ни TOUCH, ни RELEASE
+      XCTAssertTrue(v.activeLabels.isEmpty)
+    }
+  }
+
   func testRoseTapSendsRose() {
     let (v, rec, _) = make()
     v.down(finger(v.geo.center)); v.up(finger(v.geo.center))

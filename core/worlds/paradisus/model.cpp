@@ -196,9 +196,9 @@ void Model::restore(const std::string& js) {
       const auto num = [&](const char* key, double def) { const Json* v = e.get(key); return (v && v->type == Json::Num && finite(v->n)) ? v->n : def; };
       Angel* a = add(nextId_--, clampK(num("k", 0)), num("v", 0), true);
       if (!a) break;
-      a->singers = std::min(5, std::max(1, static_cast<int>(std::lround(num("singers", 4)))));
+      a->singers = static_cast<int>(std::lround(std::min(5.0, std::max(1.0, num("singers", 4)))));   // сначала зажать double: lround от 1e99 — UB
       a->detune = clamp01(num("detune", 0.5)); a->vib = clamp01(num("vib", 0.5)); a->breath = clamp01(num("breath", 0.25));
-      a->reg = std::min(2, std::max(0, static_cast<int>(std::lround(num("reg", 1)))));
+      a->reg = static_cast<int>(std::lround(std::min(2.0, std::max(0.0, num("reg", 1)))));
     }
   rng_ = sdk::Rng(saved);                               // зерна ангелов вынуты из потока — снимок после restore тот же
 }

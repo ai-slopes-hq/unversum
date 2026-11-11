@@ -98,7 +98,8 @@ static void snapshotRoundTrip() {
 static void restoreGarbage() {
   Scale sc; Model m(sc);
   const char* bad[] = {"", "{", "[]", "null", "не json", "{\"angels\":5,\"fx\":[]}", "{\"angels\":[1,null,{\"k\":1e999}],\"fx\":{\"shimmer\":\"x\"}}",
-                       "{\"angels\":[{\"k\":99,\"v\":-7,\"singers\":50,\"reg\":-3,\"detune\":9}],\"fx\":{\"mix\":-4}}", "{\"rng\":-5,\"angels\":[]}"};
+                       "{\"angels\":[{\"k\":99,\"v\":-7,\"singers\":50,\"reg\":-3,\"detune\":9}],\"fx\":{\"mix\":-4}}", "{\"rng\":-5,\"angels\":[]}",
+                       "{\"angels\":[{\"k\":1e99,\"singers\":1e99,\"reg\":-1e30,\"v\":1e300}]}", "{\"angels\":[{\"k\":-1e30,\"singers\":-1e30,\"reg\":1e99,\"detune\":1e99}]}", "{\"angels\":[{\"k\":null,\"singers\":\"x\",\"reg\":1e999,\"v\":-1e999}]}"};
   for (const char* js : bad) {
     m.touch(0, 1, 1); m.togglePin(0); m.setFx(MIX, 0.9);
     m.restore(js);
@@ -314,6 +315,21 @@ static void worldTouchMovesPinned() {                      // TOUCH с отри�
   CHECK(w.model().count() == 2 && w.model().pinnedCount() == 1 && st.finite);
 }
 
+static void worldRapidTapsAllSing() {                     // 40 быстрых касаний-отпусканий: пул (24) не должен забиваться уходящими голосами
+  Scale sc; World w(sc); w.prepare(48000, 24); Bufs b; Stat st;
+  act(w, FX, 0, {double(GLORIA), 0});
+  int skipped = 0;
+  for (int i = 0; i < 40; i++) {
+    act(w, TOUCH, 100 + i, {double(i % 9), i * 0.37});
+    run(w, b, 0.06, 128, 48000, st);
+    if (w.model().count() != 1 || !w.model().angel(0).sung) skipped++;   // каждое касание получило голос
+    act(w, RELEASE, 100 + i, {});
+    run(w, b, 0.02, 128, 48000, st);
+  }
+  CHECK(skipped == 0); CHECK(st.finite); CHECK(st.pk < 1.0);
+  Stat tail; run(w, b, 8.0, 128, 48000, tail); CHECK(!w.sounding());
+}
+
 static void worldCrowdBounded() {
   Scale sc; World w(sc); w.prepare(48000, 22); Bufs b; Stat st;
   pinFour(w);
@@ -421,7 +437,7 @@ int main() {
   harmMapping(); formantsInterpolate(); pinLimit(); hzOfScaleOff(); snapshotRoundTrip(); restoreGarbage();
   orbitsAndChime(); driftBounded(); diceDeterministic(); miscClamps();
   worldPeakBounded(); worldBlocksAnySize(); worldSilentWhenIdle(); worldVowelChangesSpectrum(); worldDeterministic(); worldSnapshotRoundTrip(); worldRestoreAnyInput();
-  worldRestoreKeepsSung(); worldTouchMovesPinned(); worldCrowdBounded(); worldPinKeepsVoice(); worldReleaseFades(); worldHeardEvents(); worldGloria(); worldMirrorLayout(); worldBadActions(); worldNoAllocInProcess();
+  worldRestoreKeepsSung(); worldTouchMovesPinned(); worldRapidTapsAllSing(); worldCrowdBounded(); worldPinKeepsVoice(); worldReleaseFades(); worldHeardEvents(); worldGloria(); worldMirrorLayout(); worldBadActions(); worldNoAllocInProcess();
   std::printf("paradisus-test: %d checks, %d failed\n", checks, fails);
   return fails ? 1 : 0;
 }

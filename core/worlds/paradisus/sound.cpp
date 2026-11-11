@@ -50,9 +50,10 @@ Sound::Voice* Sound::find(int id) {
 
 Sound::Voice* Sound::alloc() {
   for (Voice& v : voice_) if (!v.used) return &v;
-  Voice* best = nullptr;                                  // пул полон: забираем самый тихий из уходящих
+  Voice* best = nullptr;                                  // пул полон: самый тихий из уходящих гасим быстро (~35 мс), место освободится в следующих блоках
   for (Voice& v : voice_) if (v.releasing && (!best || v.env < best->env)) best = &v;
-  return best;
+  if (best) best->fast = true;
+  return nullptr;
 }
 
 void Sound::remap(int oldId, int newId) { if (Voice* v = find(oldId)) v->id = newId; }
@@ -183,12 +184,12 @@ void Sound::render(float* L, float* R, float* sL, float* sR, int n) {
   double inL[BLOCK], inR[BLOCK], mono[BLOCK];
   for (int i = 0; i < n; i++) inL[i] = inR[i] = mono[i] = 0;
 
-  const double kEnv = 1 - std::exp(-1.0 / (0.35 * sr_)), kRel = 1 - std::exp(-1.0 / (0.5 * sr_)), kG = 1 - std::exp(-1.0 / (0.02 * sr_));
+  const double kEnv = 1 - std::exp(-1.0 / (0.35 * sr_)), kRel = 1 - std::exp(-1.0 / (0.5 * sr_)), kFast = 1 - std::exp(-1.0 / (0.005 * sr_)), kG = 1 - std::exp(-1.0 / (0.02 * sr_));
   for (Voice& v : voice_) {
     if (!v.used) continue;
     double sum = 0, tmp[BLOCK];
     for (int i = 0; i < n; i++) {
-      v.env += ((v.releasing ? 0.0 : 1.0) - v.env) * (v.releasing ? kRel : kEnv);
+      v.env += ((v.releasing ? 0.0 : 1.0) - v.env) * (v.releasing ? (v.fast ? kFast : kRel) : kEnv);
       const double vib = std::sin(v.vph); v.vph += v.vinc; if (v.vph > TAU) v.vph -= TAU;
       const double sw = std::sin(v.sph); v.sph += v.sinc; if (v.sph > TAU) v.sph -= TAU;
       double src = 0;
@@ -207,7 +208,7 @@ void Sound::render(float* L, float* R, float* sL, float* sR, int n) {
     }
     if (bad(sum)) { v.used = false; continue; }          // залипший голос — убрать (редкая страховка)
     for (int i = 0; i < n; i++) mono[i] += tmp[i];
-    if (v.releasing && v.env < 1e-4) { v.used = false; v.bank.reset(); v.body.reset(); v.air.reset(); }
+    if (v.releasing && v.env < 1e-3) { v.used = false; v.bank.reset(); v.body.reset(); v.air.reset(); }
   }
   for (int i = 0; i < n; i++) inL[i] = inR[i] = mono[i];
 
