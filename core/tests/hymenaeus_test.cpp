@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "../host/scale.hpp"
+#include "../worlds/hymenaeus/cloud.hpp"
 #include "../worlds/hymenaeus/model.hpp"
 #include "../worlds/hymenaeus/rings/plucker.hpp"
 #include "../worlds/hymenaeus/rings/resonator.hpp"
@@ -254,11 +255,93 @@ static void ringsPluckerBurst() {
   for (float x : out) CHECK(std::isfinite(x));
 }
 
+// ---------- Task 3: облака ----------
+
+static hymenaeus::Cloud& theCloud(uint32_t seed = 1) { static hymenaeus::Cloud c; c.prepare(48000, seed); return c; }   // 1+ МБ — не на стек
+
+static uint32_t cloudSt = 99;
+static float cloudNoise() { cloudSt = cloudSt * 1664525u + 1013904223u; return (cloudSt >> 8) / 8388608.0f - 1; }
+
+// n сэмплов: вход — шум амплитуды amp (0 — тишина), возвращает пик, суммарную энергию и признак NaN
+struct CloudRun { double peak = 0, energy = 0; bool finite = true; };
+static CloudRun runCloud(hymenaeus::Cloud& c, int n, float amp, CloudRun* acc = nullptr) {
+  CloudRun r;
+  for (int i = 0; i < n; i++) {
+    const float x = amp * cloudNoise();
+    float l, rr; c.write(x, x * 0.5f); c.process(l, rr);
+    if (!std::isfinite(l) || !std::isfinite(rr)) r.finite = false;
+    r.peak = std::max(r.peak, double(std::max(std::fabs(l), std::fabs(rr)))); r.energy += double(l) * l + double(rr) * rr;
+  }
+  if (acc) { acc->peak = std::max(acc->peak, r.peak); acc->energy += r.energy; acc->finite = acc->finite && r.finite; }
+  return r;
+}
+
+static void cloudSilentIn() {
+  auto& c = theCloud(); c.set(0.5, 0.4, 0.8, 0.5, false, 0.5);
+  CHECK(c.sleeping());
+  const CloudRun r = runCloud(c, 48000, 0);
+  CHECK(r.energy == 0); CHECK(c.sleeping());
+}
+
+static void cloudEchoesInput() {
+  auto& c = theCloud(); c.set(0.2, 0.3, 0.8, 0.5, false, 0);
+  runCloud(c, 24000, 0.5f);                                // полсекунды шума
+  CHECK(!c.sleeping());
+  CloudRun later = runCloud(c, 48000, 0);                  // дальше тишина на входе, облако ещё звучит
+  CHECK(later.energy > 1e-3);
+}
+
+static void cloudFreezeHolds() {
+  auto& c = theCloud(); c.set(0.3, 0.3, 0.7, 0.5, false, 0);
+  const CloudRun live = runCloud(c, 48000, 0.5f);
+  c.set(0.3, 0.3, 0.7, 0.5, true, 0);
+  runCloud(c, 48000, 0);                                   // секунда на затухание живого хвоста
+  const CloudRun held = runCloud(c, 3 * 48000, 0);         // замороженное держится
+  CHECK(held.energy > 0.01 * live.energy);
+  CHECK(!c.sleeping());
+  c.set(0.3, 0.3, 0.7, 0.5, false, 0);                     // разморозка: снова пишет, за ~3.5 с буфер пустеет и облако засыпает
+  runCloud(c, 4 * 48000, 0);
+  CHECK(c.sleeping());
+}
+
+static void cloudFreezeEmpty() {
+  auto& c = theCloud(); c.set(0.5, 0.5, 1, 0.5, true, 1);
+  const CloudRun r = runCloud(c, 48000, 0);
+  CHECK(r.finite); CHECK(r.energy == 0); CHECK(c.sleeping());
+}
+
+static void cloudNoNan() {
+  auto& c = theCloud(5);
+  const double vals[] = {0, 1, -3, 7, NAN, INFINITY, -INFINITY, 0.5};
+  CloudRun all;
+  for (double a : vals) for (double b : vals) {
+    c.set(a, b, a, b, a > 0.5, b);
+    runCloud(c, 128 * 4, 0.7f, &all);
+  }
+  CHECK(all.finite); CHECK(all.peak < 4.0);
+}
+
+static void cloudDensityBounded() {
+  auto& c = theCloud(2); c.set(0.4, 1, 1, 0.5, false, 0.8);   // крупные зёрна, предельная плотность и эхо
+  CloudRun all; runCloud(c, 5 * 48000, 1.0f, &all);
+  CHECK(all.finite); CHECK(all.peak < 4.0);
+  CHECK(c.grains() <= hymenaeus::Cloud::MAX_GRAINS);
+}
+
+static void cloudSleepsAgain() {
+  auto& c = theCloud(); c.set(0.5, 0.4, 0.8, 0.5, false, 0);
+  runCloud(c, 12000, 0.5f);
+  CHECK(!c.sleeping());
+  runCloud(c, 4 * 48000, 0);                               // буфер 3 с: к концу пятой секунды в нём тишина
+  CHECK(c.sleeping());
+}
+
 int main() {
   modelSeedDeterministic(); modelDejaVuOneRepeats(); modelDejaVuZeroVaries(); modelRestsSilent();
   modelRingBands(); modelPitchToRing(); modelScaleSnap(); modelClamps(); modelLenOne();
   modelSnapshotRoundTrip(); modelRestoreGarbage(); modelRollAndClear();
   ringsRingsDown(); ringsDampingMonotone(); ringsBrightnessCentroid(); ringsStable(); ringsIdleCheap(); ringsNoAlloc(); ringsPluckerBurst();
+  cloudSilentIn(); cloudEchoesInput(); cloudFreezeHolds(); cloudFreezeEmpty(); cloudNoNan(); cloudDensityBounded(); cloudSleepsAgain();
   std::printf("hymenaeus-test: %d checks, %d failed\n", checks, fails);
   return fails ? 1 : 0;
 }
