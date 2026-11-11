@@ -106,6 +106,17 @@ struct T2DApp: App {
     case "portus", "portus-empty", "portus-play", "portus-echo", "portus-star", "portus-bloodmoon", "portus-sheet": shotPortus(T2DApp.shotName); return
     case "cymatica", "cym-empty", "cym-play", "cym-pinch", "cym-steprec", "cym-chance", "cym-drift", "cym-luna": shotCymatica(T2DApp.shotName); return
     case "hymenaeus": host.go(HymenaeusView.slotN); return   // нить играет сама (enter → run)
+    case "hymenaeus-fan", "hymenaeus-ring-sheet", "hymenaeus-legend":
+      host.go(HymenaeusView.slotN)
+      DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+        guard let v = host.world as? HymenaeusView else { return }
+        switch T2DApp.shotName {
+        case "hymenaeus-fan": if let fx = v.fx { host.shotSheet(fx, lfoKey: "echo"); host.shotLfo(rate: 1, depth: 0.5) }
+        case "hymenaeus-ring-sheet": host.shotSheet(v.ringSpec(0))
+        default: host.shotState(scl: Scl.off, legendOpen: true)
+        }
+      }
+      return
     case "hymenaeus-drag", "hymenaeus-ring", "hymenaeus-clasp":     // палец удерживается посреди жеста — видна подпись оси
       host.go(HymenaeusView.slotN)
       DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {

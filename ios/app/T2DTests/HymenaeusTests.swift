@@ -217,4 +217,51 @@ final class HymenaeusTests: XCTestCase {
     XCTAssertTrue(rec.acts.isEmpty)
     XCTAssertNil(HymTouch.pinch(ring: 0, d0: CGFloat.nan, d: 10, geo: v.geo, base: HymBase()))
   }
+
+  // ---------- плашки ----------
+  func testSpecKeysMatchCore() throws {
+    let (v, _) = make(), fx = try XCTUnwrap(v.fx)
+    let text = try String(contentsOf: URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+      .appendingPathComponent("core/worlds/hymenaeus/model.hpp"), encoding: .utf8)
+    XCTAssertTrue(text.contains("enum CloudKey { POS, SIZE, DENS, PITCH, FREEZE, ECHO, CLEVEL, SEND, NCK }"))
+    XCTAssertTrue(text.contains("enum RingKey"))
+    XCTAssertEqual(Set(fx.rows.map(\.key)), ["pos", "size", "dens", "pitch", "freeze", "echo", "level", "send", "dejavu", "len"])
+    XCTAssertEqual(HymenaeusView.cloudRows.filter { $0.kind == .cloud }.map(\.idx).sorted(), Array(0..<Hym.nck))
+    let ring = v.ringSpec(1)
+    XCTAssertEqual(ring.rows.map(\.key), ["structure", "bright", "damp", "lvl", "mode", "poly"])
+    XCTAssertEqual(ring.rows.map(\.code), [6, 7, 8, 9, -1, -1])                              // LFO кольца 1: ring·NRK + ключ
+    XCTAssertEqual(fx.rows.first { $0.key == "echo" }?.code, 18 + Hym.Cloud.echo)            // облака — после NR·NRK колец
+    XCTAssertEqual(fx.rows.first { $0.key == "freeze" }?.code, -1)
+    for k in ring.rows.map(\.key) { XCTAssertFalse(ring.text(k).isEmpty); XCTAssertTrue((0.0...1.0).contains(ring.get(k))) }
+  }
+
+  func testSliderWritesSameAction() throws {
+    let (v, rec) = make(), fx = try XCTUnwrap(v.fx), cr = v.geo.cloudsRect, k = NSObject()
+    fx.set("pos", 0.25)
+    v.down(fin(k, cr.minX + 5, cr.midY, 0, 0)); v.move(fin(k, cr.minX + cr.width * 0.25, cr.midY, 0, 0))
+    let a = acts(rec, .cloud)
+    XCTAssertEqual(a[0].a, a[1].a)                                                            // ползунок и жест — одно действие
+    let ring = v.ringSpec(0), n = rec.acts.count
+    ring.set("mode", 1); ring.set("poly", 0.9)
+    XCTAssertEqual(Array(rec.acts[n...]).map { $0.a }, [[Double(Hym.Ring.mode), 1], [Double(Hym.Ring.poly), 1]])
+    ring.tap?("poly")                                                                         // 1 голос в векторе → 2 (0.5)
+    XCTAssertEqual(rec.acts.last?.a, [Double(Hym.Ring.poly), 0.5])
+  }
+
+  func testStepsClamp() throws {
+    XCTAssertEqual(HymenaeusView.lenFrom(-3), 4); XCTAssertEqual(HymenaeusView.lenFrom(9), 16)
+    XCTAssertEqual(HymenaeusView.lenFrom(.nan), 4); XCTAssertEqual(HymenaeusView.lenFrom(0.5), 10)
+    let (v, rec) = make(), fx = try XCTUnwrap(v.fx)
+    fx.set("len", 5); fx.set("len", -5)
+    XCTAssertEqual(acts(rec, .thread).map { $0.a }, [[1, 16], [1, 4]])
+    XCTAssertEqual(fx.text("len"), "11 pearls")
+  }
+
+  func testRingHoldOpensSheet() {
+    let (v, rec) = make(), k = NSObject(), c = v.geo.ringCenter(2), R = v.geo.ringRadius(2)
+    var opened: [String] = []
+    v.openSheet = { opened.append($0.title) }
+    v.down(fin(k, c.x + R, c.y, 0, 0)); v.tick(now: 1.6, dt: 0.016); v.up(fin(k, c.x + R, c.y, 0, 0))
+    XCTAssertEqual(opened, ["anulus III"]); XCTAssertTrue(acts(rec, .strike).isEmpty)
+  }
 }

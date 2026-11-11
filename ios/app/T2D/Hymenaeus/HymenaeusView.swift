@@ -10,7 +10,7 @@ final class HymenaeusView: World {
   let slot = HymenaeusView.slotN
   let theme = Worlds.info(HymenaeusView.slotN)?.theme ?? .base
   let title = "Hymenaeus", sub = "margaritae · anuli"
-  var fx: SheetSpec? { nil }                              // веер — шаг 7 плана
+  private(set) lazy var fx: SheetSpec? = fxSpec        // веер собран раз: замыкания читают зеркало вживую
   var openSheet: ((SheetSpec) -> Void)?
   var objGone: ((Int) -> Void)?
   var rowLfoOff: ((Int) -> Void)?
@@ -18,6 +18,13 @@ final class HymenaeusView: World {
 
   let legend: [LegendRow] = [
     LegendRow(glyph: .tap, gesture: "tap a ring", does: "it sounds, where you touch the rim"),
+    LegendRow(glyph: .drag, gesture: "drag the clouds", does: "← → position, ↑ ↓ grain; bottom strip — echo"),
+    LegendRow(glyph: .hold, gesture: "hold the clouds", does: "freeze while you hold"),
+    LegendRow(glyph: .drag, gesture: "drag a ring", does: "↑ ↓ brightness, ← → damping"),
+    LegendRow(glyph: .pinch, gesture: "pinch a ring", does: "structure"),
+    LegendRow(glyph: .hold, gesture: "hold a ring", does: "its sheet: mode, voices, level"),
+    LegendRow(glyph: .tap, gesture: "tap a pearl", does: "rest on / off"),
+    LegendRow(glyph: .drag, gesture: "drag a pearl or the clasp", does: "↑ ↓ pitch · clasp ← → déjà vu"),
     LegendRow(glyph: .tap, gesture: "tap the sun", does: "map of worlds"),
   ]
 
@@ -80,6 +87,9 @@ final class HymenaeusView: World {
     pullMirror()
     for (k, h) in holds where h.zone == .cloud && !h.moved && !h.frozen && now - h.downAt > Touch.holdMs / 1000 {
       holds[k]?.frozen = true; holds[k]?.last = .cloudHold; send(.cloudHold, touchTime: 0)
+    }
+    for (k, h) in holds where !h.moved && !h.pinching && now - h.downAt > Touch.holdMs / 1000 {     // удержание на кольце — его плашка
+      if case .ring(let r, _)? = h.zone { holds[k]?.moved = true; openSheet?(ringSpec(r)) }
     }
     for _ in 0..<4 {                                      // heard: [k, (кольцо, жемчужина) × k]; читаем до пустого, но не бесконечно
       let hn = min(max(0, readHeard(&hbuf)), hbuf.count)
