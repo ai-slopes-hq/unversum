@@ -67,6 +67,16 @@ final class SideraTests: XCTestCase {
     }
   }
 
+  func testOutlineEncloses() {                                    // контур группы: вокруг всех звёзд, а не прямоугольник; вырожденные случаи не падают
+    XCTAssertTrue(sidOutline([], pad: 10).isEmpty)
+    XCTAssertEqual(sidOutline([CGPoint(x: 5, y: 5)], pad: 10).count, 12)
+    XCTAssertEqual(sidOutline([CGPoint(x: 0, y: 0), CGPoint(x: CGFloat.nan, y: 1)], pad: 10).count, 12)
+    let tri = [CGPoint(x: 0, y: 0), CGPoint(x: 100, y: 0), CGPoint(x: 50, y: 80), CGPoint(x: 50, y: 20)]
+    let o = sidOutline(tri, pad: 10)
+    XCTAssertEqual(o.count, 3)                                    // внутренняя точка в оболочку не входит
+    XCTAssertTrue(o.allSatisfy { p in tri.contains { hypot($0.x - p.x, $0.y - p.y) > 9.9 } })
+  }
+
   func testStarX() {
     let m = SidMirror(vector())!, g = SidGeo(W: 390, H: 844, topY: 59, safeBot: 34)
     for v in 0..<Sid.nv {

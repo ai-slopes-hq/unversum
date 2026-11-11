@@ -63,7 +63,7 @@ struct SidPulse { var v: Int; var i: Int; var t0: Double }     // вспышка
 struct SidPinchState { var ids: [ObjectIdentifier]; var base: (wd: Double, wa: Double); var d0: (dx: CGFloat, dy: CGFloat) }
 
 extension SideraView {
-  private func voiceOf(_ k: SidHold.Kind) -> Int? {
+  func voiceOf(_ k: SidHold.Kind) -> Int? {
     switch k { case .star(let v, _), .band(let v): return v; case .moon: return nil }
   }
   private func send(_ kind: SidAct, _ i: Int, _ a: [Double]) { core.action(kind.rawValue, i, a, touchTime: 0) }

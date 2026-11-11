@@ -42,3 +42,30 @@ struct SidGeo {
     y > moon.c.y && hypot(x - moon.c.x, y - moon.c.y) < moon.r + 6
   }
 }
+
+// очертание созвездия: выпуклая оболочка звёзд, раздутая от центра на pad; точки замкнутой кривой (для 1–2 звёзд — овал вокруг них)
+func sidOutline(_ pts: [CGPoint], pad: CGFloat) -> [CGPoint] {
+  let ps = pts.filter { $0.x.isFinite && $0.y.isFinite }.sorted { $0.x != $1.x ? $0.x < $1.x : $0.y < $1.y }
+  guard let first = ps.first else { return [] }
+  func cross(_ o: CGPoint, _ a: CGPoint, _ b: CGPoint) -> CGFloat { (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x) }
+  var hull: [CGPoint] = []
+  if ps.count >= 3 {
+    var lo: [CGPoint] = [], up: [CGPoint] = []
+    for p in ps { while lo.count >= 2, cross(lo[lo.count - 2], lo[lo.count - 1], p) <= 0 { lo.removeLast() }; lo.append(p) }
+    for p in ps.reversed() { while up.count >= 2, cross(up[up.count - 2], up[up.count - 1], p) <= 0 { up.removeLast() }; up.append(p) }
+    hull = Array(lo.dropLast()) + Array(up.dropLast())
+  }
+  if hull.count < 3 {                                       // одна, две звезды или все на одной прямой: капсула вокруг отрезка
+    let a = first, b = ps.last!
+    let ang = atan2(b.y - a.y, b.x - a.x)
+    return (0..<12).map { k in
+      let t = CGFloat(k) / 12 * 2 * .pi, c = k < 6 ? b : a
+      return CGPoint(x: c.x + pad * cos(t + ang), y: c.y + pad * sin(t + ang))
+    }
+  }
+  let cx = hull.map(\.x).reduce(0, +) / CGFloat(hull.count), cy = hull.map(\.y).reduce(0, +) / CGFloat(hull.count)
+  return hull.map { p in
+    let dx = p.x - cx, dy = p.y - cy, l = max(hypot(dx, dy), 0.001)
+    return CGPoint(x: p.x + dx / l * pad, y: p.y + dy / l * pad)
+  }
+}

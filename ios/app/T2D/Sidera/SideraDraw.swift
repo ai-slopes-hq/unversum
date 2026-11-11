@@ -35,21 +35,7 @@ extension SideraView {
   private func drawVoice(_ d: Draw, _ v: Int, _ now: Double) {
     let G = geo, g = d.g, voice = mirror.voices[v], S = G.S
     let r = G.bandRect(v), lv = CGFloat(0.35 + 0.65 * min(1, voice.lvl * 1.6))     // тише голос — тусклее созвездие
-    d.hairBox(r.minX, r.minY, r.width, r.height, 0.16)
-    g.setStrokeColor(d.ink(0.07)); g.setLineWidth(1); g.beginPath()
-    g.move(to: CGPoint(x: r.minX + 4, y: G.inner(v).midY)); g.addLine(to: CGPoint(x: r.maxX - 4, y: G.inner(v).midY)); g.strokePath()
     let n = voice.n
-    // рамки (пунктиром) и следы от центра к звезде
-    g.setLineWidth(1); g.setLineDash(phase: 0, lengths: [2, 3])
-    for i in 0..<n {
-      let b = G.boxRect(v, voice, i)
-      g.setStrokeColor(d.ink(0.13 * lv)); g.stroke(b)
-    }
-    g.setLineDash(phase: 0, lengths: [])
-    for i in 0..<n {
-      let c = G.homePoint(v, voice, i), p = G.starPoint(v, voice, i)
-      g.setStrokeColor(d.ink(0.16 * lv)); g.beginPath(); g.move(to: c); g.addLine(to: p); g.strokePath()
-    }
     // окно линии
     let head = heads[v], win = SidWindow.segments(head: head, n: n, count: 3)
     let frac = CGFloat(head.isFinite ? head - head.rounded(.down) : 0)
@@ -73,6 +59,7 @@ extension SideraView {
       }
     }
     g.setLineCap(.butt)
+    if holds.values.contains(where: { !$0.dead && voiceOf($0.kind) == v }) { drawOutline(d, v, voice) }   // тронули группу — золотой контур
     // звёзды
     for i in 0..<n {
       let p = G.starPoint(v, voice, i), on = inWin.contains(i)
@@ -95,6 +82,23 @@ extension SideraView {
     if labelOn[v] {                                                                               // подпись — только пока жест идёт
       d.mapText("\(sidNoteName(voice.note)) · \(voice.n)", r.maxX - 8, r.minY + 14, 12, 0.8, align: .right)
     }
+  }
+
+  // контур созвездия под пальцем: золотая замкнутая кривая через раздутую оболочку звёзд (не прямоугольник)
+  private func drawOutline(_ d: Draw, _ v: Int, _ voice: SidVoice) {
+    let G = geo, g = d.g
+    let pts = sidOutline((0..<voice.n).map { G.starPoint(v, voice, $0) }, pad: 16 * G.S)
+    guard pts.count >= 3 else { return }
+    let m = pts.count
+    func mid(_ a: CGPoint, _ b: CGPoint) -> CGPoint { CGPoint(x: (a.x + b.x) / 2, y: (a.y + b.y) / 2) }
+    g.beginPath(); g.move(to: mid(pts[m - 1], pts[0]))
+    for i in 0..<m { g.addQuadCurve(to: mid(pts[i], pts[(i + 1) % m]), control: pts[i]) }     // сглаживание: середины сторон, углы — опорные
+    g.closePath()
+    g.setStrokeColor(Draw.color(Tria.gold, 0.12)); g.setLineWidth(5 * G.S); g.setLineJoin(.round); g.strokePath()
+    g.beginPath(); g.move(to: mid(pts[m - 1], pts[0]))
+    for i in 0..<m { g.addQuadCurve(to: mid(pts[i], pts[(i + 1) % m]), control: pts[i]) }
+    g.closePath()
+    g.setStrokeColor(Draw.color(Tria.gold, 0.85)); g.setLineWidth(1.2 * G.S); g.strokePath()
   }
 
   // луна: четверть диска в углу; фаза — шаг блужданий (серп → полнолуние), свечение и толщина серпа — уровень выхода
@@ -120,10 +124,7 @@ extension SideraView {
   func frame(_ d: Draw, _ now: Double, moon: Bool) {
     let G = geo
     backStars(d)
-    if moon { drawMoon(d) }                                                                        // под полем: тёмный диск не стирает рамки и подписи
-    let f = G.field
-    d.hairBox(f.minX - 6, f.minY - 6, f.width + 12, f.height + 12, 0.28)                          // двойная рамка
-    d.hairBox(f.minX - 3, f.minY - 3, f.width + 6, f.height + 6, 0.12)
+    if moon { drawMoon(d) }                                                                        // под полем: тёмный диск не стирает подписи
     pulses.removeAll { now - $0.t0 > 0.6 }
     for v in 0..<Sid.nv { drawVoice(d, v, now) }
   }
