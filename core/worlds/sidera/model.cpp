@@ -50,6 +50,7 @@ void Model::fit(Point& p, int v) const {
 
 void Model::reset(uint32_t seed) {
   step_ = 0.15;
+  fx_[DRIFT] = 0.25; fx_[SPACE] = 0.3; fx_[TONE] = 0.35;
   rng_ = sdk::Rng(seed);
   for (int v = 0; v < NV; v++) {
     for (int k = 0; k < NVK; k++) prm_[v][k] = DEF[k];
@@ -96,6 +97,25 @@ void Model::roll(int v) {
   }
 }
 
+void Model::setFx(int key, double val) { if (key >= 0 && key < NFX && !std::isnan(val)) fx_[key] = clampd(val, 0, 1); }
+
+void Model::kick(int v, int pt) {
+  if (v < 0 || v >= NV || pt < -1 || pt >= NPT_MAX) return;
+  const int n = static_cast<int>(prm_[v][N]);
+  for (int i = 0; i < n; i++) {
+    if (pt >= 0 && i != pt) continue;
+    Point& p = pts_[v][i];
+    p.hd = clampd(p.hd + 0.16 * (2 * vrng_[v].next() - 1), D_MIN, 1);        // рамка уходит: созвездие заметно меняется
+    p.ha = clampd(p.ha + 0.5 * (2 * vrng_[v].next() - 1), -1, 1);
+    const double wd = prm_[v][WD], wa = prm_[v][WA];
+    const double dlo = std::max(D_MIN, p.hd - wd / 2), dhi = std::min(1.0, p.hd + wd / 2);
+    const double alo = std::max(-1.0, p.ha - wa / 2), ahi = std::min(1.0, p.ha + wa / 2);
+    p.d = dlo + (std::max(dlo, dhi) - dlo) * vrng_[v].next();                // и сама точка — в случайное место рамки
+    p.a = alo + (std::max(alo, ahi) - alo) * vrng_[v].next();
+    fit(p, v);
+  }
+}
+
 void Model::silence() { for (int v = 0; v < NV; v++) prm_[v][LVL] = 0; }
 
 void Model::walk(int v) {
@@ -112,6 +132,11 @@ void Model::walk(int v) {
     const double alo = std::max(-1.0, p.ha - wa / 2), ahi = std::min(1.0, p.ha + wa / 2);
     p.d = fold(p.d, dlo, std::max(dlo, dhi));
     p.a = fold(p.a, alo, std::max(alo, ahi));
+    if (fx_[DRIFT] > 0) {                                                       // вторичное блуждание: сама рамка (центр) медленно плывёт, зеркала на краях поля
+      p.hd = fold(p.hd + 0.03 * fx_[DRIFT] * (2 * vrng_[v].next() - 1), D_MIN, 1);
+      p.ha = fold(p.ha + 0.05 * fx_[DRIFT] * (2 * vrng_[v].next() - 1), -1, 1);
+      fit(p, v);
+    }
   }
 }
 
@@ -134,6 +159,9 @@ std::string Model::snapshot() const {
   Json o = Json::object();
   o.set("rng", Json::num(rng_.state));
   o.set("step", Json::num(step_));
+  Json fxs = Json::array();
+  for (int k = 0; k < NFX; k++) fxs.push(Json::num(fx_[k]));
+  o.set("fx", fxs);
   Json vs = Json::array();
   for (int v = 0; v < NV; v++) {
     Json e = Json::object();
@@ -163,6 +191,8 @@ void Model::restore(const std::string& js) {
   auto seedOf = [](const Json* x, uint32_t d) { return (x && x->type == Json::Num && std::isfinite(x->n)) ? static_cast<uint32_t>(clampd(x->n, 0, 4294967295.0)) : d; };
   rng_ = sdk::Rng(seedOf(j.get("rng"), 1));
   if (const Json* s = j.get("step")) if (s->type == Json::Num) setStep(s->n);
+  if (const Json* f = j.get("fx")) if (f->type == Json::Arr)
+    for (int k = 0; k < NFX && k < static_cast<int>(f->a.size()); k++) if (f->a[k].type == Json::Num) setFx(k, f->a[k].n);
   const Json* vs = j.get("voices");
   if (!vs || vs->type != Json::Arr) return;
   for (int v = 0; v < NV && v < static_cast<int>(vs->a.size()); v++) {

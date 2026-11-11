@@ -10,13 +10,14 @@ final class SideraView: World {
   let slot = SideraView.slotN
   let theme = Worlds.info(SideraView.slotN)?.theme ?? .base
   let title = "Sidera", sub = "stellae · luna"
-  var fx: SheetSpec? { nil }                              // веера нет: плашка голоса — удержанием
+  private(set) lazy var fx: SheetSpec? = fxSpec            // веер собран раз: замыкания читают зеркало вживую; плашка голоса — удержанием
   var openSheet: ((SheetSpec) -> Void)?
   var objGone: ((Int) -> Void)?
   var rowLfoOff: ((Int) -> Void)?
   var goMap: (() -> Void)?
 
   let legend: [LegendRow] = [
+    LegendRow(glyph: .tap, gesture: "tap a star or a band", does: "shakes it: the star (or the whole constellation) jumps"),
     LegendRow(glyph: .drag, gesture: "drag a star", does: "moves its box: pitch of the bend, length of the step"),
     LegendRow(glyph: .two, gesture: "two fingers on a band", does: "← → box width, ↑ ↓ box height"),
     LegendRow(glyph: .hold, gesture: "hold a band or a star", does: "its sheet: note, stars, level, pan, law"),
@@ -33,6 +34,7 @@ final class SideraView: World {
   private(set) var now = 0.0
   private var started = false
   var heads = [0.0, 1.7, 3.1]                           // позиция головы окна линии по голосам, в отрезках
+  var pulses: [SidPulse] = []
   var holds: [ObjectIdentifier: SidHold] = [:]
   var pinches: [Int: SidPinchState] = [:]
   var labelOn = [Bool](repeating: false, count: Sid.nv)   // подпись «нота · N» — пока жест идёт (Task 6)
@@ -51,7 +53,7 @@ final class SideraView: World {
     started = true; core.action(Act.run.rawValue, 0, [1], touchTime: 0)
   }
   func scale(pcs: [Int]?, root: Int) {}                   // лад читает ядро
-  func restored() { started = true; holds = [:]; pinches = [:]; labelOn = [Bool](repeating: false, count: Sid.nv) }
+  func restored() { started = true; pulses = []; holds = [:]; pinches = [:]; labelOn = [Bool](repeating: false, count: Sid.nv) }
   func idle() {}
   func tick(now: Double, dt: Double) {
     self.now = now; pullMirror(); tickHolds()

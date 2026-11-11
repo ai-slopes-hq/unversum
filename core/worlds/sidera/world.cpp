@@ -36,11 +36,14 @@ void World::action(int kind, int i, const double* a, int n) {
     }
     case CLEAR: model_.silence(); break;
     case MOON: if (has(1)) model_.setStep(a[0]); break;
+    case KICK: if (has(1) && std::isfinite(a[0])) model_.kick(i, keyOf(a[0])); break;
+    case FX: if (has(2)) model_.setFx(keyOf(a[0]), a[1]); break;
     case RUN: if (has(1) && !std::isnan(a[0])) run_ = a[0] != 0; break;
     case sdk::ACT_LFO: {
       if (!has(2) || i != -1) break;
       const int key = keyOf(a[0]);
       if (key == 0) model_.setStep(a[1]);
+      else if (key >= 4 * NV + 1 && key <= 4 * NV + NFX) model_.setFx(key - 4 * NV - 1, a[1]);
       else if (key >= 1 && key <= 4 * NV) {
         const int v = (key - 1) / 4, k = LFO_KEYS[(key - 1) % 4];
         model_.setVoice(v, k, k == PAN ? 2 * a[1] - 1 : a[1]);
@@ -56,7 +59,7 @@ void World::process(const sdk::Out& out, int n) {
   if (n > 128) n = 128;
   for (int k = 0; k < n; k++) out.L[k] = out.R[k] = out.sL[k] = out.sR[k] = 0.f;
   if (!run_) { env_ *= 0.9; return; }
-  for (int v = 0; v < NV; v++) voice_[v].render(model_, v, out.L, out.R, out.sL, out.sR, n, SEND);
+  for (int v = 0; v < NV; v++) voice_[v].render(model_, v, out.L, out.R, out.sL, out.sR, n, model_.fx(SPACE));
   double sum = 0;
   for (int k = 0; k < n; k++) {
     out.L[k] = static_cast<float>(KNEE(out.L[k]));
@@ -69,12 +72,13 @@ void World::process(const sdk::Out& out, int n) {
 int World::mirror(double* buf, int cap) const {
   if (!buf || cap < MIRROR_N) return 0;
   double* p = buf;
-  *p++ = std::min(1.0, env_); *p++ = model_.step(); *p++ = SEND;
+  *p++ = std::min(1.0, env_); *p++ = model_.step(); *p++ = model_.fx(SPACE);
   for (int v = 0; v < NV; v++) {
     for (int k = 0; k < VSTEP; k++) *p++ = model_.voice(v, k);          // NOTE … DIST
     *p++ = std::min(1.0, voice_[v].energy());
     for (int i = 0; i < NPT_MAX; i++) { const Point q = model_.pt(v, i); *p++ = q.d; *p++ = q.a; *p++ = q.hd; *p++ = q.ha; }
   }
+  for (int k = 0; k < NFX; k++) *p++ = model_.fx(k);
   return MIRROR_N;
 }
 

@@ -36,7 +36,7 @@ void Voice::render(Model& m, int v, float* L, float* R, float* sL, float* sR, in
     dc_ = sdk::DcBlock(); lp_ = sdk::OnePole(); env_ = 0; started_ = false;
     return;
   }
-  const double pan = m.voice(v, PAN);
+  const double pan = m.voice(v, PAN), tone = std::max(0.03, m.fx(TONE));   // коэффициент однополюсника: 0.35 по умолчанию
   if (pan != pan_) { pan_ = pan; sdk::panEq(pan, gl_, gr_); }
   if (!started_) { startPeriod(m, v); pos_ = 0; gain_ = 0; }          // подъём с нуля нарастает (≈10 мс), без ступеньки
   for (int i = 0; i < n; i++) {
@@ -49,7 +49,7 @@ void Voice::render(Model& m, int v, float* L, float* R, float* sL, float* sR, in
     }
     gain_ += (target - gain_) * 0.002;
     if (target <= 0 && gain_ < 1e-5) gain_ = 0;
-    double y = lp_.step(dc_.step(x), 0.35);
+    double y = lp_.step(dc_.step(x), tone);
     if (!std::isfinite(y)) { y = 0; dc_ = sdk::DcBlock(); lp_ = sdk::OnePole(); }
     y *= gain_;
     env_ += (std::fabs(y) - env_) * 0.002;

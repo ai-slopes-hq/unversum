@@ -59,6 +59,7 @@ struct SidHold {
   var moved = false, pinching = false, dead = false
   var x: CGFloat, y: CGFloat
 }
+struct SidPulse { var v: Int; var i: Int; var t0: Double }     // вспышка встряски: кольцо расходится от звезды (i = −1 — от всех звёзд голоса)
 struct SidPinchState { var ids: [ObjectIdentifier]; var base: (wd: Double, wa: Double); var d0: (dx: CGFloat, dy: CGFloat) }
 
 extension SideraView {
@@ -113,6 +114,13 @@ extension SideraView {
     guard let h = holds.removeValue(forKey: f.id) else { return }
     if case .moon = h.kind { if !h.moved { goMap?() }; return }
     guard let v = voiceOf(h.kind) else { return }
+    if !h.moved && !h.pinching && !h.dead {                                   // короткий тап: звезда — встряска одной звезды, полоса — всего созвездия
+      switch h.kind {
+      case .star(_, let i): send(.kick, v, [Double(i)]); pulses.append(SidPulse(v: v, i: i, t0: now))
+      default: send(.kick, v, [-1]); pulses.append(SidPulse(v: v, i: -1, t0: now))
+      }
+      if pulses.count > 12 { pulses.removeFirst(pulses.count - 12) }
+    }
     if h.pinching, let st = pinches[v] {
       pinches[v] = nil
       for id in st.ids where id != f.id { holds[id]?.pinching = false; holds[id]?.dead = true }

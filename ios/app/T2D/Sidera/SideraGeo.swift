@@ -11,11 +11,11 @@ struct SidGeo {
   init(W: CGFloat, H: CGFloat, topY: CGFloat, safeBot: CGFloat) {
     self.W = W; self.H = H; self.topY = topY; self.safeBot = safeBot
     S = min(W / 390, H / 844)
-    moon = (CGPoint(x: 0, y: topY + 2), 46 * S)
+    moon = (CGPoint(x: 0, y: topY + 10 * S), 34 * S)       // ниже заголовка и меньше: ни диск, ни дуга фазы (1,28 r) не лезут под имя мира
   }
 
   var field: CGRect {                                      // от под луны до над нижним баром
-    let top = topY + 56, bottom = H - safeBot - TopBar.barH - 12
+    let top = topY + 10 * S + 34 * S * 1.28 + 10, bottom = H - safeBot - TopBar.barH - 12
     return CGRect(x: SidGeo.side, y: top, width: W - 2 * SidGeo.side, height: max(1, bottom - top))
   }
   func bandRect(_ v: Int) -> CGRect {

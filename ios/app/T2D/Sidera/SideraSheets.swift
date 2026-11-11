@@ -56,4 +56,25 @@ extension SideraView {
         send(k, Double((mirror.voices[v].dist + 1) % 3))
       })
   }
+
+  // веер FX (кнопка fx): drift — вторичное блуждание рамок, space — посыл в ревербер, tone — яркость
+  static let fxRows = ["drift", "space", "tone"]
+  private static let fxLabels = ["drift": "motus", "space": "spatium", "tone": "tonus"]
+
+  var fxSpec: SheetSpec {
+    func idx(_ k: String) -> Int { SideraView.fxRows.firstIndex(of: k) ?? 0 }
+    func pct(_ x: Double) -> String { "\(Int((Sid.clamp(x) * 100).rounded()))%" }
+    return SheetSpec(
+      title: "astra", hint: "drift, space, tone — tap outside to close",
+      rows: SideraView.fxRows.map { SheetRow(key: $0, label: SideraView.fxLabels[$0] ?? $0, code: Sid.Fx.lfoBase + idx($0)) },
+      get: { [unowned self] k in mirror.fx[idx(k)] },
+      set: { [unowned self] k, x in core.action(SidAct.fx.rawValue, 0, [Double(idx(k)), Sid.clamp(x)], touchTime: 0) },
+      text: { [unowned self] k in
+        let x = mirror.fx[idx(k)]
+        if k == "drift" && x < 0.02 { return "still" }
+        return pct(x)
+      },
+      lfo: SheetLfo(obj: -1, keys: Set(SideraView.fxRows), shape: 1),
+      reset: nil, arc: nil, tap: nil)
+  }
 }

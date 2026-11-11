@@ -5,7 +5,7 @@ import ObjectiveC
 
 // Sidera: разбор зеркала, раскладка полос, номера действий, попадание в луну
 final class SideraTests: XCTestCase {
-  // 219 чисел по порядку world.hpp: голова 3, по голосу 8 + 16 × (d, a, hd, ha)
+  // 222 числа по порядку world.hpp: голова 3, по голосу 8 + 16 × (d, a, hd, ha), в конце drift / space / tone
   fileprivate func vector() -> [Double] {
     var m = [Double](repeating: 0, count: Sid.mirrorN)
     m[0] = 0.4; m[1] = 0.6; m[2] = 0.3
@@ -22,7 +22,7 @@ final class SideraTests: XCTestCase {
   }
 
   func testMirrorDecode() {
-    XCTAssertEqual(Sid.mirrorN, 219)
+    XCTAssertEqual(Sid.mirrorN, 222)
     let m = SidMirror(vector())!
     XCTAssertEqual(m.level, 0.4, accuracy: 1e-9); XCTAssertEqual(m.step, 0.6, accuracy: 1e-9); XCTAssertEqual(m.send, 0.3, accuracy: 1e-9)
     XCTAssertEqual(m.voices.map { $0.n }, [5, 8, 11])
@@ -49,6 +49,7 @@ final class SideraTests: XCTestCase {
   func testActNumbers() {
     XCTAssertEqual(SidAct.voice.rawValue, 0); XCTAssertEqual(SidAct.star.rawValue, 1); XCTAssertEqual(SidAct.dice.rawValue, 2)
     XCTAssertEqual(SidAct.clear.rawValue, 3); XCTAssertEqual(SidAct.moon.rawValue, 4); XCTAssertEqual(SidAct.run.rawValue, 5)
+    XCTAssertEqual(SidAct.kick.rawValue, 6); XCTAssertEqual(SidAct.fx.rawValue, 7)
     XCTAssertEqual(Sid.Lfo.code(2, 1), 10); XCTAssertEqual(Sid.Lfo.code(0, 0), 1)
   }
 
@@ -58,7 +59,7 @@ final class SideraTests: XCTestCase {
       for v in 0..<Sid.nv {
         let r = g.bandRect(v)
         XCTAssertGreaterThan(r.height, 40, "\(W)x\(H) band \(v)")
-        XCTAssertGreaterThanOrEqual(r.minY, g.topY + 50, "под луной \(W)")
+        XCTAssertGreaterThanOrEqual(r.minY, g.moon.c.y + g.moon.r * 1.28, "под луной и её дугой \(W)")
         XCTAssertLessThanOrEqual(r.maxY, barTop, "над нижним баром \(W)x\(H)")
         XCTAssertGreaterThanOrEqual(r.minX, 0); XCTAssertLessThanOrEqual(r.maxX, W)
         if v > 0 { XCTAssertFalse(r.intersects(g.bandRect(v - 1)), "bands \(v) \(W)") }
@@ -283,6 +284,22 @@ final class SideraTests: XCTestCase {
     XCTAssertEqual(mapped, 1, "тап по луне — карта")
   }
 
+  func testTapKicksAndFxSheetWrites() {
+    let (v, rec, fs) = rig(); let g = v.geo, m = v.mirror
+    let s = g.starPoint(2, m.voices[2], 4)
+    let f = at(fs[0], s, moved: false); v.down(f); v.up(f)                              // тап по звезде → KICK одной звезды, вспышка
+    XCTAssertEqual(rec.acts.last?.kind, SidAct.kick.rawValue); XCTAssertEqual(rec.acts.last?.i, 2); XCTAssertEqual(rec.acts.last?.a, [4])
+    XCTAssertEqual(v.pulses.count, 1)
+    let r = g.bandRect(0)
+    let b = at(fs[0], CGPoint(x: r.midX, y: r.minY + 2), moved: false); v.down(b); v.up(b)   // пустое место полосы → встряска всего голоса
+    if let last = rec.acts.last, last.kind == SidAct.kick.rawValue { XCTAssertEqual(last.a.count, 1) } else { XCTFail("kick") }
+    rec.acts.removeAll()
+    let spec = v.fx!
+    XCTAssertEqual(spec.rows.map(\.key), ["drift", "space", "tone"]); XCTAssertEqual(spec.rows.map(\.code), [13, 14, 15])
+    spec.set("space", 0.7)
+    XCTAssertEqual(rec.acts.last?.kind, SidAct.fx.rawValue); XCTAssertEqual(rec.acts.last?.a, [1, 0.7])
+  }
+
   func testTwoFingersWidenAndHoldOpensSheet() {
     let (v, rec, fs) = rig(); let g = v.geo
     let r = g.bandRect(0)
@@ -333,6 +350,7 @@ final class SideraTests: XCTestCase {
     core.action(SidAct.run.rawValue, 0, [1], touchTime: 0)
     core.action(SidAct.voice.rawValue, 1, [Double(Sid.Key.lvl), 0.8], touchTime: 0)
     core.action(SidAct.voice.rawValue, 1, [Double(Sid.Key.note), 17], touchTime: 0)
+    core.action(SidAct.fx.rawValue, 0, [Double(Sid.Fx.drift), 0], touchTime: 0)       // дрейф рамок выключен: иначе центры уходят, пока идёт рендер
     let before = mirror()
     XCTAssertEqual(before.voices[1].lvl, 0.8, accuracy: 1e-9)
     XCTAssertTrue(host.snap(slot: SideraView.slotN, id: 1))

@@ -17,6 +17,8 @@ constexpr double D_MIN = 0.02;                          // меньшая дли
 enum Dist { CAUCHY, LOGISTIC, UNIFORM, NDIST };
 enum VKey { NOTE, N, WD, WA, LVL, PAN, DIST, VSTEP, NVK };   // NOTE 0…60 (целые), N 3…16, WD WA LVL 0…1, PAN −1…1, DIST 0…2, VSTEP 0…2
 
+enum FxKey { DRIFT, SPACE, TONE, NFX };                 // общие FX мира 0…1: DRIFT — вторичное блуждание рамок, SPACE — посыл в ревербер, TONE — яркость (фильтр голоса)
+
 struct Point { double d = 0.5, a = 0, hd = 0.5, ha = 0; };   // d — 0.02…1, a — −1…1, hd/ha — центр рамки
 
 class Model {
@@ -29,6 +31,9 @@ class Model {
   void moveHome(int v, int pt, double hd, double ha);   // центр рамки точки: hd 0.02…1, ha −1…1; точка (d, a) подтягивается внутрь рамки
   void setStep(double s);                               // общий масштаб шага (луна) 0…1
   void roll(int v = -1);                                // кубик: голос v (−1 — все): точки возвращаются в центры рамок, блуждание сеется заново
+  void kick(int v, int pt);                             // встряска: точка pt голоса v (−1 — все) прыгает в случайное место рамки, рамка чуть сдвигается
+  void setFx(int key, double val);                      // FxKey, значение 0…1; вне диапазона и NaN — ничего
+  double fx(int key) const { return (key >= 0 && key < NFX) ? fx_[key] : 0; }
   void silence();                                       // корзина: LVL всех голосов = 0, точки целы
   void walk(int v);                                     // один период блуждания: все N точек голоса v делают шаг
 
@@ -49,6 +54,7 @@ class Model {
   double prm_[NV][NVK] = {};
   Point pts_[NV][NPT_MAX];
   double step_ = 0.15;
+  double fx_[NFX] = {0.25, 0.3, 0.35};
   sdk::Rng rng_{1};                                     // мастер: семена голосов при roll
   sdk::Rng vrng_[NV] = {sdk::Rng(1), sdk::Rng(1), sdk::Rng(1)};
 };

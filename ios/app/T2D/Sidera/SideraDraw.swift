@@ -32,7 +32,7 @@ extension SideraView {
     for _ in 0..<70 { let px = rnd() * geo.W, py = rnd() * geo.H, a = 0.06 + rnd() * 0.12; d.dot(px, py, 0.7 * geo.S + 0.2, a) }
   }
 
-  private func drawVoice(_ d: Draw, _ v: Int) {
+  private func drawVoice(_ d: Draw, _ v: Int, _ now: Double) {
     let G = geo, g = d.g, voice = mirror.voices[v], S = G.S
     let r = G.bandRect(v), lv = CGFloat(0.35 + 0.65 * min(1, voice.lvl * 1.6))     // тише голос — тусклее созвездие
     d.hairBox(r.minX, r.minY, r.width, r.height, 0.16)
@@ -84,6 +84,14 @@ extension SideraView {
         g.move(to: CGPoint(x: p.x, y: p.y - 4 * S)); g.addLine(to: CGPoint(x: p.x, y: p.y + 4 * S)); g.strokePath()
       }
     }
+    for pl in pulses where pl.v == v {                                                            // встряска: кольцо расходится и гаснет за 0,6 с
+      let t = CGFloat((now - pl.t0) / 0.6)
+      guard t >= 0, t < 1 else { continue }
+      for i in (pl.i >= 0 ? [pl.i] : Array(0..<n)) where i < n {
+        let p = G.starPoint(v, voice, i)
+        d.ring(p.x, p.y, (4 + 22 * t) * S, 0.7 * (1 - t) * lv, 1)
+      }
+    }
     if labelOn[v] {                                                                               // подпись — только пока жест идёт
       d.mapText("\(sidNoteName(voice.note)) · \(voice.n)", r.maxX - 8, r.minY + 14, 12, 0.8, align: .right)
     }
@@ -93,7 +101,7 @@ extension SideraView {
   private func drawMoon(_ d: Draw) {
     let G = geo, g = d.g, c = G.moon.c, r = G.moon.r
     let lv = CGFloat(min(1, mirror.level * 3)), p = CGFloat(Sid.clamp(mirror.step))
-    d.glowAt(c.x + r * 0.45, c.y + r * 0.45, r * (1.3 + lv * 0.6), 0.05 + 0.3 * lv)
+    d.glowAt(c.x + r * 0.45, c.y + r * 0.45, r * (1.1 + lv * 0.4), 0.04 + 0.22 * lv)
     g.saveGState()
     g.clip(to: CGRect(x: c.x, y: c.y, width: r * 3, height: r * 3))                               // видна четверть вправо-вниз
     g.setFillColor(d.ink(0.12 + 0.6 * lv)); g.fillEllipse(in: CGRect(x: c.x - r, y: c.y - r, width: 2 * r, height: 2 * r))
@@ -116,6 +124,7 @@ extension SideraView {
     let f = G.field
     d.hairBox(f.minX - 6, f.minY - 6, f.width + 12, f.height + 12, 0.28)                          // двойная рамка
     d.hairBox(f.minX - 3, f.minY - 3, f.width + 6, f.height + 6, 0.12)
-    for v in 0..<Sid.nv { drawVoice(d, v) }
+    pulses.removeAll { now - $0.t0 > 0.6 }
+    for v in 0..<Sid.nv { drawVoice(d, v, now) }
   }
 }
