@@ -139,7 +139,15 @@ void Model::setCloud(int key, double v) {
 void Model::roll(int t) {
   for (int k = 0; k < NR; k++) if (t < 0 || t == k) for (int i = 0; i < PEARL_MAX; i++) toss(thr_[k], i);
 }
-void Model::clear() { for (int t = 0; t < NR; t++) for (int i = 0; i < PEARL_MAX; i++) thr_[t].p[i].rest = true; }
+
+void Model::clearAll() {
+  const auto blank = [](Thread& th, int t) { th = Thread(); th.lo = LO_DEF[t]; th.hi = HI_DEF[t]; for (int i = 0; i < PEARL_MAX; i++) th.p[i].rest = true; };
+  for (int t = 0; t < NR; t++) { blank(thr_[t], t); for (int l = 0; l < NLOC; l++) blank(loc_[l][t], t); }
+  for (int r = 0; r < NR; r++) for (int k = 0; k < NRK; k++) ring_[r][k] = RING_DEF[k];
+  for (int k = 0; k < NCK; k++) cloud_[k] = CLOUD_DEF[k];
+  cloud_[FREEZE] = 0;
+  curLoc_ = 0; mix_ = 0.5;
+}
 
 bool Model::sounding() const {
   for (int t = 0; t < NR; t++) for (int i = 0; i < thr_[t].len; i++) if (!thr_[t].p[i].rest) return true;

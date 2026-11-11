@@ -214,9 +214,52 @@ static void modelRollAndClear() {
   const std::string a = m.snapshot(); m.roll(); CHECK(m.snapshot() != a);
   const Pearl keep = m.thread(1).p[0]; m.roll(0); CHECK(m.thread(1).p[0].pitch == keep.pitch);   // roll(0) нить 1 не трогает
   m.roll(1); CHECK(m.thread(1).p[0].pitch != keep.pitch);
-  m.clear();
+  m.clearAll();
   for (int t = 0; t < NR; t++) for (int i = 0; i < PEARL_MAX; i++) CHECK(m.thread(t).p[i].rest);
   CHECK(!m.sounding());
+}
+
+static void modelClearAllIsEmpty() {
+  Scale sc; Model m(sc); m.reset(7);
+  m.setRing(0, STRUCT, 0.9); m.setRing(1, POLY, 1); m.setCloud(ECHO, 0.9); m.setCloud(FREEZE, 1); m.setMix(0.1);
+  m.setDejaVu(0, 0.1); m.setLen(1, 4); m.setRange(0, 30, 90);
+  for (int l : {2, 1, 3, 0}) { m.setLoc(l); m.setRest(0, 3, false); m.setRest(1, 5, false); m.setPearlPitch(0, 1, 0.9); }
+  m.setLoc(2);
+  for (int i = 0; i < 5; i++) { m.next(0); m.next(1); }
+  m.clearAll();
+  Model def(sc); def.reset(7);
+  CHECK(m.loc() == 0); CHECK(!m.sounding());
+  for (int l = 0; l < NLOC; l++) {
+    m.setLoc(l);
+    for (int t = 0; t < NR; t++) {
+      const Thread& th = m.thread(t);
+      for (int i = 0; i < PEARL_MAX; i++) CHECK(th.p[i].rest);
+      CHECK(th.len == PEARL_DEF && th.dejavu == 0.7 && th.cur == 0);
+      CHECK(th.lo == def.thread(t).lo && th.hi == def.thread(t).hi);
+    }
+    CHECK(!m.sounding());
+  }
+  m.setLoc(0);
+  for (int r = 0; r < NR; r++) for (int k = 0; k < NRK; k++) CHECK(m.ring(r, k) == def.ring(r, k));
+  for (int k = 0; k < NCK; k++) CHECK(m.cloud(k) == def.cloud(k));
+  CHECK(m.mix() == 0.5);
+  for (int t = 0; t < NR; t++) { m.setDejaVu(t, 1); for (int i = 0; i < 20; i++) CHECK(!m.next(t).hit); }   // дефолтный déjà vu 0.7 перебрасывает пустую нить, поэтому проверяем при 1
+}
+
+static void modelClearUndoRestores() {
+  Scale sc; Model m(sc); m.reset(9);
+  m.setRing(1, DAMP, 0.2); m.setCloud(FREEZE, 1); m.setMix(0.8); m.setLoc(3); m.setRest(0, 2, false);
+  for (int i = 0; i < 7; i++) m.next(0);
+  const std::string s = m.snapshot();
+  m.clearAll(); CHECK(m.snapshot() != s);
+  m.restore(s); CHECK(m.snapshot() == s);
+}
+
+static void modelClearTwice() {
+  Scale sc; Model m(sc); m.reset(11);
+  m.setLoc(2); m.setCloud(ECHO, 0.9);
+  m.clearAll(); const std::string a = m.snapshot();
+  m.clearAll(); CHECK(m.snapshot() == a);
 }
 
 
@@ -675,6 +718,28 @@ static void worldBudget() {
   std::printf("  budget: %.2f%% of real time\n", 100 * sec / audio);
 }
 
+static void worldClearSilences() {
+  Scale sc; auto& w = theWorld(sc, 5);
+  act(w, hymenaeus::BPM, 0, {240}); act(w, hymenaeus::RUN, 0, {1});
+  for (int r = 0; r < NR; r++) act(w, hymenaeus::RING, r, {2, 0.3});
+  runWorld(w, 48000 * 2 / 128);
+  act(w, hymenaeus::STRIKE, 0, {0.3, 1}); act(w, hymenaeus::STRIKE, 1, {0.3, 1});   // ручные удары ждут блока
+  act(w, hymenaeus::CLEAR, 0, {}); act(w, hymenaeus::RUN, 0, {0});         // нить после CLEAR с déjà vu 0.7 снова наполняется, поэтому ход останавливаем
+  const int half = 48000 / 2 / 128;
+  const WRun first = runWorld(w, half);                                    // звон и хвост облака не гасятся параметрами мгновенно (ревербер хоста тут не в счёт)
+  CHECK(first.heard == 0);                                                 // ни ручных ударов, ни heard после CLEAR
+  const WRun mid = runWorld(w, half * 3), last = runWorld(w, half);        // до 2 с
+  std::printf("  clear: peak 0-0.5 s %.3g, 1.5-2 s %.3g\n", first.peak, last.peak);
+  CHECK(first.finite && mid.finite && last.finite);
+  CHECK(mid.heard == 0 && last.heard == 0);
+  CHECK(last.peak < first.peak * 0.8);                                     // звон затухает
+  runWorld(w, half * 2 * 20);                                              // ещё 20 с: затухание до тишины (замер: ниже 1e-4 примерно к 19.5 с)
+  const WRun tail = runWorld(w, half);
+  std::printf("  clear: peak at 22-22.5 s %.3g\n", tail.peak);
+  CHECK(tail.peak < 1e-4);
+  CHECK(!w.model().sounding());
+}
+
 static void worldBothRingsStep() {
   Scale sc; auto& w = theWorld(sc, 3);
   act(w, hymenaeus::BPM, 0, {240}); act(w, hymenaeus::RUN, 0, {1});
@@ -840,12 +905,12 @@ static void worldMirrorSize() {
 int main() {
   modelSeedDeterministic(); modelDejaVuOneRepeats(); modelDejaVuZeroVaries(); modelRestsSilent();
   modelRingsCount(); modelDefaultRanges(); modelTwoThreadsIndependent(); modelRangeClamp(); modelPitchWithinRange(); modelDeterministic(); modelScaleSnap(); modelScaleSnapLowRange(); modelClamps(); modelLenOne();
-  modelSnapshotRoundTrip(); modelRestoreGarbage(); modelRollAndClear(); modelCloudSend();
+  modelSnapshotRoundTrip(); modelRestoreGarbage(); modelRollAndClear(); modelClearAllIsEmpty(); modelClearUndoRestores(); modelClearTwice(); modelCloudSend();
   modelLocSwapKeepsSound(); modelLocKeepsEdits(); modelLocOutOfRange(); modelLocsDiffer(); modelDiceKeepsTimbre(); modelTimbreKeepsNotes(); modelMixClamp(); modelLocSnapshotRoundTrip(); modelLocRestoreGarbage();
   ringsRingsDown(); ringsDampingMonotone(); ringsBrightnessCentroid(); ringsStable(); ringsIdleCheap(); ringsNoAlloc(); ringsPluckerBurst();
   cloudSilentIn(); cloudEchoesInput(); cloudFreezeHolds(); cloudFreezeEmpty(); cloudEchoDecays(); cloudNoNan(); cloudDensityBounded(); cloudSleepsAgain();
   worldSilentWhenStopped(); worldStepsInTime(); worldStrikeSounds(); worldNoStepFlood(); worldStopNoStuck(); worldSnapshotRoundTrip();
-  worldGarbageActions(); worldBudget(); worldBothRingsStep();
+  worldGarbageActions(); worldBudget(); worldBothRingsStep(); worldClearSilences();
   modelRingModePoly(); soundStringsSound(); soundStructureGlide(); soundPolyVoices(); soundPolyStrings(); soundModeSwitchLive(); worldMirrorSize();
   std::printf("hymenaeus-test: %d checks, %d failed\n", checks, fails);
   return fails ? 1 : 0;

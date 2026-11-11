@@ -49,7 +49,7 @@ class Model {
   void setLoc(int slot);                                // локация 0…NLOC−1: активные нити уходят в старый слот, из нового приходят другие; вне диапазона — ничего
   void setMix(double v);                                // 0…1 (0.5 — как раньше): сухое ↔ облака; NaN игнорируется
   void rollTimbre();                                    // STRUCT, BRIGHT, DAMP колец и POS, SIZE, DENS, PITCH облаков — случайно; ноты и уровни не трогает
-  void clear();                                         // все нити — паузы
+  void clearAll();                                      // корзина: все ноты всех слотов — паузы, нити/кольца/облака (кроме FREEZE → 0)/mix — по умолчанию, cur и curLoc 0; rng не трогается
 
   Step next(int t);                                     // шаг нити t: курсор двигается, жемчужина может перебросится; ring = t
   double hzOf(int t, double pitch) const;               // высота 0…1 → Гц: lo…hi нити t, лад хоста
