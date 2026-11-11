@@ -1,4 +1,5 @@
 // Тесты мира Sidera (XIV, GENDYN): модель, голос, мир. Сборка — core/build.sh → core/build/sidera-test.
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <string>
@@ -6,6 +7,7 @@
 
 #include "../host/scale.hpp"
 #include "../worlds/sidera/model.hpp"
+#include "../worlds/sidera/voice.hpp"
 
 static int checks = 0, fails = 0;
 #define CHECK(c) do { checks++; if (!(c)) { fails++; std::printf("FAIL %s:%d  %s\n", __FILE__, __LINE__, #c); } } while (0)
@@ -149,9 +151,107 @@ static void modelHzFollowsScale() {
   CHECK(m.hzOf(0) != 55.0 * std::pow(2.0, 1.0 / 12));
 }
 
+// ---------- Task 2: голос ----------
+
+struct Buf {
+  std::vector<float> L, R, sL, sR;
+  void render(Voice& vo, Model& m, int v, int n, double send = 0.3) {   // n сэмплов блоками по 128, выход накапливается
+    for (int done = 0; done < n;) {
+      const int k = std::min(128, n - done);
+      std::vector<float> l(k, 0.f), r(k, 0.f), sl(k, 0.f), sr(k, 0.f);
+      vo.render(m, v, l.data(), r.data(), sl.data(), sr.data(), k, send);
+      L.insert(L.end(), l.begin(), l.end()); R.insert(R.end(), r.begin(), r.end());
+      sL.insert(sL.end(), sl.begin(), sl.end()); sR.insert(sR.end(), sr.begin(), sr.end());
+      done += k;
+    }
+  }
+};
+
+static void voiceSumOfSegments() {
+  Scale sc;
+  for (int n : {3, 8, 16}) {
+    Model m(sc); m.setVoice(0, N, n); Voice vo; vo.prepare(48000);
+    Buf b; b.render(vo, m, 0, 128);
+    double sum = 0;
+    for (int i = 0; i < vo.segs(); i++) sum += vo.seg(i);
+    CHECK(vo.segs() == n);
+    CHECK(std::fabs(sum - vo.period()) < 1e-9);
+    CHECK(std::fabs(vo.period() - 48000.0 / m.hzOf(0)) <= 1.0);
+  }
+}
+
+static void voiceNoDc() {
+  Scale sc; Model m(sc); Voice vo; vo.prepare(48000);
+  Buf b; b.render(vo, m, 0, 96000);
+  double mean = 0; int cnt = 0;
+  for (size_t i = 24000; i < b.L.size(); i++) { mean += b.L[i] + b.R[i]; cnt += 2; }
+  CHECK(std::fabs(mean / cnt) < 0.01);
+  double pk = 0; for (float x : b.L) pk = std::max(pk, static_cast<double>(std::fabs(x)));
+  CHECK(pk > 0.01);                                                              // и звук есть
+}
+
+static void voiceFiniteExtremes() {
+  Scale sc;
+  for (int note : {0, 60}) for (int n : {3, 16}) for (double step : {0.0, 1.0}) for (int dist = 0; dist < NDIST; dist++) {
+    Model m(sc); m.reset(4); m.setStep(step); m.setVoice(0, NOTE, note); m.setVoice(0, N, n); m.setVoice(0, DIST, dist); m.setVoice(0, WA, 1); m.setVoice(0, WD, 1);
+    Voice vo; vo.prepare(48000);
+    Buf b; b.render(vo, m, 0, 96000);
+    bool ok = true;
+    for (size_t i = 0; i < b.L.size(); i++) ok = ok && std::isfinite(b.L[i]) && std::isfinite(b.R[i]) && std::isfinite(b.sL[i]) && std::fabs(b.L[i]) <= 4 && std::fabs(b.R[i]) <= 4;
+    CHECK(ok);
+  }
+}
+
+static void voiceStepZeroPeriodic() {
+  Scale sc; Model m(sc); m.setStep(0); m.setVoice(1, LVL, 0); m.setVoice(2, LVL, 0);
+  Voice vo; vo.prepare(44000);                                                   // f0 55 Гц → период ровно 800 сэмплов
+  Buf b; b.render(vo, m, 0, 800 * 20);
+  double worst = 0;
+  for (int i = 0; i < 800; i++) worst = std::max(worst, static_cast<double>(std::fabs(b.L[800 * 18 + i] - b.L[800 * 19 + i])));
+  CHECK(worst < 1e-6);
+}
+
+static void voiceLevelZeroSilent() {
+  Scale sc; Model m(sc); for (int v = 0; v < NV; v++) m.setVoice(v, LVL, 0);
+  Voice vo; vo.prepare(48000);
+  Buf b; b.render(vo, m, 0, 48000);
+  bool zero = true;
+  for (size_t i = 0; i < b.L.size(); i++) zero = zero && b.L[i] == 0 && b.R[i] == 0 && b.sL[i] == 0 && b.sR[i] == 0;
+  CHECK(zero);
+  CHECK(vo.energy() < 1e-6);
+}
+
+static void voiceNoteChangeAtBoundary() {
+  Scale sc; Model m(sc); m.setStep(1); Voice vo; vo.prepare(48000);
+  Buf b;
+  for (int blk = 0; blk < 400; blk++) {
+    m.setVoice(0, NOTE, (blk * 7) % 61); m.setVoice(0, N, 3 + (blk * 5) % 14);
+    b.render(vo, m, 0, 128);
+  }
+  bool ok = true; double jump = 0;
+  for (size_t i = 0; i < b.L.size(); i++) {
+    ok = ok && std::isfinite(b.L[i]) && std::isfinite(b.R[i]);
+    if (i) jump = std::max(jump, static_cast<double>(std::fabs(b.L[i] - b.L[i - 1])));
+  }
+  CHECK(ok);
+  CHECK(jump <= 2.0);
+}
+
+static void voiceSilenceThenResume() {
+  Scale sc; Model m(sc); Voice vo; vo.prepare(48000);
+  Buf b; b.render(vo, m, 0, 4800);
+  m.setVoice(0, LVL, 0); b.render(vo, m, 0, 48000);
+  m.setVoice(0, LVL, 0.5); Buf c; c.render(vo, m, 0, 4800);
+  double pk = 0; for (float x : c.L) pk = std::max(pk, static_cast<double>(std::fabs(x)));
+  CHECK(pk > 0.01);
+  bool fin = true; for (float x : c.L) fin = fin && std::isfinite(x);
+  CHECK(fin);
+}
+
 int main() {
   modelSeedDeterministic(); modelBarriersHold(); modelStepZeroStatic(); modelCollapsedBox(); modelClamps(); modelMoveHome(); modelSilence();
   modelRollResetsToHome(); modelSnapshotRoundTrip(); modelRestoreGarbage(); modelHzFollowsScale();
+  voiceSumOfSegments(); voiceNoDc(); voiceFiniteExtremes(); voiceStepZeroPeriodic(); voiceLevelZeroSilent(); voiceNoteChangeAtBoundary(); voiceSilenceThenResume();
   std::printf("sidera-test: %d checks, %d failed\n", checks, fails);
   return fails ? 1 : 0;
 }
