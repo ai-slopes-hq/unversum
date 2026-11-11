@@ -304,6 +304,16 @@ static void worldRestoreKeepsSung() {                     // restore с теми
   CHECK(chimes >= 1);
 }
 
+static void worldTouchMovesPinned() {                      // TOUCH с отрицательным id двигает закреплённого, но не рождает ангелов
+  Scale sc; World w(sc); w.prepare(48000, 23); Bufs b; Stat st;
+  act(w, TOUCH, 3, {2, 1}); act(w, PIN, 3, {}); run(w, b, 0.3, 128, 48000, st);
+  const int id = w.model().angel(0).id; CHECK(id < 0);
+  act(w, TOUCH, id, {6, 4.2}); run(w, b, 0.3, 128, 48000, st);
+  CHECK(w.model().count() == 1 && w.model().angel(0).pinned && w.model().angel(0).k == 6 && std::fabs(w.model().angel(0).v - 4.2) < 1e-9 && w.model().angel(0).id == id);
+  act(w, TOUCH, -777, {1, 1}); act(w, TOUCH, 3, {2, 1}); run(w, b, 0.1, 128, 48000, st);   // неизвестный отрицательный — ничего; положительный старый id — новый временный, как раньше
+  CHECK(w.model().count() == 2 && w.model().pinnedCount() == 1 && st.finite);
+}
+
 static void worldCrowdBounded() {
   Scale sc; World w(sc); w.prepare(48000, 22); Bufs b; Stat st;
   pinFour(w);
@@ -411,7 +421,7 @@ int main() {
   harmMapping(); formantsInterpolate(); pinLimit(); hzOfScaleOff(); snapshotRoundTrip(); restoreGarbage();
   orbitsAndChime(); driftBounded(); diceDeterministic(); miscClamps();
   worldPeakBounded(); worldBlocksAnySize(); worldSilentWhenIdle(); worldVowelChangesSpectrum(); worldDeterministic(); worldSnapshotRoundTrip(); worldRestoreAnyInput();
-  worldRestoreKeepsSung(); worldCrowdBounded(); worldPinKeepsVoice(); worldReleaseFades(); worldHeardEvents(); worldGloria(); worldMirrorLayout(); worldBadActions(); worldNoAllocInProcess();
+  worldRestoreKeepsSung(); worldTouchMovesPinned(); worldCrowdBounded(); worldPinKeepsVoice(); worldReleaseFades(); worldHeardEvents(); worldGloria(); worldMirrorLayout(); worldBadActions(); worldNoAllocInProcess();
   std::printf("paradisus-test: %d checks, %d failed\n", checks, fails);
   return fails ? 1 : 0;
 }

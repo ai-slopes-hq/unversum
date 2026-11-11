@@ -121,7 +121,7 @@ final class ParadisusView: World {
   // подпись, пока трогаешь ангела: имя сферы · гармоника, гласная
   var activeLabels: [(title: String, sub: String, at: CGPoint, align: Align)] {
     holds.values.compactMap { h in
-      guard h.kind != .none else { return nil }
+      guard h.kind != .none, !h.sheet, h.kind == .temp || h.moved else { return nil }   // закреплённого подписываем, только пока ведут; под плашкой — нет
       let a = mirror.angels.first { $0.id == h.id }
       let k = a?.k ?? h.k, v = a?.v ?? h.v, p = geo.angelPos(k, v), right = p.x < geo.cx
       return ("\(ParLook.name(k)) · \(ParLook.harm(k))", "\(ParLook.vowelName(v)) · ×\(ParLook.harm(k))",
@@ -169,7 +169,7 @@ final class ParadisusView: World {
     h.cur = p
     if !h.moved && !ParTouch.moved(from: h.p0, to: p) { holds[f.id] = h; return }
     h.moved = true
-    let g = h.kind == .temp ? ParTouch.drag(to: p, k: h.k, geo: geo) : ParTouch.dragPinned(to: p, k: h.k, geo: geo)
+    let g = ParTouch.drag(to: p, k: h.k, geo: geo)
     switch g {
     case .touch(let k, let v)?: h.k = k; h.v = v; send(.touch, h.id, [Double(k), v], f.touchTime)     // поперёк — на ближайшую сферу
     case .vowel(let v)?: h.v = v; send(.vowel, h.id, [v], f.touchTime)                                // вдоль — гласная

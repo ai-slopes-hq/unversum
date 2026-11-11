@@ -3,7 +3,7 @@ import Foundation
 
 // жесты Paradisus как чистые функции (порт down/move/up из worlds/paradisus/view.js): что под пальцем, как тянуть, двойной тап.
 // Вид только вызывает их и шлёт действия ядру.
-// Закреплённый ангел: касание (TOUCH) принимает только id >= 0, поэтому его тянут лишь вдоль — гласная (VOWEL); поперёк — через ядро нельзя.
+// Закреплённого тянут так же, как временного (в ядре TOUCH с отрицательным id двигает существующего): вдоль — VOWEL, поперёк — TOUCH с новым k.
 enum ParHit: Equatable {
   case angel(Int)       // ангел, который ещё не закреплён (поёт, пока его держат), по id из зеркала
   case sphere(Int)
@@ -54,12 +54,6 @@ enum ParTouch {
     let k1 = geo.sphereAt(p) ?? k
     let v = geo.vowel(k1, p)
     return k1 == k ? .vowel(v) : .touch(k: k1, v: v)
-  }
-
-  // закреплённого тянут только вдоль его сферы
-  static func dragPinned(to p: CGPoint, k: Int, geo: ParGeo) -> ParGesture? {
-    guard ok(p) else { return nil }
-    return .vowel(geo.vowel(k, p))
   }
 
   static func moved(from p0: CGPoint, to p: CGPoint) -> Bool { ok(p) && hypot(p.x - p0.x, p.y - p0.y) >= dragStart }

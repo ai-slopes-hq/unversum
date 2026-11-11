@@ -118,7 +118,6 @@ final class ParadisusTests: XCTestCase {
     XCTAssertEqual(ParTouch.hit(CGPoint(x: 1, y: g.bot + 60), geo: g, m: m), ParHit.none)
     XCTAssertEqual(ParTouch.hit(CGPoint(x: CGFloat.nan, y: 5), geo: g, m: m), ParHit.none)
     if case .touch(let k, let v)? = ParTouch.drag(to: g.angelPos(5, 1), k: 3, geo: g) { XCTAssertEqual(k, 5); XCTAssertEqual(v, 1, accuracy: 1e-6) } else { XCTFail("across") }
-    XCTAssertEqual(ParTouch.dragPinned(to: g.angelPos(5, 2), k: 3, geo: g), .vowel(g.vowel(3, g.angelPos(5, 2))))
     if case .vowel(let v)? = ParTouch.drag(to: g.angelPos(3, 2), k: 3, geo: g) { XCTAssertEqual(v, 2, accuracy: 1e-6) } else { XCTFail("along") }
   }
 
@@ -161,6 +160,24 @@ final class ParadisusTests: XCTestCase {
     let r = v.geo.angelPos(5, 3)                                                            // дальше вдоль новой сферы — гласная, сфера сохранена
     v.move(finger(r, from: p))
     XCTAssertEqual(rec.acts[2].kind, ParAct.vowel.rawValue); XCTAssertEqual(rec.acts[2].a[0], 3, accuracy: 1e-6)
+  }
+
+  // закреплённый: тянут вдоль (VOWEL) и поперёк (TOUCH с его отрицательным id); RELEASE при подъёме не шлём; под плашкой подписи нет
+  func testPinnedDragAcrossAndAlong() {
+    let (v, rec, _) = make(Box(vec([ParAngel(id: -3, k: 4, v: 2, vEff: 2, pinned: true)])))
+    let p = v.geo.angelPos(4, 2)
+    v.down(finger(p)); XCTAssertTrue(rec.acts.isEmpty); XCTAssertTrue(v.activeLabels.isEmpty)
+    v.move(finger(v.geo.angelPos(4, 3), from: p))
+    XCTAssertEqual(rec.acts[0].kind, ParAct.vowel.rawValue); XCTAssertEqual(rec.acts[0].i, -3)
+    v.move(finger(v.geo.angelPos(6, 3), from: p))
+    XCTAssertEqual(rec.acts[1].kind, ParAct.touch.rawValue); XCTAssertEqual(rec.acts[1].i, -3); XCTAssertEqual(rec.acts[1].a[0], 6)
+    XCTAssertEqual(v.activeLabels.count, 1)
+    v.up(finger(p)); XCTAssertEqual(rec.acts.count, 2)
+    // удержание открывает плашку — подпись прячется
+    let (w, _, _) = make(Box(vec([ParAngel(id: -3, k: 4, v: 2, vEff: 2, pinned: true)])))
+    w.openSheet = { _ in }
+    w.down(finger(p)); w.tick(now: 1.6, dt: 0.1)
+    XCTAssertTrue(w.activeLabels.isEmpty)
   }
 
   func testDoubleTapPins() {

@@ -21,7 +21,7 @@ void World::prepare(double sr, uint32_t seed) {
 void World::action(int kind, int i, const double* a, int n) {
   const auto has = [&](int k) { return a && n >= k; };
   switch (kind) {
-    case TOUCH: if (i >= 0 && has(2)) model_.touch(i, std::isfinite(a[0]) ? static_cast<int>(std::lround(std::max(-100.0, std::min(100.0, a[0])))) : 0, a[1]); break;
+    case TOUCH: if ((i >= 0 || model_.find(i)) && has(2)) model_.touch(i, std::isfinite(a[0]) ? static_cast<int>(std::lround(std::max(-100.0, std::min(100.0, a[0])))) : 0, a[1]); break;
     case RELEASE: model_.release(i); break;
     case PIN: {
       const bool was = model_.find(i) != nullptr;
