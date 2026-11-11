@@ -51,7 +51,7 @@ static void modelRestsSilent() {
   m.togglePearl(0, 0); CHECK(m.thread(0).p[0].rest == true);
 }
 
-static void modelRingsCount() { CHECK(NR == 2); CHECK(NRK == 5); CHECK(NLOC == 4); }
+static void modelRingsCount() { CHECK(NR == 2); CHECK(NRK == 5); }
 
 static void modelDefaultRanges() {
   Scale sc; Model m(sc);
@@ -213,23 +213,17 @@ static void modelClearAllIsEmpty() {
   Scale sc; Model m(sc); m.reset(7);
   m.setRing(0, STRUCT, 0.9); m.setRing(1, POLY, 1); m.setCloud(ECHO, 0.9); m.setCloud(FREEZE, 1); m.setMix(0.1);
   m.setLen(1, 4); m.setRange(0, 30, 90);
-  for (int l : {2, 1, 3, 0}) { m.setLoc(l); m.setRest(0, 3, false); m.setRest(1, 5, false); m.setPearlPitch(0, 1, 0.9); }
-  m.setLoc(2);
+  m.setRest(0, 3, false); m.setRest(1, 5, false); m.setPearlPitch(0, 1, 0.9);
   for (int i = 0; i < 5; i++) { m.next(0); m.next(1); }
   m.clearAll();
   Model def(sc); def.reset(7);
-  CHECK(m.loc() == 0); CHECK(!m.sounding());
-  for (int l = 0; l < NLOC; l++) {
-    m.setLoc(l);
-    for (int t = 0; t < NR; t++) {
-      const Thread& th = m.thread(t);
-      for (int i = 0; i < PEARL_MAX; i++) CHECK(th.p[i].rest);
-      CHECK(th.len == PEARL_DEF && th.cur == 0);
-      CHECK(th.lo == def.thread(t).lo && th.hi == def.thread(t).hi);
-    }
-    CHECK(!m.sounding());
+  CHECK(!m.sounding());
+  for (int t = 0; t < NR; t++) {
+    const Thread& th = m.thread(t);
+    for (int i = 0; i < PEARL_MAX; i++) CHECK(th.p[i].rest);
+    CHECK(th.len == PEARL_DEF && th.cur == 0);
+    CHECK(th.lo == def.thread(t).lo && th.hi == def.thread(t).hi);
   }
-  m.setLoc(0);
   for (int r = 0; r < NR; r++) for (int k = 0; k < NRK; k++) CHECK(m.ring(r, k) == def.ring(r, k));
   for (int k = 0; k < NCK; k++) CHECK(m.cloud(k) == def.cloud(k));
   CHECK(m.mix() == 0.5);
@@ -238,7 +232,7 @@ static void modelClearAllIsEmpty() {
 
 static void modelClearUndoRestores() {
   Scale sc; Model m(sc); m.reset(9);
-  m.setRing(1, DAMP, 0.2); m.setCloud(FREEZE, 1); m.setMix(0.8); m.setLoc(3); m.setRest(0, 2, false);
+  m.setRing(1, DAMP, 0.2); m.setCloud(FREEZE, 1); m.setMix(0.8); m.setRest(0, 2, false);
   for (int i = 0; i < 7; i++) m.next(0);
   const std::string s = m.snapshot();
   m.clearAll(); CHECK(m.snapshot() != s);
@@ -247,7 +241,7 @@ static void modelClearUndoRestores() {
 
 static void modelClearTwice() {
   Scale sc; Model m(sc); m.reset(11);
-  m.setLoc(2); m.setCloud(ECHO, 0.9);
+  m.setCloud(ECHO, 0.9);
   m.clearAll(); const std::string a = m.snapshot();
   m.clearAll(); CHECK(m.snapshot() == a);
 }
@@ -259,51 +253,6 @@ static bool sameNotes(const Thread& a, const Thread& b) {
   if (a.len != b.len || a.lo != b.lo || a.hi != b.hi) return false;
   for (int i = 0; i < PEARL_MAX; i++) if (a.p[i].pitch != b.p[i].pitch || a.p[i].rest != b.p[i].rest) return false;
   return true;
-}
-
-static void modelLocSwapKeepsSound() {
-  Scale sc; Model m(sc); m.reset(3);
-  m.setRing(1, DAMP, 0.9); m.setCloud(ECHO, 0.77); m.setMix(0.8);
-  double r[NR][NRK], c[NCK];
-  for (int i = 0; i < NR; i++) for (int k = 0; k < NRK; k++) r[i][k] = m.ring(i, k);
-  for (int k = 0; k < NCK; k++) c[k] = m.cloud(k);
-  Model ref(sc); ref.reset(3);
-  m.setLoc(1);
-  CHECK(m.loc() == 1);
-  for (int i = 0; i < NR; i++) for (int k = 0; k < NRK; k++) CHECK(m.ring(i, k) == r[i][k]);
-  for (int k = 0; k < NCK; k++) CHECK(m.cloud(k) == c[k]);
-  CHECK(m.mix() == 0.8);
-  CHECK(!sameNotes(m.thread(0), ref.thread(0)));            // ноты стали другими, не прежними
-}
-
-static void modelLocKeepsEdits() {
-  Scale sc; Model m(sc); m.reset(4);
-  
-  m.setPearlPitch(0, 2, 0.123); m.setRest(1, 3, true); m.setLen(0, 6);
-  for (int i = 0; i < 4; i++) { m.next(0); m.next(1); }
-  const int c0 = m.thread(0).cur, c1 = m.thread(1).cur;
-  m.setLoc(1);
-  CHECK(m.thread(0).cur == c0 % m.thread(0).len && m.thread(1).cur == c1 % m.thread(1).len);   // курсор не сброшен
-  m.setLoc(0);
-  CHECK(m.thread(0).p[2].pitch == 0.123 && m.thread(1).p[3].rest && m.thread(0).len == 6);
-  // быстрые повторные переключения без потерь
-  m.setPearlPitch(0, 5, 0.42);
-  m.setLoc(2); m.setLoc(2); m.setLoc(3); m.setLoc(0);
-  CHECK(m.thread(0).p[5].pitch == 0.42 && m.thread(0).p[2].pitch == 0.123);
-}
-
-static void modelLocOutOfRange() {
-  Scale sc; Model m(sc); m.reset(5);
-  m.setLoc(2); const std::string a = m.snapshot();
-  m.setLoc(-1); m.setLoc(4); m.setLoc(1000);
-  CHECK(m.loc() == 2); CHECK(m.snapshot() == a);
-}
-
-static void modelLocsDiffer() {
-  Scale sc; Model m(sc); m.reset(6);
-  Thread t[NLOC][NR];
-  for (int l = 0; l < NLOC; l++) { m.setLoc(l); for (int k = 0; k < NR; k++) t[l][k] = m.thread(k); }
-  for (int a = 0; a < NLOC; a++) for (int b = a + 1; b < NLOC; b++) for (int k = 0; k < NR; k++) CHECK(!sameNotes(t[a][k], t[b][k]));
 }
 
 static void modelDiceKeepsTimbre() {
@@ -359,19 +308,19 @@ static void modelMixClamp() {
   m.setMix(-INFINITY); CHECK(m.mix() == 0);
 }
 
-static void modelLocSnapshotRoundTrip() {
+static void modelSnapshotMixRoundTrip() {
   Scale sc; Model m(sc); m.reset(11);
-  m.setMix(0.77); m.setPearlPitch(0, 1, 0.31); m.setLoc(2); m.setPearlPitch(1, 4, 0.66); m.setLen(0, 9);
+  m.setMix(0.77); m.setPearlPitch(0, 1, 0.31); m.setPearlPitch(1, 4, 0.66); m.setLen(0, 9);
   for (int i = 0; i < 5; i++) { m.next(0); m.next(1); }
   const std::string js = m.snapshot();
   Model b(sc); b.restore(js);
   CHECK(b.snapshot() == js);
-  CHECK(b.loc() == 2 && b.mix() == 0.77);
-  b.setLoc(0); CHECK(b.thread(0).p[1].pitch == 0.31);
-  b.setLoc(2); CHECK(b.thread(1).p[4].pitch == 0.66 && b.thread(0).len == 9);
+  CHECK(b.mix() == 0.77);
+  CHECK(b.thread(0).p[1].pitch == 0.31 && b.thread(1).p[4].pitch == 0.66 && b.thread(0).len == 9);
+  CHECK(js.find("loc") == std::string::npos);                          // ключи loc / curLoc новые снимки не пишут
 }
 
-static void modelLocRestoreGarbage() {
+static void modelRestoreGarbageNoLoc() {
   Scale sc; Model m(sc);
   const char* bad[] = {"", "{}", "{\"p\":[[0.5,0]],\"len\":3}", "{\"thr\":5,\"loc\":7,\"curLoc\":\"x\",\"mix\":[]}",
     "{\"thr\":[],\"loc\":[1,2,[3],[[1],{}]],\"curLoc\":99,\"mix\":9}",
@@ -379,9 +328,8 @@ static void modelLocRestoreGarbage() {
     "{\"thr\":[{}],\"loc\":[[{},{}],[{},{}],[{},{}],[{},{}]],\"curLoc\":1.5,\"mix\":-4}"};
   for (const char* js : bad) {
     m.restore(js);
-    CHECK(m.loc() >= 0 && m.loc() < NLOC); CHECK(m.mix() >= 0 && m.mix() <= 1);
-    for (int l = 0; l < NLOC; l++) {
-      m.setLoc(l);
+    CHECK(m.mix() >= 0 && m.mix() <= 1);
+    {
       for (int t = 0; t < NR; t++) {
         const Thread& th = m.thread(t);
         CHECK(th.len >= 1 && th.len <= PEARL_MAX); CHECK(th.cur >= 0 && th.cur < th.len);
@@ -393,6 +341,14 @@ static void modelLocRestoreGarbage() {
   }
   m.restore("");                                          // пустое — рабочий дефолт
   CHECK(m.snapshot() == Model(sc).snapshot());
+  {                                                       // старый снимок с loc / curLoc: ключи читаются и отбрасываются, нити те же
+    Model o(sc); o.reset(11); o.setMix(0.4);
+    std::string js = o.snapshot();
+    const std::string withLoc = "{\"curLoc\":2,\"loc\":[[{\"len\":4},{\"len\":5}],[],[],[]]," + js.substr(1);
+    Model x(sc); x.restore(withLoc);
+    CHECK(x.snapshot() == js);
+    CHECK(x.snapshot().find("loc") == std::string::npos && x.snapshot().find("Loc") == std::string::npos);
+  }
 }
 
 
@@ -917,12 +873,12 @@ static const MixRef MIX_REF = {0.800939202, 0.907557428, 0.119531089, 0.11897741
 
 static std::vector<double> mirrorOf(hymenaeus::World& w) { std::vector<double> m(MIRROR_N + 4, -777); CHECK(w.mirror(m.data(), MIRROR_N) == MIRROR_N); return m; }
 // смещения зеркала (см. world.hpp)
-constexpr int M_RUN = 0, M_BPM = 1, M_LOC = 2, M_MIX = 3, M_CUR = 4, M_LEN = 6, M_LO = 8, M_HI = 10, M_PEARL = 12,
+constexpr int M_RUN = 0, M_BPM = 1, M_MIX = 2, M_CUR = 3, M_LEN = 5, M_LO = 7, M_HI = 9, M_PEARL = 11,
               M_RING = M_PEARL + 2 * 2 * PEARL_MAX, M_CLOUD = M_RING + NR * 6, M_CENV = M_CLOUD + NCK;
 
 static void worldActRouting() {
   CHECK(hymenaeus::RING == 0 && hymenaeus::CLOUD == 1 && hymenaeus::PEARL == 2 && hymenaeus::STRIKE == 3 && hymenaeus::THREAD == 4 && hymenaeus::DICE == 5
-        && hymenaeus::CLEAR == 6 && hymenaeus::RUN == 7 && hymenaeus::BPM == 8 && hymenaeus::TIMBRE == 9 && hymenaeus::LOC == 10 && hymenaeus::MIX == 11);
+        && hymenaeus::CLEAR == 6 && hymenaeus::RUN == 7 && hymenaeus::BPM == 8 && hymenaeus::TIMBRE == 9 && hymenaeus::MIX == 10);
   Scale sc; auto& w = theWorld(sc, 3);
   act(w, hymenaeus::THREAD, 1, {1, 50}); CHECK(w.model().thread(1).lo == 50 && w.model().thread(0).lo == 47);
   act(w, hymenaeus::THREAD, 1, {2, 80}); CHECK(w.model().thread(1).hi == 80);
@@ -934,10 +890,8 @@ static void worldActRouting() {
   act(w, hymenaeus::RING, 1, {0, 0.1}); CHECK(w.model().ring(1, STRUCT) == 0.1);
   act(w, hymenaeus::CLOUD, 0, {3, 0.9}); CHECK(w.model().cloud(PITCH) == 0.9);
   act(w, hymenaeus::MIX, 0, {0.8}); CHECK(w.model().mix() == 0.8);
-  act(w, hymenaeus::LOC, 0, {2}); CHECK(w.model().loc() == 2);
-  act(w, hymenaeus::LOC, 0, {9}); CHECK(w.model().loc() == 2);
   act(w, hymenaeus::BPM, 0, {120}); act(w, hymenaeus::RUN, 0, {1});
-  { auto m = mirrorOf(w); CHECK(m[M_RUN] == 1 && m[M_BPM] == 120 && m[M_LOC] == 2 && m[M_MIX] == 0.8); }
+  { auto m = mirrorOf(w); CHECK(m[M_RUN] == 1 && m[M_BPM] == 120 && m[M_MIX] == 0.8); }
   const double rs0 = w.model().ring(0, STRUCT), cs0 = w.model().cloud(POS), cur = w.model().ring(1, LVL), lvl = w.model().ring(0, LVL), snd = w.model().cloud(SEND);
   act(w, hymenaeus::TIMBRE, 0, {});
   CHECK(w.model().ring(0, STRUCT) != rs0 || w.model().cloud(POS) != cs0);
@@ -948,7 +902,7 @@ static void worldActRouting() {
   act(w, hymenaeus::PEARL, 99, {0, 0, 1}); act(w, hymenaeus::PEARL, -1, {0, 0, 1}); act(w, hymenaeus::PEARL, 1, {2, 0, 1}); act(w, hymenaeus::PEARL, 1, {-1, 1, 1});
   act(w, hymenaeus::PEARL, 1, {0, 5, 1}); act(w, hymenaeus::PEARL, 1, {0, 0}); act(w, hymenaeus::PEARL, 1, {0, 0, NAN});
   act(w, hymenaeus::THREAD, 2, {2, 50}); act(w, hymenaeus::THREAD, -1, {2, 50}); act(w, hymenaeus::THREAD, 0, {9, 1}); act(w, hymenaeus::THREAD, 0, {2, NAN});
-  act(w, hymenaeus::LOC, 0, {-1}); act(w, hymenaeus::LOC, 0, {NAN}); act(w, hymenaeus::LOC, 0, {}); act(w, hymenaeus::MIX, 0, {NAN}); act(w, hymenaeus::MIX, 0, {});
+  act(w, hymenaeus::MIX, 0, {NAN}); act(w, hymenaeus::MIX, 0, {});
   CHECK(w.model().snapshot() == before);
 }
 
@@ -1017,7 +971,7 @@ void operator delete(void* p) noexcept { std::free(p); }
 void operator delete(void* p, std::size_t) noexcept { std::free(p); }
 
 static void worldNoAllocInProcess() {
-  Scale sc; auto& w = theWorld(sc, 5); mixSetup(w); act(w, hymenaeus::MIX, 0, {0.3}); act(w, hymenaeus::LOC, 0, {1}); act(w, hymenaeus::RING, 1, {4, 1});
+  Scale sc; auto& w = theWorld(sc, 5); mixSetup(w); act(w, hymenaeus::MIX, 0, {0.3}); act(w, hymenaeus::RING, 1, {4, 1});
   runWorld(w, 4);
   static float L[128], R[128], sL[128], sR[128]; sdk::Out out{L, R, sL, sR};
   double hb[64];
@@ -1031,16 +985,16 @@ static void worldNoAllocInProcess() {
 }
 
 static void worldMirrorLayout() {
-  CHECK(hymenaeus::MIRROR_HEAD == 12); CHECK(hymenaeus::MIRROR_RING == 6);
-  CHECK(MIRROR_N == 12 + 2 * 2 * 16 + 2 * 6 + 8 + 1); CHECK(MIRROR_N == 97);
+  CHECK(hymenaeus::MIRROR_HEAD == 11); CHECK(hymenaeus::MIRROR_RING == 6);
+  CHECK(MIRROR_N == 11 + 2 * 2 * 16 + 2 * 6 + 8 + 1); CHECK(MIRROR_N == 96);
   CHECK(M_CENV == MIRROR_N - 1);
   Scale sc; auto& w = theWorld(sc, 8);
-  act(w, hymenaeus::MIX, 0, {0.25}); act(w, hymenaeus::LOC, 0, {3});
+  act(w, hymenaeus::MIX, 0, {0.25});
   act(w, hymenaeus::THREAD, 1, {0, 6}); act(w, hymenaeus::THREAD, 0, {1, 40}); act(w, hymenaeus::THREAD, 0, {2, 70});
   act(w, hymenaeus::PEARL, 4, {1, 0, 0.6}); act(w, hymenaeus::PEARL, 4, {1, 1, 0}); act(w, hymenaeus::PEARL, 5, {1, 1, 1}); act(w, hymenaeus::RING, 1, {1, 0.42}); act(w, hymenaeus::CLOUD, 0, {7, 0.12});
   const auto m = mirrorOf(w);
   const Model& md = w.model();
-  CHECK(m[M_LOC] == 3 && m[M_MIX] == 0.25);
+  CHECK(m[M_MIX] == 0.25);
   for (int t = 0; t < NR; t++) {
     CHECK(m[M_CUR + t] == md.thread(t).cur); CHECK(m[M_LEN + t] == md.thread(t).len);
     CHECK(m[M_LO + t] == md.thread(t).lo); CHECK(m[M_HI + t] == md.thread(t).hi);
@@ -1230,7 +1184,7 @@ int main() {
   modelSeedDeterministic(); modelLoopRepeats(); modelRestsSilent();
   modelRingsCount(); modelDefaultRanges(); modelTwoThreadsIndependent(); modelRangeClamp(); modelPitchWithinRange(); modelDeterministic(); modelScaleSnap(); modelScaleSnapLowRange(); modelClamps(); modelLenOne();
   modelSnapshotRoundTrip(); modelRestoreGarbage(); modelRollAndClear(); modelClearAllIsEmpty(); modelClearUndoRestores(); modelClearTwice(); modelCloudSend();
-  modelLocSwapKeepsSound(); modelLocKeepsEdits(); modelLocOutOfRange(); modelLocsDiffer(); modelDiceKeepsTimbre(); modelTimbreKeepsNotes(); modelTimbreDoesNotShiftMelody(); modelMixClamp(); modelLocSnapshotRoundTrip(); modelLocRestoreGarbage();
+  modelDiceKeepsTimbre(); modelTimbreKeepsNotes(); modelTimbreDoesNotShiftMelody(); modelMixClamp(); modelSnapshotMixRoundTrip(); modelRestoreGarbageNoLoc();
   ringsRingsDown(); ringsDampingMonotone(); ringsBrightnessCentroid(); ringsStable(); ringsIdleCheap(); ringsNoAlloc(); ringsPluckerBurst();
   cloudSilentIn(); cloudEchoesInput(); cloudFreezeHolds(); cloudFreezeEmpty(); cloudEchoDecays(); cloudNoNan(); cloudDensityBounded(); cloudSleepsAgain();
   worldSilentWhenStopped(); worldStepsInTime(); worldStrikeSounds(); worldNoStepFlood(); worldStopNoStuck(); worldSnapshotRoundTrip();

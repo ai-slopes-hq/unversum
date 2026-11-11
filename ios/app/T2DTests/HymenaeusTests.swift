@@ -8,15 +8,15 @@ private final class HymRec: Core {
 
 // Hymenaeus: разбор зеркала, раскладка зон, номера действий, тап-удар
 final class HymenaeusTests: XCTestCase {
-  // 97 число по порядку world.hpp: голова 12, жемчужины 2×32, кольца 2×6, облака 8, энергия
+  // 96 чисел по порядку world.hpp: голова 11, жемчужины 2×32, кольца 2×6, облака 8, энергия
   private func vector() -> [Double] {
     var m = [Double](repeating: 0, count: Hym.mirrorN)
-    m[0] = 1; m[1] = 96; m[2] = 2; m[3] = 0.62
-    m[4] = 3; m[5] = 6                                             // cursor
-    m[6] = 11; m[7] = 8                                            // len
-    m[8] = 36; m[9] = 55; m[10] = 72; m[11] = 84                   // lo, hi
-    for t in 0..<Hym.nr { for i in 0..<Hym.pearlMax { m[12 + t * 32 + 2 * i] = Double(i) / 16 + Double(t) / 100; m[13 + t * 32 + 2 * i] = (t == 0 && i == 4) || (t == 1 && i == 1) ? 1 : 0 } }
-    let o = 12 + 64
+    m[0] = 1; m[1] = 96; m[2] = 0.62
+    m[3] = 3; m[4] = 6                                             // cursor
+    m[5] = 11; m[6] = 8                                            // len
+    m[7] = 36; m[8] = 55; m[9] = 72; m[10] = 84                    // lo, hi
+    for t in 0..<Hym.nr { for i in 0..<Hym.pearlMax { m[11 + t * 32 + 2 * i] = Double(i) / 16 + Double(t) / 100; m[12 + t * 32 + 2 * i] = (t == 0 && i == 4) || (t == 1 && i == 1) ? 1 : 0 } }
+    let o = 11 + 64
     for r in 0..<Hym.nr { for k in 0..<Hym.ringN { m[o + r * Hym.ringN + k] = Double(r * 10 + k + 1) / 100 } }
     let c = o + Hym.nr * Hym.ringN
     for k in 0..<Hym.nck { m[c + k] = Double(k + 1) / 10 }
@@ -25,9 +25,9 @@ final class HymenaeusTests: XCTestCase {
   }
 
   func testMirrorLayout() {
-    XCTAssertEqual(Hym.mirrorN, 97); XCTAssertEqual(Hym.nr, 2)
+    XCTAssertEqual(Hym.mirrorN, 96); XCTAssertEqual(Hym.nr, 2)
     let m = HymMirror(vector())
-    XCTAssertTrue(m.run); XCTAssertEqual(m.bpm, 96); XCTAssertEqual(m.loc, 2); XCTAssertEqual(m.mix, 0.62, accuracy: 1e-9)
+    XCTAssertTrue(m.run); XCTAssertEqual(m.bpm, 96); XCTAssertEqual(m.mix, 0.62, accuracy: 1e-9)
     XCTAssertEqual(m.cursor, [3, 6]); XCTAssertEqual(m.len, [11, 8])
     XCTAssertEqual(m.lo, [36, 55]); XCTAssertEqual(m.hi, [72, 84])
     XCTAssertEqual(m.playedIndex(0), 2); XCTAssertEqual(m.playedIndex(1), 5)
@@ -39,7 +39,7 @@ final class HymenaeusTests: XCTestCase {
     XCTAssertEqual(m.cloud[Hym.Cloud.echo], 0.6, accuracy: 1e-9); XCTAssertEqual(m.cloudEnergy, 0.5)
     let z = HymMirror(Array(vector().prefix(30)))                 // короче — не падает, нули
     XCTAssertFalse(z.run); XCTAssertEqual(z.len, [0, 0]); XCTAssertEqual(z.cloud, [Double](repeating: 0, count: Hym.nck))
-    var bad = vector(); bad[1] = .nan; bad[6] = .infinity; bad[12 + 2] = .nan
+    var bad = vector(); bad[1] = .nan; bad[5] = .infinity; bad[11 + 2] = .nan
     let b = HymMirror(bad)
     XCTAssertEqual(b.bpm, 0); XCTAssertEqual(b.len[0], 1); XCTAssertEqual(b.pearls[0][1].pitch, 0)
   }
@@ -83,11 +83,11 @@ final class HymenaeusTests: XCTestCase {
     let text = try String(contentsOf: header, encoding: .utf8)
     let line = try XCTUnwrap(text.split(separator: "\n").first { $0.contains("enum Act {") })
     let names = line.split(separator: "{")[1].split(separator: "}")[0].split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces).lowercased() }
-    XCTAssertEqual(names, ["ring", "cloud", "pearl", "strike", "thread", "dice", "clear", "run", "bpm", "timbre", "loc", "mix"])
-    XCTAssertEqual(names.count, 12)
+    XCTAssertEqual(names, ["ring", "cloud", "pearl", "strike", "thread", "dice", "clear", "run", "bpm", "timbre", "mix"])
+    XCTAssertEqual(names.count, 11)
     for (i, n) in names.enumerated() { XCTAssertEqual(String(describing: HymAct(rawValue: i)!), n); XCTAssertEqual(HymAct(rawValue: i)?.rawValue, i) }
-    XCTAssertNil(HymAct(rawValue: 12))
-    // MIRROR_N — из комментария-описания зеркала в шапке world.hpp: «(MIRROR_N = 97 чисел)»
+    XCTAssertNil(HymAct(rawValue: 11))
+    // MIRROR_N — из комментария-описания зеркала в шапке world.hpp: «(MIRROR_N = 96 чисел)»
     let m = try XCTUnwrap(text.range(of: "MIRROR_N = ")), digits = text[m.upperBound...].prefix { $0.isNumber }
     XCTAssertEqual(Int(digits), Hym.mirrorN)
   }
@@ -312,7 +312,7 @@ final class HymenaeusTests: XCTestCase {
   }
 
   func testLenRowClampedBelowMin() throws {
-    var m = vector(); m[7] = 2
+    var m = vector(); m[6] = 2
     let (v, _) = make(m), ring = v.ringSpec(1)
     XCTAssertEqual(ring.get("len"), 0)
   }

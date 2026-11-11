@@ -17,7 +17,7 @@
 
 namespace hymenaeus {
 
-constexpr int NR = 2, PEARL_MAX = 16, PEARL_DEF = 11, NRK = 5, NLOC = 4;
+constexpr int NR = 2, PEARL_MAX = 16, PEARL_DEF = 11, NRK = 5;
 constexpr int NOTE_MIN = 24, NOTE_MAX = 96, RANGE_MIN_W = 5;
 enum RingKey { STRUCT, BRIGHT, DAMP, LVL, POLY };       // POLY 0…1 → 1 / 2 / 4 голоса
 enum CloudKey { POS, SIZE, DENS, PITCH, FREEZE, ECHO, CLEVEL, SEND, NCK };   // SEND — посыл в общий ревербер
@@ -46,10 +46,9 @@ class Model {
   void setRing(int ring, int key, double v);
   void setCloud(int key, double v);
   void roll(int t = -1);                                // кубик: нить t (−1 — обе) бросается заново
-  void setLoc(int slot);                                // локация 0…NLOC−1: активные нити уходят в старый слот, из нового приходят другие; вне диапазона — ничего
   void setMix(double v);                                // 0…1 (0.5 — как раньше): сухое ↔ облака; NaN игнорируется
   void rollTimbre();                                    // STRUCT, BRIGHT, DAMP колец и POS, SIZE, DENS, PITCH облаков — случайно; ноты и уровни не трогает
-  void clearAll();                                      // корзина: все ноты всех слотов — паузы, нити/кольца/облака (кроме FREEZE → 0)/mix — по умолчанию, cur и curLoc 0; rng не трогается
+  void clearAll();                                      // корзина: все ноты — паузы, нити/кольца/облака (кроме FREEZE → 0)/mix — по умолчанию, cur 0; rng не трогается
 
   Step next(int t);                                     // шаг нити t: курсор двигается; ring = t
   double hzOf(int t, double pitch) const;               // высота 0…1 → Гц: lo…hi нити t, лад хоста
@@ -58,7 +57,6 @@ class Model {
   std::string snapshot() const;
   void restore(const std::string& js);                  // мусор и выход за диапазон зажимаются, не падают
 
-  int loc() const { return curLoc_; }
   double mix() const { return mix_; }
   const Thread& thread(int t) const { return thr_[(t >= 0 && t < NR) ? t : 0]; }
   double ring(int r, int key) const { return (r >= 0 && r < NR && key >= 0 && key < NRK) ? ring_[r][key] : 0; }
@@ -70,8 +68,6 @@ class Model {
   Thread thr_[NR];
   double ring_[NR][NRK] = {};
   double cloud_[NCK] = {};
-  Thread loc_[NLOC][NR];                                // слоты; слот curLoc_ устарел — правда в thr_ (ноты, len, lo, hi; cur не хранится)
-  int curLoc_ = 0;
   double mix_ = 0.5;
   sdk::Rng rng_{1};
   sdk::Rng trng_{1};                                    // отдельный поток для кости timbre: мелодии не зависят от бросков тембра

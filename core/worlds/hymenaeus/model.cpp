@@ -27,10 +27,6 @@ void fixRange(int& a, int& b) {                         // уже целые н�
     if (b > NOTE_MAX) { b = NOTE_MAX; a = b - RANGE_MIN_W; }
   }
 }
-void copyNotes(const Thread& from, Thread& to) {        // всё, кроме курсора
-  for (int i = 0; i < PEARL_MAX; i++) to.p[i] = from.p[i];
-  to.len = from.len; to.lo = from.lo; to.hi = from.hi;
-}
 // слот/нить из недоверенного JSON поверх th (поля, которых нет или которые не те, остаются); курсор не трогает
 void loadNotes(const sdk::Json& e, Thread& th) {
   using sdk::Json;
@@ -133,23 +129,7 @@ void Model::reset(uint32_t seed) {
   for (int r = 0; r < NR; r++) for (int k = 0; k < NRK; k++) ring_[r][k] = RING_DEF[k];
   for (int k = 0; k < NCK; k++) cloud_[k] = CLOUD_DEF[k];
   for (int t = 0; t < NR; t++) dice(thr_[t], t == 1 ? &thr_[0] : nullptr);
-  curLoc_ = 0; mix_ = 0.5;
-  for (int l = 0; l < NLOC; l++) for (int t = 0; t < NR; t++) {   // слот 0 — копия нитей, 1–3 — другие мелодии из того же rng
-    Thread& s = loc_[l][t];
-    if (l == 0) { copyNotes(thr_[t], s); continue; }
-    s = Thread(); s.lo = LO_DEF[t]; s.hi = HI_DEF[t];
-    dice(s, t == 1 ? &loc_[l][0] : nullptr);
-  }
-}
-
-void Model::setLoc(int slot) {
-  if (slot < 0 || slot >= NLOC || slot == curLoc_) return;
-  for (int t = 0; t < NR; t++) {
-    copyNotes(thr_[t], loc_[curLoc_][t]);
-    copyNotes(loc_[slot][t], thr_[t]);
-    thr_[t].cur %= thr_[t].len;                         // курсор не сбрасывается, только вписывается в новую длину
-  }
-  curLoc_ = slot;
+  mix_ = 0.5;
 }
 
 void Model::setMix(double v) { if (!std::isnan(v)) mix_ = clamp01(v); }
@@ -197,11 +177,11 @@ void Model::roll(int t) {
 
 void Model::clearAll() {
   const auto blank = [](Thread& th, int t) { th = Thread(); th.lo = LO_DEF[t]; th.hi = HI_DEF[t]; for (int i = 0; i < PEARL_MAX; i++) th.p[i].rest = true; };
-  for (int t = 0; t < NR; t++) { blank(thr_[t], t); for (int l = 0; l < NLOC; l++) blank(loc_[l][t], t); }
+  for (int t = 0; t < NR; t++) blank(thr_[t], t);
   for (int r = 0; r < NR; r++) for (int k = 0; k < NRK; k++) ring_[r][k] = RING_DEF[k];
   for (int k = 0; k < NCK; k++) cloud_[k] = CLOUD_DEF[k];
   cloud_[FREEZE] = 0;
-  curLoc_ = 0; mix_ = 0.5;
+  mix_ = 0.5;
 }
 
 bool Model::sounding() const {
@@ -235,7 +215,6 @@ std::string Model::snapshot() const {
   Json o = Json::object();
   o.set("rng", Json::num(rng_.state));
   o.set("trng", Json::num(trng_.state));
-  o.set("curLoc", Json::num(curLoc_));
   o.set("mix", Json::num(mix_));
   Json ts = Json::array();
   for (int t = 0; t < NR; t++) {
@@ -244,13 +223,6 @@ std::string Model::snapshot() const {
     ts.push(e);
   }
   o.set("thr", ts);
-  Json ls = Json::array();
-  for (int l = 0; l < NLOC; l++) {
-    Json s = Json::array();
-    for (int t = 0; t < NR; t++) s.push(notesJson(l == curLoc_ ? thr_[t] : loc_[l][t]));   // активный слот — по живым нитям
-    ls.push(s);
-  }
-  o.set("loc", ls);
   Json rs = Json::array();
   for (int r = 0; r < NR; r++) { Json e = Json::array(); for (int k = 0; k < NRK; k++) e.push(Json::num(ring_[r][k])); rs.push(e); }
   o.set("rings", rs);
@@ -273,15 +245,7 @@ void Model::restore(const std::string& js) {
   rng_ = sdk::Rng(static_cast<uint32_t>(t < 0 ? 0 : t > 4294967295.0 ? 4294967295.0 : t));
   trng_ = sdk::Rng(static_cast<uint32_t>(t) ^ 0x9E3779B9u);
   if (const Json* v = j.get("trng")) if (v->type == Json::Num && finite(v->n)) trng_ = sdk::Rng(static_cast<uint32_t>(v->n < 0 ? 0 : v->n > 4294967295.0 ? 4294967295.0 : v->n));
-  if (const Json* v = j.get("curLoc")) if (v->type == Json::Num && finite(v->n) && v->n >= 0 && v->n < NLOC) curLoc_ = static_cast<int>(v->n);
   if (const Json* v = j.get("mix")) if (v->type == Json::Num) setMix(v->n);
-  if (const Json* ls = j.get("loc")) if (ls->type == Json::Arr)     // слоты; активный перезапишут живые нити ниже
-    for (int l = 0; l < NLOC && l < static_cast<int>(ls->a.size()); l++) {
-      const Json& s = ls->a[l];
-      if (s.type != Json::Arr) continue;
-      for (int k = 0; k < NR && k < static_cast<int>(s.a.size()); k++) loadNotes(s.a[k], loc_[l][k]);
-    }
-  for (int k = 0; k < NR; k++) copyNotes(loc_[curLoc_][k], thr_[k]);   // слот 0 после reset — прежние ноты; иначе из loc
   for (int k = 0; k < NR && k < static_cast<int>(ts->a.size()); k++) {
     const Json& e = ts->a[k];
     if (e.type != Json::Obj) continue;

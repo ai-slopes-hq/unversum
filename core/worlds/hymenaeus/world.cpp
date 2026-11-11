@@ -56,7 +56,6 @@ void World::action(int kind, int i, const double* a, int n) {
       else if (std::isfinite(a[0])) { const int t = keyOf(a[0]); if (t == -1) model_.roll(); else if (t >= 0 && t < NR) model_.roll(t); }
       break;
     case TIMBRE: model_.rollTimbre(); break;
-    case LOC: if (has(1) && std::isfinite(a[0])) model_.setLoc(keyOf(a[0])); break;
     case MIX: if (has(1)) model_.setMix(a[0]); break;
     case CLEAR: model_.clearAll(); sound_.silence(); nman_ = 0; nh_ = 0; break;
     case RUN: if (has(1) && !std::isnan(a[0])) { const bool on = a[0] != 0; if (on && !run_) steps_.reset(); run_ = on; } break;
@@ -116,7 +115,7 @@ void World::process(const sdk::Out& out, int n) {
 int World::mirror(double* buf, int cap) const {
   if (!buf || cap < MIRROR_N) return 0;
   double* p = buf;
-  *p++ = run_; *p++ = bpm_; *p++ = model_.loc(); *p++ = model_.mix();
+  *p++ = run_; *p++ = bpm_; *p++ = model_.mix();
   for (int t = 0; t < NR; t++) *p++ = model_.thread(t).cur;
   for (int t = 0; t < NR; t++) *p++ = model_.thread(t).len;
   for (int t = 0; t < NR; t++) *p++ = model_.thread(t).lo;
