@@ -52,6 +52,7 @@ final class HymenaeusTests: XCTestCase {
       for l in 0..<Hym.locN { zones.append(("seal\(l)", g.sealRect(l))) }
       for i in 0..<zones.count { for j in (i + 1)..<zones.count { XCTAssertFalse(zones[i].1.intersects(zones[j].1), "\(zones[i].0) x \(zones[j].0) \(W)") } }
       XCTAssertTrue(g.cloudsRect.contains(g.lensRect), "линза внутри облаков \(W)")
+      for (n, r) in zones where n != "clouds" { XCTAssertFalse(g.lensRect.intersects(r), "lens x \(n) \(W)") }
       XCTAssertLessThan(g.staveY(0), g.staveY(1))
       for z in zones { XCTAssertTrue(CGRect(x: 0, y: 0, width: W, height: H).contains(z.1), "\(z.0) на экране \(W)") }
       for i in 0..<Hym.nr { XCTAssertTrue(g.ringsRect.contains(CGRect(x: g.ringCenter(i).x - g.ringR(i), y: g.ringCenter(i).y - g.ringR(i), width: 2 * g.ringR(i), height: 2 * g.ringR(i)))) }
@@ -69,6 +70,21 @@ final class HymenaeusTests: XCTestCase {
     }
     for (k, key) in ["pos", "size", "dens", "pitch"].enumerated() { XCTAssertEqual(fx.rows.first { $0.key == key }?.code, 10 + k) }
     XCTAssertEqual(fx.rows.first { $0.key == "send" }?.code, 10 + Hym.Cloud.send)
+  }
+
+  func testActNumbersMatchCore() throws {
+    let header = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+      .appendingPathComponent("core/worlds/hymenaeus/world.hpp")
+    let text = try String(contentsOf: header, encoding: .utf8)
+    let line = try XCTUnwrap(text.split(separator: "\n").first { $0.contains("enum Act {") })
+    let names = line.split(separator: "{")[1].split(separator: "}")[0].split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces).lowercased() }
+    XCTAssertEqual(names, ["ring", "cloud", "pearl", "strike", "thread", "dice", "clear", "run", "bpm", "timbre", "loc", "mix"])
+    XCTAssertEqual(names.count, 12)
+    for (i, n) in names.enumerated() { XCTAssertEqual(String(describing: HymAct(rawValue: i)!), n); XCTAssertEqual(HymAct(rawValue: i)?.rawValue, i) }
+    XCTAssertNil(HymAct(rawValue: 12))
+    // MIRROR_N — из комментария-описания зеркала в шапке world.hpp: «(MIRROR_N = 99 чисел)»
+    let m = try XCTUnwrap(text.range(of: "MIRROR_N = ")), digits = text[m.upperBound...].prefix { $0.isNumber }
+    XCTAssertEqual(Int(digits), Hym.mirrorN)
   }
 
   func testRingTapStrikes() {
