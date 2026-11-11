@@ -16,7 +16,13 @@ final class SideraView: World {
   var rowLfoOff: ((Int) -> Void)?
   var goMap: (() -> Void)?
 
-  let legend: [LegendRow] = []                            // жесты — в Task 6
+  let legend: [LegendRow] = [
+    LegendRow(glyph: .drag, gesture: "drag a star", does: "moves its box: pitch of the bend, length of the step"),
+    LegendRow(glyph: .two, gesture: "two fingers on a band", does: "← → box width, ↑ ↓ box height"),
+    LegendRow(glyph: .hold, gesture: "hold a band or a star", does: "its sheet: note, stars, level, pan, law"),
+    LegendRow(glyph: .drag, gesture: "drag the moon", does: "along the arc: how fast the stars wander"),
+    LegendRow(glyph: .tap, gesture: "tap the moon", does: "map of worlds"),
+  ]
 
   let core: Core
   private(set) var geo: SidGeo
@@ -27,6 +33,8 @@ final class SideraView: World {
   private(set) var now = 0.0
   private var started = false
   var heads = [0.0, 1.7, 3.1]                           // позиция головы окна линии по голосам, в отрезках
+  var holds: [ObjectIdentifier: SidHold] = [:]
+  var pinches: [Int: SidPinchState] = [:]
   var labelOn = [Bool](repeating: false, count: Sid.nv)   // подпись «нота · N» — пока жест идёт (Task 6)
 
   init(core: Core, readMirror: Reader? = nil) {
@@ -44,10 +52,10 @@ final class SideraView: World {
     started = true; core.action(Act.run.rawValue, 0, [1], touchTime: 0)
   }
   func scale(pcs: [Int]?, root: Int) {}                   // лад читает ядро
-  func restored() { started = true }
+  func restored() { started = true; holds = [:]; pinches = [:]; labelOn = [Bool](repeating: false, count: Sid.nv) }
   func idle() {}
   func tick(now: Double, dt: Double) {
-    self.now = now; pullMirror()
+    self.now = now; pullMirror(); tickHolds()
     let step = min(max(dt, 0), 0.1) * sidHeadRate(step: mirror.step)
     for v in 0..<Sid.nv { let n = Double(max(mirror.voices[v].n, 1)); heads[v] = fmod(heads[v] + step, n) }
   }
@@ -57,8 +65,4 @@ final class SideraView: World {
   }
   func draw(_ d: Draw, now: Double) { frame(d, now, moon: true) }
   func drawShot(_ d: Draw, now: Double) { frame(d, now, moon: false) }
-  func down(_ f: Finger) {}
-  func move(_ f: Finger) {}
-  func up(_ f: Finger) {}
-  func cancel(_ f: Finger) {}
 }

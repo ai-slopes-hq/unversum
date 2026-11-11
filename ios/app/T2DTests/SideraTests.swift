@@ -1,5 +1,6 @@
 import XCTest
 import T2DCore
+import ObjectiveC
 @testable import T2D
 
 // Sidera: разбор зеркала, раскладка полос, номера действий, попадание в луну
@@ -190,6 +191,142 @@ final class SideraTests: XCTestCase {
     let (d, _) = canvas(320, 568)
     v.draw(d, now: 3); v.drawShot(d, now: 3)
   }
+  // ---------- жесты ----------
+  private func geoAndMirror() -> (SidGeo, SidMirror) { (SidGeo(W: 390, H: 844, topY: 59, safeBot: 34), SidMirror(vector())!) }
+
+  func testPickStarWins() {
+    let (g, m) = geoAndMirror()
+    let p = g.starPoint(1, m.voices[1], 3)
+    XCTAssertEqual(sidPick(g, m, CGPoint(x: p.x + 4, y: p.y - 3)), .star(voice: 1, pt: 3))
+  }
+
+  func testPickBandThenNone() {
+    let (g, m) = geoAndMirror()
+    var pt = CGPoint(x: g.bandRect(2).midX, y: g.bandRect(2).maxY - 3)
+    for v in 0..<Sid.nv { for i in 0..<m.voices[v].n { let s = g.starPoint(v, m.voices[v], i); if hypot(s.x - pt.x, s.y - pt.y) < 30 { pt.x += 40 } } }
+    let got = sidPick(g, m, pt)
+    if case .box(let v) = got { XCTAssertEqual(v, 2) } else if case .star = got { /* звезда оказалась рядом — тоже верно */ } else { XCTFail("\(got)") }
+    XCTAssertEqual(sidPick(g, m, CGPoint(x: 195, y: 3)), .none)
+  }
+
+  func testPickMoon() {
+    let (g, m) = geoAndMirror()
+    XCTAssertEqual(sidPick(g, m, CGPoint(x: g.moon.c.x + 12, y: g.moon.c.y + 12)), .moon)
+  }
+
+  func testHomeFromPointRoundTrip() {
+    let (g, m) = geoAndMirror()
+    for v in 0..<Sid.nv { for i in 1..<m.voices[v].n {
+      let h = sidHomeFromPoint(g, voice: v, m.voices[v], pt: i, g.homePoint(v, m.voices[v], i))
+      XCTAssertEqual(h.ha, m.voices[v].stars[i].ha, accuracy: 0.01, "ha v\(v) i\(i)")
+      XCTAssertEqual(h.prev?.pt, i - 1); XCTAssertEqual(h.prev?.hd ?? -1, m.voices[v].stars[i - 1].hd, accuracy: 0.01, "hd v\(v) i\(i)")
+    } }
+    let h0 = sidHomeFromPoint(g, voice: 0, m.voices[0], pt: 0, g.homePoint(0, m.voices[0], 0))
+    XCTAssertNil(h0.prev, "первая звезда стоит на левом краю")
+  }
+
+  func testHomeClamped() {
+    let (g, m) = geoAndMirror()
+    let far = sidHomeFromPoint(g, voice: 0, m.voices[0], pt: 2, CGPoint(x: 9999, y: -9999))
+    XCTAssertEqual(far.ha, 1); XCTAssertTrue((Sid.dMin...1).contains(far.prev?.hd ?? 0))
+    let low = sidHomeFromPoint(g, voice: 0, m.voices[0], pt: 2, CGPoint(x: -9999, y: 9999))
+    XCTAssertEqual(low.ha, -1); XCTAssertTrue((Sid.dMin...1).contains(low.prev?.hd ?? 0))
+    let nan = sidHomeFromPoint(g, voice: 0, m.voices[0], pt: 2, CGPoint(x: CGFloat.nan, y: CGFloat.nan))
+    XCTAssertTrue(nan.ha.isFinite); XCTAssertNil(nan.prev, "не число — звезду не трогаем")
+  }
+
+  func testMoonStepRange() {
+    let (g, _) = geoAndMirror(), c = g.moon.c
+    XCTAssertEqual(sidMoonStep(g, CGPoint(x: c.x + 50, y: c.y)), 0, accuracy: 1e-9)
+    XCTAssertEqual(sidMoonStep(g, CGPoint(x: c.x, y: c.y + 50)), 1, accuracy: 1e-9)
+    XCTAssertEqual(sidMoonStep(g, CGPoint(x: c.x + 35, y: c.y + 35)), 0.5, accuracy: 1e-6)
+    XCTAssertEqual(sidMoonStep(g, CGPoint(x: c.x + 50, y: c.y - 80)), 0); XCTAssertEqual(sidMoonStep(g, CGPoint(x: c.x - 50, y: c.y + 10)), 1)
+    XCTAssertEqual(sidMoonStep(g, CGPoint(x: CGFloat.nan, y: CGFloat.nan)), 0)
+  }
+
+  func testPinchWidensBox() {
+    let (g, _) = geoAndMirror()
+    let r = sidPinch(g, voice: 0, base: (wd: 0.25, wa: 0.3), d0: (dx: 40, dy: 40), d: (dx: 40 + g.inner(0).width / 2, dy: 40))
+    XCTAssertEqual(r.wd, 0.75, accuracy: 1e-6); XCTAssertEqual(r.wa, 0.3, accuracy: 1e-6)
+    let c = sidPinch(g, voice: 0, base: (0.25, 0.3), d0: (40, 40), d: (-9999, 9999))
+    XCTAssertEqual(c.wd, 0); XCTAssertEqual(c.wa, 1)
+  }
+
+  private func rig() -> (SideraView, SidRec, [Finger]) {
+    let rec = SidRec(), v = SideraView(core: rec, readMirror: { b in let m = self.vector(); for i in 0..<m.count { b[i] = m[i] }; return m.count })
+    v.layout(W: 390, H: 844, topY: 59, safeBot: 34); v.tick(now: 1, dt: 0.016)
+    let ids = [NSObject(), NSObject()]
+    let fs = ids.map { Finger(id: ObjectIdentifier($0), x: 0, y: 0, x0: 0, y0: 0, t0: 0, moved: false, touchTime: 0) }
+    objc_setAssociatedObject(v, "ids", ids, .OBJC_ASSOCIATION_RETAIN)
+    return (v, rec, fs)
+  }
+  private func at(_ f: Finger, _ p: CGPoint, moved: Bool = true) -> Finger { var q = f; q.x = p.x; q.y = p.y; q.moved = moved; return q }
+
+  func testGestureSendsActions() {
+    let (v, rec, fs) = rig(); let g = v.geo, m = v.mirror
+    // тянешь звезду → STAR (ha и hd предыдущей), подпись видна, по отпусканию уходит
+    let s = g.starPoint(1, m.voices[1], 3)
+    var f = at(fs[0], s, moved: false); v.down(f)
+    f = at(f, CGPoint(x: s.x + 30, y: s.y - 25)); v.move(f)
+    let stars = rec.acts.filter { $0.kind == SidAct.star.rawValue }
+    XCTAssertEqual(stars.count, 2); XCTAssertEqual(stars[0].i, 1); XCTAssertEqual(stars[0].a[0], 3); XCTAssertEqual(stars[1].a[0], 2)
+    for a in stars { XCTAssertTrue(a.a.allSatisfy { $0.isFinite }); XCTAssertTrue((Sid.dMin...1).contains(a.a[1])); XCTAssertTrue((-1.0...1).contains(a.a[2])) }
+    XCTAssertTrue(v.labelOn[1]); v.up(f); XCTAssertFalse(v.labelOn[1])
+    // луна: тянешь → MOON, тап → goMap
+    rec.acts.removeAll()
+    var mapped = 0; v.goMap = { mapped += 1 }
+    let c = g.moon.c
+    var mf = at(fs[0], CGPoint(x: c.x + 12, y: c.y + 12), moved: false); v.down(mf)
+    mf = at(mf, CGPoint(x: c.x + 20, y: c.y + 45)); v.move(mf); v.up(mf)
+    XCTAssertEqual(rec.acts.last?.kind, SidAct.moon.rawValue); XCTAssertEqual(mapped, 0)
+    let tf = at(fs[0], CGPoint(x: c.x + 12, y: c.y + 12), moved: false); v.down(tf); v.up(tf)
+    XCTAssertEqual(mapped, 1, "тап по луне — карта")
+  }
+
+  func testTwoFingersWidenAndHoldOpensSheet() {
+    let (v, rec, fs) = rig(); let g = v.geo
+    let r = g.bandRect(0)
+    var a = at(fs[0], CGPoint(x: r.minX + 80, y: r.midY), moved: false), b = at(fs[1], CGPoint(x: r.minX + 120, y: r.midY), moved: false)
+    v.down(a); v.down(b)
+    b = at(b, CGPoint(x: r.minX + 220, y: r.midY - 30)); v.move(b)
+    let w = rec.acts.filter { $0.kind == SidAct.voice.rawValue }
+    XCTAssertEqual(Set(w.map { Int($0.a[0]) }), [Sid.Key.wd, Sid.Key.wa]); XCTAssertTrue(w.allSatisfy { $0.i == 0 && (0.0...1).contains($0.a[1]) })
+    v.up(a); v.up(b)
+    // удержание на полосе → плашка
+    var opened: SheetSpec?; v.openSheet = { opened = $0 }
+    a = at(fs[0], CGPoint(x: r.minX + 30, y: r.maxY - 5), moved: false); v.down(a)
+    v.tick(now: 1.2, dt: 0.016); XCTAssertNil(opened)
+    v.tick(now: 1.2 + Touch.holdMs / 1000 + 0.05, dt: 0.016); XCTAssertNotNil(opened)
+    v.up(a)
+  }
+
+  func testVoiceSheet() {
+    let (v, rec, _) = rig()
+    let spec = v.voiceSpec(2)
+    XCTAssertEqual(spec.rows.map { $0.key }, ["note", "n", "lvl", "pan", "wd", "wa", "dist"])
+    XCTAssertEqual(spec.rows.first { $0.key == "lvl" }?.code, Sid.Lfo.code(2, 0)); XCTAssertEqual(spec.rows.first { $0.key == "wa" }?.code, Sid.Lfo.code(2, 3))
+    XCTAssertEqual(spec.text("note"), sidNoteName(14)); XCTAssertEqual(spec.text("n"), "11 stellae")
+    for r in spec.rows { XCTAssertTrue((0.0...1).contains(spec.get(r.key)), r.key) }
+    spec.set("n", 1); spec.set("pan", 0); spec.set("note", 0.5); spec.set("dist", 1)
+    let vs = rec.acts.filter { $0.kind == SidAct.voice.rawValue }
+    XCTAssertEqual(vs.map { $0.i }, [2, 2, 2, 2])
+    XCTAssertEqual(vs[0].a, [Double(Sid.Key.n), 16]); XCTAssertEqual(vs[1].a[0], Double(Sid.Key.pan)); XCTAssertEqual(vs[1].a[1], -1)
+    XCTAssertEqual(vs[2].a, [Double(Sid.Key.note), 30]); XCTAssertEqual(vs[3].a, [Double(Sid.Key.dist), 2])
+    rec.acts.removeAll(); spec.tap?("dist")
+    XCTAssertEqual(rec.acts.last?.a, [Double(Sid.Key.dist), 0], "тап по строке закона шага — следующий")
+    XCTAssertNotNil(spec.lfo); XCTAssertEqual(spec.lfo?.keys, ["lvl", "pan", "wd", "wa"])
+  }
+
+  func testLegendHasNoRussianAndCoversGestures() {
+    let v = SideraView(core: Rec2())
+    XCTAssertGreaterThanOrEqual(v.legend.count, 5)
+    for r in v.legend { XCTAssertNil((r.gesture + r.does).range(of: "[А-Яа-я]", options: .regularExpression)) }
+  }
+
 }
 
 private final class Rec2: Core { func action(_ k: Int, _ i: Int, _ a: [Double], touchTime: Double) -> Bool { true } }
+private final class SidRec: Core {
+  var acts: [(kind: Int, i: Int, a: [Double])] = []
+  func action(_ k: Int, _ i: Int, _ a: [Double], touchTime: Double) -> Bool { acts.append((k, i, a)); return true }
+}
