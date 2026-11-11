@@ -1,5 +1,7 @@
 # XIV · Hymenaeus
 
+> **Выключен из релиза (11.11, автор):** запись убрана из `Worlds.all` (`ios/app/T2D/Worlds.swift`), клетка (1, 2) — рубашка. Код, ядро и тесты мира на месте; вернуть — раскомментировать запись и убрать (1, 2) из `backs`.
+
 **Hymenaeus (мир XIV, только нативный iOS, слот 14; в вебе его нет).** Светлый мир: чернила на слоновой кости, золото на кольцах. Цепочка: две жемчужные нити (Marbles-lite) играют мелодии → два золотых кольца звенят (порт Mutable Instruments Rings) → звон уходит в облака (Clouds-lite: гранулятор, эхо, freeze) и в общий ревербер ядра. Дизайн — `docs/superpowers/specs/2026-11-11-hymenaeus-design.md` (первая версия, три кольца) и `docs/superpowers/specs/2026-11-11-hymenaeus-two-rings-design.md` (две нити, локации, mix; действует он, кроме локаций — их убрали 11.11), макет — `mockups/hymenaeus.html`.
 
 **Код.** Ядро — `core/worlds/hymenaeus/`: `model.cpp` (две нити на `sdk::Rng`, кубик `Model::dice` на `sdk/melody.hpp`, диапазон, mix; шаги от `sdk::Steps`/MIDI-часов), `rings/` (модальный резонатор, `string.hpp` — симпатические струны, щипок; порт Rings, MIT — `LICENSE-MI.txt`), `cloud.cpp` (буфер зёрен, freeze, эхо), `sound.cpp`, `world.cpp` (действия `Act`). Вид — `ios/app/T2D/Hymenaeus/`: `HymMirror` (зеркало, `MIRROR_N` = 96), `HymGeo` (зоны), `HymDraw`, `HymTouch` (жесты — чистые функции), `HymSheets` (плашки), `HymenaeusView` (касания, тик). В `core/sdk/` лежит `melody.hpp` — части кубика, общие с Cymatica (`diceHits`, `coprimeLen`, `walkSpan`); `euclid.hpp` — общий с Cymatica и Horologium.

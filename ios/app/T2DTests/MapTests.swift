@@ -42,7 +42,7 @@ final class MapTests: XCTestCase {
     XCTAssertEqual(cells.count, 16)
     for (c, r) in cells {
       let p = f.rect(col: c, row: r)
-      let want: MapHit = (c == 2 && r == 1) ? .world(1) : (c == 3 && r == 1) ? .world(10) : (c == 3 && r == 2) ? .world(8) : (c == 0 && r == 2) ? .world(9) : (c == 1 && r == 1) ? .world(2) : (c == 0 && r == 3) ? .world(12) : (c == 2 && r == 0) ? .world(5) : (c == 2 && r == 2) ? .world(4) : (c == 3 && r == 3) ? .world(13) : (c == 1 && r == 3) ? .world(7) : (c == 3 && r == 0) ? .world(11) : (c == 1 && r == 2) ? .world(14) : (c == 1 && r == 0) ? .world(6) : .peek(col: c, row: r)
+      let want: MapHit = (c == 2 && r == 1) ? .world(1) : (c == 3 && r == 1) ? .world(10) : (c == 3 && r == 2) ? .world(8) : (c == 0 && r == 2) ? .world(9) : (c == 1 && r == 1) ? .world(2) : (c == 0 && r == 3) ? .world(12) : (c == 2 && r == 0) ? .world(5) : (c == 2 && r == 2) ? .world(4) : (c == 3 && r == 3) ? .world(13) : (c == 1 && r == 3) ? .world(7) : (c == 3 && r == 0) ? .world(11) : (c == 1 && r == 0) ? .world(6) : .peek(col: c, row: r)
       XCTAssertEqual(MapGeo.hit(f, W: W, x: p.midX, y: p.midY), want, "cell \(c),\(r)")
       XCTAssertEqual(MapGeo.hit(f, W: W, x: p.maxX + f.gap / 2, y: p.midY), want, "gap right \(c),\(r)")
       if r != 1 { XCTAssertEqual(MapGeo.hit(f, W: W, x: p.midX, y: p.maxY + f.gap / 2), want, "gap below \(c),\(r)") }   // под рядом 1 — солнце и concordia съедают
@@ -54,12 +54,12 @@ final class MapTests: XCTestCase {
   }
 
   func testRegistry() {
-    XCTAssertEqual(Worlds.all.count, 13)
-    XCTAssertEqual(Set(Worlds.all.map { $0.slot }), [1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14])   // XIV Hymenaeus — 11.11; XV Goetia выключен 04.11; VII и XI вернулись 11.11; VI Paradisus — 11.11 в клетке (2, 3)
+    XCTAssertEqual(Worlds.all.count, 12)
+    XCTAssertEqual(Set(Worlds.all.map { $0.slot }), [1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13])   // XIV Hymenaeus выключен 11.11; XV Goetia выключен 04.11; VII и XI вернулись 11.11; VI Paradisus — 11.11 в клетке (2, 3)
     let cells = Worlds.all.map { "\($0.col),\($0.row)" }
-    XCTAssertEqual(Set(cells).count, 13)
+    XCTAssertEqual(Set(cells).count, 12)
     for b in Worlds.backs { XCTAssertFalse(cells.contains("\(b.col),\(b.row)")) }
-    XCTAssertEqual(Worlds.all.filter { $0.view }.map { $0.slot }, [1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14])
+    XCTAssertEqual(Worlds.all.filter { $0.view }.map { $0.slot }, [1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13])
     XCTAssertEqual(Worlds.info(10)?.title, "Firmamentum")
     XCTAssertEqual(Worlds.at(col: 3, row: 1)?.slot, 10)
     let fi = Worlds.info(10)!.theme, na = Worlds.info(4)!.theme
