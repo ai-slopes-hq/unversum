@@ -90,11 +90,32 @@ void Model::moveHome(int v, int pt, double hd, double ha) {
 void Model::setStep(double s) { if (!std::isnan(s)) step_ = clampd(s, 0, 1); }
 
 void Model::roll(int v) {
+  // кубик собирает созвездие заново: нота, число звёзд, рамки, панорама, закон шага, октава, положение звёзд; при броске всех голосов — ещё луна и FX
+  const auto in = [&](double lo, double hi) { return lo + (hi - lo) * rng_.next(); };
+  constexpr double NOTE_LO[NV] = {0, 5, 12}, NOTE_HI[NV] = {12, 24, 40}, PAN_C[NV] = {-0.5, 0, 0.5};
+  constexpr double OCTS[4] = {-1, 0, 0, 1};
   for (int k = 0; k < NV; k++) {
     if (v >= 0 && k != v) continue;
+    setVoice(k, NOTE, in(NOTE_LO[k], NOTE_HI[k]));
+    setVoice(k, N, in(4, 14));
+    setVoice(k, WD, in(0.1, 0.55));
+    setVoice(k, WA, in(0.15, 0.7));
+    setVoice(k, PAN, clampd(PAN_C[k] + in(-0.4, 0.4), -1, 1));
+    setVoice(k, DIST, std::floor(in(0, NDIST)));
+    setVoice(k, VSTEP, in(0.6, 1.6));
+    setVoice(k, OCT, OCTS[static_cast<int>(in(0, 4))]);
     if (prm_[k][LVL] <= 0.001) prm_[k][LVL] = DEF_LVL[k];             // после «очистить» кубик возвращает звук; ручной уровень не трогаем
     vrng_[k] = sdk::Rng(static_cast<uint32_t>(rng_.next() * 4294967296.0));
-    for (int i = 0; i < NPT_MAX; i++) { pts_[k][i].d = pts_[k][i].hd; pts_[k][i].a = pts_[k][i].ha; fit(pts_[k][i], k); }
+    for (int i = 0; i < NPT_MAX; i++) {
+      Point& p = pts_[k][i];
+      p.hd = in(0.15, 0.85); p.ha = in(-0.9, 0.9);
+      p.d = p.hd; p.a = p.ha; fit(p, k);
+    }
+  }
+  if (v < 0) {
+    setStep(in(0.05, 0.9));
+    setFx(DRIFT, in(0.1, 0.7)); setFx(SPACE, in(0.1, 0.6)); setFx(TONE, in(0.2, 0.8));
+    setFx(CUTOFF, in(0.55, 1)); setFx(RESO, in(0, 0.4));
   }
 }
 

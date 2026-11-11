@@ -266,6 +266,19 @@ static void voiceSilenceThenResume() {
   CHECK(fin);
 }
 
+static void diceRebuildsEverything() {                    // автор: кубик ничего не менял — теперь нота, N, рамки, луна и FX меняются
+  Scale sc; Model m(sc); m.reset(5);
+  double note[NV], n[NV], wd[NV]; for (int v = 0; v < NV; v++) { note[v] = m.voice(v, NOTE); n[v] = m.voice(v, N); wd[v] = m.voice(v, WD); }
+  const double step = m.step(), drift = m.fx(DRIFT), hd = m.pt(0, 0).hd;
+  m.roll();
+  int changed = 0;
+  for (int v = 0; v < NV; v++) changed += (m.voice(v, NOTE) != note[v]) + (m.voice(v, N) != n[v]) + (m.voice(v, WD) != wd[v]);
+  CHECK(changed >= 6); CHECK(m.step() != step); CHECK(m.fx(DRIFT) != drift); CHECK(m.pt(0, 0).hd != hd);
+  for (int v = 0; v < NV; v++) { CHECK(m.voice(v, N) >= NPT_MIN && m.voice(v, N) <= NPT_MAX); CHECK(m.voice(v, NOTE) >= 0 && m.voice(v, NOTE) <= 60); }
+  const double step2 = m.step(), n1 = m.voice(0, N); m.roll(1);                  // один голос: чужие и общие настройки стоят
+  CHECK(m.step() == step2); CHECK(m.voice(0, N) == n1);
+}
+
 static void diceAfterClearWakesVoices() {                 // автор: после корзины звук не возвращался — кубик должен его вернуть
   Scale sc; Model m(sc); m.reset(4); m.silence();
   CHECK(!m.sounding());
@@ -402,8 +415,9 @@ static void worldSnapshotRoundTrip() {
   Blocks b; b.run(a, 80);
   const std::string js = a.snapshot();
   World c(sc); c.prepare(48000, 77); c.restore(js);
-  CHECK(c.snapshot() == js);
-  Blocks bd; bd.run(c, 30); CHECK(bd.peak > 0.0);                                // восстановленный включённый мир играет
+  Blocks silent; silent.run(c, 30); CHECK(silent.sumAbs == 0);                   // старт приложения: restore не включает мир сам
+  go(c); CHECK(c.snapshot() == js);                                              // модель восстановлена точно
+  Blocks bd; bd.run(c, 30); CHECK(bd.peak > 0.0);                                // вошли — играет
 }
 
 static void worldRestoreGarbage() {
@@ -505,7 +519,7 @@ static void worldFxKickActions() {
 int main() {
   modelSeedDeterministic(); modelBarriersHold(); modelStepZeroStatic(); modelCollapsedBox(); modelClamps(); modelMoveHome(); modelSilence();
   modelRollResetsToHome(); modelSnapshotRoundTrip(); modelRestoreGarbage(); modelHzFollowsScale();
-  voiceSumOfSegments(); voiceNoDc(); voiceFiniteExtremes(); voiceStepZeroPeriodic(); voiceLevelZeroSilent(); voiceNoteChangeAtBoundary(); voicePeriodShorterThanN(); voiceSilenceThenResume(); voiceResumeRampsFromZero(); diceAfterClearWakesVoices();
+  voiceSumOfSegments(); voiceNoDc(); voiceFiniteExtremes(); voiceStepZeroPeriodic(); voiceLevelZeroSilent(); voiceNoteChangeAtBoundary(); voicePeriodShorterThanN(); voiceSilenceThenResume(); voiceResumeRampsFromZero(); diceAfterClearWakesVoices(); diceRebuildsEverything();
   worldMirrorSize(); worldActionDispatch(); worldSilentUntilRun(); worldClearSilent(); worldDiceReseeds(); worldLfoKeys(); worldSnapshotRoundTrip(); worldRestoreGarbage(); worldOutputBounded(); modelFxKickDrift(); worldFxKickActions(); modelOctave(); worldFilter();
   std::printf("sidera-test: %d checks, %d failed\n", checks, fails);
   return fails ? 1 : 0;

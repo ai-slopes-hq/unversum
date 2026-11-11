@@ -105,10 +105,9 @@ void World::restore(const std::string& js) {
   using sdk::Json;
   bool ok = false;
   const Json j = Json::parse(js, &ok);
-  model_.reset(1); run_ = false;
+  model_.reset(1);                                       // run_ не трогаем: на старте он false (мир молчит, пока не зашли), при undo остаётся как есть
   if (!ok || j.type != Json::Obj) return;
   if (const Json* m = j.get("model")) model_.restore(m->dump());
-  if (const Json* r = j.get("run")) if (r->type == Json::Bool) run_ = r->b;
 }
 
 }  // namespace sidera

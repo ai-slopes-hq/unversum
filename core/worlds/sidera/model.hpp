@@ -31,7 +31,7 @@ class Model {
   void setVoice(int v, int key, double val);
   void moveHome(int v, int pt, double hd, double ha);   // центр рамки точки: hd 0.02…1, ha −1…1; точка (d, a) подтягивается внутрь рамки
   void setStep(double s);                               // общий масштаб шага (луна) 0…1
-  void roll(int v = -1);                                // кубик: голос v (−1 — все): точки возвращаются в центры рамок, блуждание сеется заново
+  void roll(int v = -1);                                // кубик: голос v (−1 — все): новые нота, N, рамки, панорама, закон, октава и положение звёзд, блуждание сеется заново; при −1 ещё луна и FX
   void kick(int v, int pt);                             // встряска: точка pt голоса v (−1 — все) прыгает в случайное место рамки, рамка чуть сдвигается
   void setFx(int key, double val);                      // FxKey, значение 0…1; вне диапазона и NaN — ничего
   double fx(int key) const { return (key >= 0 && key < NFX) ? fx_[key] : 0; }
