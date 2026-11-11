@@ -55,7 +55,7 @@ class Model {
   double prm_[NV][NVK] = {};
   Point pts_[NV][NPT_MAX];
   double step_ = 0.15;
-  double fx_[NFX] = {0.25, 0.3, 0.35, 1.0, 0.1};
+  double fx_[NFX] = {0.25, 0.3, 0.35, 1.0, 0.3};
   sdk::Rng rng_{1};                                     // мастер: семена голосов при roll
   sdk::Rng vrng_[NV] = {sdk::Rng(1), sdk::Rng(1), sdk::Rng(1)};
 };

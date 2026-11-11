@@ -327,7 +327,7 @@ static void worldMirrorSize() {
   std::vector<double> buf(MIRROR_N + 10, -99);
   CHECK(MIRROR_N == 227);
   CHECK(w.mirror(buf.data(), MIRROR_N) == MIRROR_N);
-  CHECK(buf[219] == 0.25 && buf[220] == 0.3 && buf[221] == 0.35 && buf[222] == 1 && buf[223] == 0.1 && buf[224] == 0 && buf[226] == 0 && buf[2] == 0.3);   // FX по умолчанию; send = SPACE
+  CHECK(buf[219] == 0.25 && buf[220] == 0.3 && buf[221] == 0.35 && buf[222] == 1 && buf[223] == 0.3 && buf[224] == 0 && buf[226] == 0 && buf[2] == 0.3);   // FX по умолчанию; send = SPACE
   CHECK(buf[1] == 0.15);                                                         // step по умолчанию
   CHECK(buf[3 + 1] == 5);                                                        // N голоса 0
   CHECK(buf[3 + 72 + 1] == 8 && buf[3 + 144 + 1] == 12);

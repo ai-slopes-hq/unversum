@@ -63,11 +63,14 @@ void World::process(const sdk::Out& out, int n) {
   if (!run_) { env_ *= 0.9; return; }
   for (int v = 0; v < NV; v++) voice_[v].render(model_, v, out.L, out.R, out.sL, out.sR, n, model_.fx(SPACE));
   cut_ += (model_.fx(CUTOFF) - cut_) * 0.3; res_ += (model_.fx(RESO) - res_) * 0.3;     // сглаживание по блокам: без щелчка
-  const double hz = 30.0 * std::pow(18000.0 / 30.0, cut_), qdb = -3.0 + 24.0 * res_;       // срез 30 Гц…18 кГц по экспоненте; Q в дБ (−3 — без горба)
+  const double hz = 30.0 * std::pow(18000.0 / 30.0, cut_), qdb = -3.0 + 30.0 * res_;       // срез 30 Гц…18 кГц по экспоненте; Q в дБ (−3 — без горба, до +27 — почти звенит)
+  const double drive = 1.0 + 3.0 * res_;                                                    // злость, как у Tenebrae: насыщение до фильтра растёт с резонансом, горб ещё раз мягко режется после
   for (sdk::Biquad& f : flt_) f.set(sdk::Biquad::lowpass, std::min(hz, 0.45 * sr_), qdb, sr_);
+  const auto pre = [&](float x) { return std::tanh(drive * x) / drive; };
+  const auto post = [](double y) { return std::tanh(1.6 * y) / 1.6; };
   for (int k = 0; k < n; k++) {
-    out.L[k] = static_cast<float>(flt_[0].step(out.L[k])); out.R[k] = static_cast<float>(flt_[1].step(out.R[k]));
-    out.sL[k] = static_cast<float>(flt_[2].step(out.sL[k])); out.sR[k] = static_cast<float>(flt_[3].step(out.sR[k]));
+    out.L[k] = static_cast<float>(post(flt_[0].step(pre(out.L[k])))); out.R[k] = static_cast<float>(post(flt_[1].step(pre(out.R[k]))));
+    out.sL[k] = static_cast<float>(post(flt_[2].step(pre(out.sL[k])))); out.sR[k] = static_cast<float>(post(flt_[3].step(pre(out.sR[k]))));
   }
   for (sdk::Biquad& f : flt_) f.flushTiny(1e-15);
   double sum = 0;

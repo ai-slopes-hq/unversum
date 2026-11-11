@@ -50,7 +50,7 @@ void Model::fit(Point& p, int v) const {
 
 void Model::reset(uint32_t seed) {
   step_ = 0.15;
-  fx_[DRIFT] = 0.25; fx_[SPACE] = 0.3; fx_[TONE] = 0.35; fx_[CUTOFF] = 1.0; fx_[RESO] = 0.1;
+  fx_[DRIFT] = 0.25; fx_[SPACE] = 0.3; fx_[TONE] = 0.35; fx_[CUTOFF] = 1.0; fx_[RESO] = 0.3;
   rng_ = sdk::Rng(seed);
   for (int v = 0; v < NV; v++) {
     for (int k = 0; k < NVK; k++) prm_[v][k] = DEF[k];
