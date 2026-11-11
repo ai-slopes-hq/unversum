@@ -220,6 +220,141 @@ static void modelRollAndClear() {
 }
 
 
+// ---------- Task 2 (two rings): локации, mix, тембр ----------
+
+static bool sameNotes(const Thread& a, const Thread& b) {
+  if (a.len != b.len || a.dejavu != b.dejavu || a.lo != b.lo || a.hi != b.hi) return false;
+  for (int i = 0; i < PEARL_MAX; i++) if (a.p[i].pitch != b.p[i].pitch || a.p[i].rest != b.p[i].rest) return false;
+  return true;
+}
+
+static void modelLocSwapKeepsSound() {
+  Scale sc; Model m(sc); m.reset(3);
+  m.setRing(1, DAMP, 0.9); m.setCloud(ECHO, 0.77); m.setMix(0.8);
+  double r[NR][NRK], c[NCK];
+  for (int i = 0; i < NR; i++) for (int k = 0; k < NRK; k++) r[i][k] = m.ring(i, k);
+  for (int k = 0; k < NCK; k++) c[k] = m.cloud(k);
+  Model ref(sc); ref.reset(3);
+  m.setLoc(1);
+  CHECK(m.loc() == 1);
+  for (int i = 0; i < NR; i++) for (int k = 0; k < NRK; k++) CHECK(m.ring(i, k) == r[i][k]);
+  for (int k = 0; k < NCK; k++) CHECK(m.cloud(k) == c[k]);
+  CHECK(m.mix() == 0.8);
+  CHECK(!sameNotes(m.thread(0), ref.thread(0)));            // ноты стали другими, не прежними
+}
+
+static void modelLocKeepsEdits() {
+  Scale sc; Model m(sc); m.reset(4);
+  m.setDejaVu(0, 1); m.setDejaVu(1, 1);
+  m.setPearlPitch(0, 2, 0.123); m.setRest(1, 3, true); m.setLen(0, 6);
+  for (int i = 0; i < 4; i++) { m.next(0); m.next(1); }
+  const int c0 = m.thread(0).cur, c1 = m.thread(1).cur;
+  m.setLoc(1);
+  CHECK(m.thread(0).cur == c0 % m.thread(0).len && m.thread(1).cur == c1 % m.thread(1).len);   // курсор не сброшен
+  m.setLoc(0);
+  CHECK(m.thread(0).p[2].pitch == 0.123 && m.thread(1).p[3].rest && m.thread(0).len == 6);
+  // быстрые повторные переключения без потерь
+  m.setPearlPitch(0, 5, 0.42);
+  m.setLoc(2); m.setLoc(2); m.setLoc(3); m.setLoc(0);
+  CHECK(m.thread(0).p[5].pitch == 0.42 && m.thread(0).p[2].pitch == 0.123);
+}
+
+static void modelLocOutOfRange() {
+  Scale sc; Model m(sc); m.reset(5);
+  m.setLoc(2); const std::string a = m.snapshot();
+  m.setLoc(-1); m.setLoc(4); m.setLoc(1000);
+  CHECK(m.loc() == 2); CHECK(m.snapshot() == a);
+}
+
+static void modelLocsDiffer() {
+  Scale sc; Model m(sc); m.reset(6);
+  Thread t[NLOC][NR];
+  for (int l = 0; l < NLOC; l++) { m.setLoc(l); for (int k = 0; k < NR; k++) t[l][k] = m.thread(k); }
+  for (int a = 0; a < NLOC; a++) for (int b = a + 1; b < NLOC; b++) for (int k = 0; k < NR; k++) CHECK(!sameNotes(t[a][k], t[b][k]));
+}
+
+static void modelDiceKeepsTimbre() {
+  Scale sc; Model m(sc); m.reset(7);
+  m.setRing(0, STRUCT, 0.2); m.setCloud(POS, 0.9); m.setMix(0.3);
+  double r[NR][NRK], c[NCK];
+  for (int i = 0; i < NR; i++) for (int k = 0; k < NRK; k++) r[i][k] = m.ring(i, k);
+  for (int k = 0; k < NCK; k++) c[k] = m.cloud(k);
+  m.roll(); m.roll(0); m.roll(1);
+  for (int i = 0; i < NR; i++) for (int k = 0; k < NRK; k++) CHECK(m.ring(i, k) == r[i][k]);
+  for (int k = 0; k < NCK; k++) CHECK(m.cloud(k) == c[k]);
+  CHECK(m.mix() == 0.3);
+}
+
+static void modelTimbreKeepsNotes() {
+  Scale sc; Model m(sc); m.reset(8);
+  m.setRing(0, LVL, 0.33); m.setRing(1, POLY, 1); m.setCloud(SEND, 0.21); m.setCloud(FREEZE, 1); m.setCloud(CLEVEL, 0.44); m.setCloud(ECHO, 0.12); m.setMix(0.66);
+  const Thread t0 = m.thread(0), t1 = m.thread(1);
+  double r[NR][NRK], c[NCK];
+  for (int i = 0; i < NR; i++) for (int k = 0; k < NRK; k++) r[i][k] = m.ring(i, k);
+  for (int k = 0; k < NCK; k++) c[k] = m.cloud(k);
+  bool changed = false;
+  for (int n = 0; n < 20; n++) {
+    m.rollTimbre();
+    CHECK(sameNotes(m.thread(0), t0) && sameNotes(m.thread(1), t1));
+    CHECK(m.thread(0).cur == t0.cur);
+    for (int i = 0; i < NR; i++) {
+      CHECK(m.ring(i, LVL) == r[i][LVL] && m.ring(i, POLY) == r[i][POLY]);
+      for (int k : {int(STRUCT), int(BRIGHT), int(DAMP)}) { CHECK(m.ring(i, k) >= 0 && m.ring(i, k) <= 1); if (m.ring(i, k) != r[i][k]) changed = true; }
+    }
+    for (int k : {int(SEND), int(FREEZE), int(CLEVEL), int(ECHO)}) CHECK(m.cloud(k) == c[k]);
+    for (int k : {int(POS), int(SIZE), int(DENS), int(PITCH)}) { CHECK(m.cloud(k) >= 0 && m.cloud(k) <= 1); if (m.cloud(k) != c[k]) changed = true; }
+    CHECK(m.mix() == 0.66);
+  }
+  CHECK(changed);
+}
+
+static void modelMixClamp() {
+  Scale sc; Model m(sc);
+  CHECK(m.mix() == 0.5);
+  m.setMix(0.3); m.setMix(NAN); CHECK(m.mix() == 0.3);
+  m.setMix(2); CHECK(m.mix() == 1);
+  m.setMix(-1); CHECK(m.mix() == 0);
+  m.setMix(INFINITY); CHECK(m.mix() == 1);
+  m.setMix(-INFINITY); CHECK(m.mix() == 0);
+}
+
+static void modelLocSnapshotRoundTrip() {
+  Scale sc; Model m(sc); m.reset(11);
+  m.setMix(0.77); m.setPearlPitch(0, 1, 0.31); m.setLoc(2); m.setPearlPitch(1, 4, 0.66); m.setLen(0, 9);
+  for (int i = 0; i < 5; i++) { m.next(0); m.next(1); }
+  const std::string js = m.snapshot();
+  Model b(sc); b.restore(js);
+  CHECK(b.snapshot() == js);
+  CHECK(b.loc() == 2 && b.mix() == 0.77);
+  b.setLoc(0); CHECK(b.thread(0).p[1].pitch == 0.31);
+  b.setLoc(2); CHECK(b.thread(1).p[4].pitch == 0.66 && b.thread(0).len == 9);
+}
+
+static void modelLocRestoreGarbage() {
+  Scale sc; Model m(sc);
+  const char* bad[] = {"", "{}", "{\"p\":[[0.5,0]],\"len\":3}", "{\"thr\":5,\"loc\":7,\"curLoc\":\"x\",\"mix\":[]}",
+    "{\"thr\":[],\"loc\":[1,2,[3],[[1],{}]],\"curLoc\":99,\"mix\":9}",
+    "{\"thr\":[{}],\"loc\":[[{\"len\":99,\"lo\":-5,\"hi\":\"x\",\"p\":5},7],[],[[]],{}],\"curLoc\":-3,\"mix\":null}",
+    "{\"thr\":[{}],\"loc\":[[{},{}],[{},{}],[{},{}],[{},{}]],\"curLoc\":1.5,\"mix\":-4}"};
+  for (const char* js : bad) {
+    m.restore(js);
+    CHECK(m.loc() >= 0 && m.loc() < NLOC); CHECK(m.mix() >= 0 && m.mix() <= 1);
+    for (int l = 0; l < NLOC; l++) {
+      m.setLoc(l);
+      for (int t = 0; t < NR; t++) {
+        const Thread& th = m.thread(t);
+        CHECK(th.len >= 1 && th.len <= PEARL_MAX); CHECK(th.cur >= 0 && th.cur < th.len);
+        CHECK(th.lo >= NOTE_MIN && th.hi <= NOTE_MAX && th.hi - th.lo >= RANGE_MIN_W);
+        for (int i = 0; i < PEARL_MAX; i++) CHECK(th.p[i].pitch >= 0 && th.p[i].pitch <= 1);
+        for (int i = 0; i < 20; i++) m.next(t);
+      }
+    }
+  }
+  m.restore("");                                          // пустое — рабочий дефолт
+  CHECK(m.snapshot() == Model(sc).snapshot());
+}
+
+
 // ---------- Task 2: кольца (порт Rings) ----------
 
 // удар в резонатор: импульс на первом сэмпле, дальше тишина; возвращает odd+even
@@ -706,6 +841,7 @@ int main() {
   modelSeedDeterministic(); modelDejaVuOneRepeats(); modelDejaVuZeroVaries(); modelRestsSilent();
   modelRingsCount(); modelDefaultRanges(); modelTwoThreadsIndependent(); modelRangeClamp(); modelPitchWithinRange(); modelDeterministic(); modelScaleSnap(); modelScaleSnapLowRange(); modelClamps(); modelLenOne();
   modelSnapshotRoundTrip(); modelRestoreGarbage(); modelRollAndClear(); modelCloudSend();
+  modelLocSwapKeepsSound(); modelLocKeepsEdits(); modelLocOutOfRange(); modelLocsDiffer(); modelDiceKeepsTimbre(); modelTimbreKeepsNotes(); modelMixClamp(); modelLocSnapshotRoundTrip(); modelLocRestoreGarbage();
   ringsRingsDown(); ringsDampingMonotone(); ringsBrightnessCentroid(); ringsStable(); ringsIdleCheap(); ringsNoAlloc(); ringsPluckerBurst();
   cloudSilentIn(); cloudEchoesInput(); cloudFreezeHolds(); cloudFreezeEmpty(); cloudEchoDecays(); cloudNoNan(); cloudDensityBounded(); cloudSleepsAgain();
   worldSilentWhenStopped(); worldStepsInTime(); worldStrikeSounds(); worldNoStepFlood(); worldStopNoStuck(); worldSnapshotRoundTrip();

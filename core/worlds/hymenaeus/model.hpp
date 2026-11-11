@@ -3,7 +3,8 @@
 //
 // Нить — до 16 жемчужин (высота 0…1, пауза), играют первые len по кругу. Застёжка déjà vu 0…1: на каждом шаге с вероятностью
 // 1 − dejavu жемчужина под курсором перебрасывается (новая высота, пауза с шансом REST_P), иначе остаётся — 1 даёт точный повтор.
-// Две нити, нить t бьёт кольцо t (0 — modal, 1 — strings); у каждой свои длина, курсор, déjà vu и диапазон высоты lo…hi (ноты MIDI,
+// Четыре локации (слоты): в каждой для каждой нити свои жемчужины, длина, déjà vu и диапазон; кольца, облака и mix общие и при смене
+// локации не меняются. Курсоры нитей при смене не сбрасываются. Две нити, нить t бьёт кольцо t (0 — modal, 1 — strings); у каждой свои длина, курсор, déjà vu и диапазон высоты lo…hi (ноты MIDI,
 // 24…96, ширина ≥ 5). Высота 0…1 → lo + p·(hi − lo) → лад хоста (Scale) → Гц. Случайность — общая, от одного rng.
 #pragma once
 #include <string>
@@ -45,6 +46,9 @@ class Model {
   void setRing(int ring, int key, double v);
   void setCloud(int key, double v);
   void roll(int t = -1);                                // кубик: нить t (−1 — обе) бросается заново
+  void setLoc(int slot);                                // локация 0…NLOC−1: активные нити уходят в старый слот, из нового приходят другие; вне диапазона — ничего
+  void setMix(double v);                                // 0…1 (0.5 — как раньше): сухое ↔ облака; NaN игнорируется
+  void rollTimbre();                                    // STRUCT, BRIGHT, DAMP колец и POS, SIZE, DENS, PITCH облаков — случайно; ноты и уровни не трогает
   void clear();                                         // все нити — паузы
 
   Step next(int t);                                     // шаг нити t: курсор двигается, жемчужина может перебросится; ring = t
@@ -54,6 +58,8 @@ class Model {
   std::string snapshot() const;
   void restore(const std::string& js);                  // мусор и выход за диапазон зажимаются, не падают
 
+  int loc() const { return curLoc_; }
+  double mix() const { return mix_; }
   const Thread& thread(int t) const { return thr_[(t >= 0 && t < NR) ? t : 0]; }
   double ring(int r, int key) const { return (r >= 0 && r < NR && key >= 0 && key < NRK) ? ring_[r][key] : 0; }
   double cloud(int key) const { return (key >= 0 && key < NCK) ? cloud_[key] : 0; }
@@ -64,6 +70,9 @@ class Model {
   Thread thr_[NR];
   double ring_[NR][NRK] = {};
   double cloud_[NCK] = {};
+  Thread loc_[NLOC][NR];                                // слоты; слот curLoc_ устарел — правда в thr_ (ноты, len, dejavu, lo, hi; cur не хранится)
+  int curLoc_ = 0;
+  double mix_ = 0.5;
   sdk::Rng rng_{1};
 };
 
