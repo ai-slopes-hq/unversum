@@ -1,13 +1,17 @@
 import CoreGraphics
 import Foundation
 
-// геометрия Hymenaeus по макету mockups/hymenaeus.html: сцена 390×844, масштаб S = min(W/390, H/844), по центру на широком экране
+// геометрия Hymenaeus по макету mockups/hymenaeus-v2.html (вариант C): сцена 390×844, масштаб S = min(W/390, H/844), по центру на широком экране.
+// Сверху вниз: облака (с линзой пересечения) · mix · два стана (resonans, chorda) · переплетённые кольца · печати-локации.
 struct HymGeo {
   let W, H, S, ox, oy: CGFloat
   let sun: (x: CGFloat, y: CGFloat, r: CGFloat)
-  // нить: эллипс; кольца внутри неё (0 — большое, низкие ноты; 2 — малое)
-  static let neckC = CGPoint(x: 197, y: 656), neckRx: CGFloat = 142, neckRy: CGFloat = 84
-  static let ringX: [CGFloat] = [140, 215, 270], ringR: [CGFloat] = [46, 38, 30], ringW: CGFloat = 11
+  // станы: верхняя линия, 5 линий с шагом staveStep; жемчужины от staveX0 до staveX1, застёжка справа
+  static let staveTop: [CGFloat] = [352, 446], staveStep: CGFloat = 16, staveX0: CGFloat = 42, staveX1: CGFloat = 332, staveL: CGFloat = 22, staveR: CGFloat = 370, claspX: CGFloat = 356
+  // кольца: нить t играет кольцо t; центры по одной горизонтали, обода пересекаются
+  static let ringCY: CGFloat = 668, ringX: [CGFloat] = [158, 232], ringRad: CGFloat = 50, ringW: CGFloat = 11
+  static let mixY: CGFloat = 298, mixX0: CGFloat = 70, mixX1: CGFloat = 320
+  static let sealY: CGFloat = 772, sealX0: CGFloat = 105, sealDX: CGFloat = 62, sealR: CGFloat = 17
 
   init(W: CGFloat, H: CGFloat, topY: CGFloat) {
     self.W = W; self.H = H
@@ -18,19 +22,27 @@ struct HymGeo {
   func pt(_ x: CGFloat, _ y: CGFloat) -> CGPoint { CGPoint(x: ox + x * S, y: oy + y * S) }
   func rect(_ x0: CGFloat, _ y0: CGFloat, _ x1: CGFloat, _ y1: CGFloat) -> CGRect { CGRect(x: ox + x0 * S, y: oy + y0 * S, width: (x1 - x0) * S, height: (y1 - y0) * S) }
 
-  var cloudsRect: CGRect { rect(0, 96, 390, 420) }
-  var neckRect: CGRect { rect(HymGeo.neckC.x - HymGeo.neckRx - 10, HymGeo.neckC.y - HymGeo.neckRy - 10, HymGeo.neckC.x + HymGeo.neckRx + 10, HymGeo.neckC.y + HymGeo.neckRy + 10) }
-  var ringsRect: CGRect { rect(HymGeo.ringX[0] - HymGeo.ringR[0] - 6, HymGeo.neckC.y - HymGeo.ringR[0] - 6, HymGeo.ringX[2] + HymGeo.ringR[2] + 6, HymGeo.neckC.y + HymGeo.ringR[0] + 6) }
+  var cloudsRect: CGRect { rect(0, 96, 390, 282) }
+  var lensRect: CGRect { rect(150, 150, 232, 214) }                          // линза пересечения двух облаков — внутри cloudsRect
+  var mixTrack: CGRect { rect(HymGeo.mixX0 - 10, HymGeo.mixY - 12, HymGeo.mixX1 + 10, HymGeo.mixY + 12) }
+  func mixValue(_ x: CGFloat) -> Double { Hym.clamp(Double((x - pt(HymGeo.mixX0, 0).x) / ((HymGeo.mixX1 - HymGeo.mixX0) * S))) }
+  func staveY(_ t: Int) -> CGFloat { pt(0, HymGeo.staveTop[t]).y }          // верхняя линия стана нити t
+  func staveRect(_ t: Int) -> CGRect { rect(HymGeo.staveL - 4, HymGeo.staveTop[t] - 16, HymGeo.staveR + 4, HymGeo.staveTop[t] + 4 * HymGeo.staveStep + 12) }
+  var ringsRect: CGRect { rect(HymGeo.ringX[0] - HymGeo.ringRad - HymGeo.ringW, HymGeo.ringCY - HymGeo.ringRad - HymGeo.ringW, HymGeo.ringX[1] + HymGeo.ringRad + HymGeo.ringW, HymGeo.ringCY + HymGeo.ringRad + HymGeo.ringW) }
+  func sealRect(_ loc: Int) -> CGRect {                                       // кружок печати и римская цифра под ним
+    let x = HymGeo.sealX0 + CGFloat(loc) * HymGeo.sealDX
+    return rect(x - HymGeo.sealR - 2, HymGeo.sealY - HymGeo.sealR - 2, x + HymGeo.sealR + 2, HymGeo.sealY + HymGeo.sealR + 18)
+  }
 
-  func ringCenter(_ i: Int) -> CGPoint { pt(HymGeo.ringX[i], HymGeo.neckC.y) }
-  func ringRadius(_ i: Int) -> CGFloat { HymGeo.ringR[i] * S }
+  func ringCenter(_ i: Int) -> CGPoint { pt(HymGeo.ringX[i], HymGeo.ringCY) }
+  func ringR(_ i: Int) -> CGFloat { HymGeo.ringRad * S }
 
   // кольцо под пальцем и место удара 0…1 (по часовой от верха): ближе к ободу — выбирается; внутри и у края — тоже кольцо
   func ringAt(_ x: CGFloat, _ y: CGFloat) -> (ring: Int, pos: Double)? {
     var best: Int?, bd = CGFloat.infinity
     for i in 0..<Hym.nr {
-      let c = ringCenter(i), d = hypot(x - c.x, y - c.y), edge = abs(d - ringRadius(i))
-      if d <= ringRadius(i) + (HymGeo.ringW * 1.5 + 6) * S && edge < bd { bd = edge; best = i }
+      let c = ringCenter(i), d = hypot(x - c.x, y - c.y), edge = abs(d - ringR(i))
+      if d <= ringR(i) + (HymGeo.ringW * 1.5 + 6) * S && edge < bd { bd = edge; best = i }
     }
     guard let i = best else { return nil }
     let c = ringCenter(i)
@@ -39,16 +51,13 @@ struct HymGeo {
     return (i, a)
   }
 
-  // застёжка и жемчужины на эллипсе нити (рисует drawNecklace, касания находят по тем же точкам)
-  static let gap0: CGFloat = -1.05
-  static func gap1(_ dejavu: Double) -> CGFloat { gap0 + 0.15 + CGFloat(1 - Hym.clamp(dejavu)) * 0.9 }   // чем ближе déjà vu к 1, тем плотнее замкнута
-  func neckPt(_ t: CGFloat) -> CGPoint { pt(HymGeo.neckC.x + cos(t) * HymGeo.neckRx, HymGeo.neckC.y + sin(t) * HymGeo.neckRy) }
-  func pearlT(_ i: Int, n: Int, dejavu: Double) -> CGFloat {
-    let g1 = HymGeo.gap1(dejavu), tau = CGFloat.pi * 2
-    return g1 + 0.2 + (n > 1 ? CGFloat(i) / CGFloat(n - 1) : 0.5) * (tau - (g1 - HymGeo.gap0) - 0.4)
+  // жемчужины на стане нити t: x — равномерно, y — по высоте (полутона мерой в полшага линейки, 9 позиций от нижней линии)
+  func staveRow(_ pitch: Double) -> Int { Int((Hym.clamp(pitch) * 8).rounded()) }
+  func pearlPoint(_ t: Int, _ i: Int, n: Int, pitch: Double) -> CGPoint {
+    let x = HymGeo.staveX0 + (n > 1 ? CGFloat(i) / CGFloat(n - 1) : 0.5) * (HymGeo.staveX1 - HymGeo.staveX0)
+    return pt(x, HymGeo.staveTop[t] + (4 - CGFloat(staveRow(pitch)) / 2) * HymGeo.staveStep)
   }
-  func pearlPoint(_ i: Int, n: Int, dejavu: Double) -> CGPoint { neckPt(pearlT(i, n: n, dejavu: dejavu)) }
-  func claspPoints(dejavu: Double) -> [CGPoint] { [neckPt(HymGeo.gap0), neckPt(HymGeo.gap1(dejavu))] }
+  func claspPoint(_ t: Int, lastPitch: Double) -> CGPoint { pt(HymGeo.claspX, HymGeo.staveTop[t] + (4 - CGFloat(staveRow(lastPitch)) / 2) * HymGeo.staveStep) }
 
   func cornerHit(_ x: CGFloat, _ y: CGFloat) -> Bool {              // солнце-четверть слева сверху ведёт на карту
     y > sun.y && hypot(x - sun.x, y - sun.y) < sun.r + 6

@@ -41,7 +41,7 @@ final class HymenaeusView: World {
   typealias Reader = (inout [Double]) -> Int
   private let readMirror: Reader
   private let readHeard: Reader
-  private var mbuf = [Double](repeating: 0, count: 72), hbuf = [Double](repeating: 0, count: 80)
+  private var mbuf = [Double](repeating: 0, count: 128), hbuf = [Double](repeating: 0, count: 80)
   private var now = 0.0
   let dr = HymDrawState()
 
@@ -59,7 +59,7 @@ final class HymenaeusView: World {
       let y: CGFloat
       switch h.zone {
       case .cloud?, .echo?: y = cr.minY + 8 * geo.S
-      default: y = geo.neckRect.minY - 6 * geo.S
+      default: y = geo.staveRect(0).minY - 6 * geo.S      // Task 6
       }
       return (HymTouch.label(g), CGPoint(x: geo.W / 2, y: y))
     }
@@ -73,7 +73,8 @@ final class HymenaeusView: World {
 
   func layout(W: CGFloat, H: CGFloat, topY: CGFloat, safeBot: CGFloat) { geo = HymGeo(W: W, H: H, topY: topY) }
   func cornerHit(_ x: CGFloat, _ y: CGFloat) -> Bool { geo.cornerHit(x, y) }
-  func dice() { core.action(Act.dice.rawValue, 0, [], touchTime: 0) }
+  func dice() { core.action(Act.dice.rawValue, 0, [], touchTime: 0) }                 // обе нити; Task 6: кнопка «ноты»
+  func timbre() { core.action(Act.timbre.rawValue, 0, [], touchTime: 0) }             // Task 6: кнопка «тембр»
   func clear() { core.action(Act.clear.rawValue, 0, [], touchTime: 0) }
   private var started = false
   func enter() {                                          // нить играет сама при первом входе; остановленную и восстановленную не будим
@@ -116,8 +117,8 @@ final class HymenaeusView: World {
     var b = HymBase()
     switch z {
     case .ring(let r, _)?: let q = mirror.rings[r]; b.bright = q.bright; b.damp = q.damp; b.structure = q.structure
-    case .clasp?: b.dejavu = mirror.dejavu
-    case .pearl(let i)?: b.pitch = mirror.pearls[i].pitch
+    case .clasp(let t)?: b.dejavu = mirror.dejavu[t]
+    case .pearl(let t, let i)?: b.pitch = mirror.pearls[t][i].pitch
     default: break
     }
     return b
@@ -125,7 +126,7 @@ final class HymenaeusView: World {
 
   func down(_ f: Finger) {
     let p = CGPoint(x: f.x, y: f.y)
-    let z = HymTouch.zone(at: p, geo: geo, len: mirror.len, dejavu: mirror.dejavu)
+    let z = HymTouch.zone(at: p, geo: geo, mirror: mirror)
     var h = Hold(zone: z, p0: p, base: baseAt(z), downAt: now); h.cur = p
     if case .ring(let r, _)? = z, let (k, o) = holds.first(where: { sameRing($0.value.zone, r) }) {
       holds[k]?.pinching = true; holds[k]?.moved = true; h.pinching = true; h.moved = true     // второй палец на том же кольце — щипок
@@ -148,9 +149,9 @@ final class HymenaeusView: World {
       core.action(Act.ring.rawValue, r, [Double(Hym.Ring.bright), b], touchTime: touchTime)
       core.action(Act.ring.rawValue, r, [Double(Hym.Ring.damp), d], touchTime: touchTime)
     case .ringPinch(let r, let v): core.action(Act.ring.rawValue, r, [Double(Hym.Ring.structure), v], touchTime: touchTime)
-    case .claspDrag(let v): core.action(Act.thread.rawValue, 0, [0, v], touchTime: touchTime)
-    case .pearlTap(let i): core.action(Act.pearl.rawValue, i, [1, mirror.pearls[i].rest ? 0 : 1], touchTime: touchTime)
-    case .pearlPitch(let i, let v): core.action(Act.pearl.rawValue, i, [0, v], touchTime: touchTime)
+    case .claspDrag(let t, let v): core.action(Act.thread.rawValue, t, [Double(Hym.Thread.dejavu), v], touchTime: touchTime)
+    case .pearlTap(let t, let i): core.action(Act.pearl.rawValue, i, [Double(t), 1, mirror.pearls[t][i].rest ? 0 : 1], touchTime: touchTime)
+    case .pearlPitch(let t, let i, let v): core.action(Act.pearl.rawValue, i, [Double(t), 0, v], touchTime: touchTime)
     }
   }
 
@@ -179,7 +180,7 @@ final class HymenaeusView: World {
     case .ring(let r, let pos)?:
       ringHitPos[r] = pos
       send(.ringStrike(ring: r, pos: pos), touchTime: f.touchTime)           // ручной удар поверх нити
-    case .pearl(let i)?: send(.pearlTap(i), touchTime: f.touchTime)
+    case .pearl(let t, let i)?: send(.pearlTap(thread: t, i), touchTime: f.touchTime)
     default: break
     }
   }
@@ -204,5 +205,5 @@ extension HymenaeusView: WorldTempo {
   func setBpm(_ bpm: Double) { core.action(Act.bpm.rawValue, 0, [bpm], touchTime: 0) }
   func play(_ on: Bool) { core.action(Act.run.rawValue, 0, [on ? 1 : 0], touchTime: 0) }
   var playing: Bool { mirror.run }
-  var armed: Bool { mirror.pearls.prefix(max(1, mirror.len)).contains { !$0.rest } }
+  var armed: Bool { (0..<Hym.nr).contains { t in mirror.pearls[t].prefix(max(1, mirror.len[t])).contains { !$0.rest } } }
 }

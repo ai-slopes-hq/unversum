@@ -126,7 +126,7 @@ extension HymenaeusView {
     cloud(g, p1.x, p1.y, G.S, 0.55); cloud(g, p2.x, p2.y, 1.15 * G.S, 0.8)
     for i in 0..<Hym.nr {
       let c = G.ringCenter(i)
-      band(g, c.x, c.y, G.ringRadius(i), HymGeo.ringW * G.S, i == 0 ? 0.95 : i == 1 ? 0.75 : 0.6)
+      band(g, c.x, c.y, G.ringR(i), HymGeo.ringW * G.S, i == 0 ? 0.95 : 0.8)
     }
     dr.wall = g.makeImage()
     return dr.wall
@@ -159,7 +159,7 @@ extension HymenaeusView {
 
   // нити звука: от каждого кольца к облаку, ноты в полёте
   private func threadPoint(_ r: Int, _ t: CGFloat, _ x1: CGFloat, _ y1: CGFloat) -> CGPoint {
-    let c = geo.ringCenter(r), y0 = c.y - geo.ringRadius(r), x0 = c.x
+    let c = geo.ringCenter(r), y0 = c.y - geo.ringR(r), x0 = c.x
     let w = sin(t * 9 + CGFloat(r + 1)) * 9 * t * geo.S
     return CGPoint(x: x0 + (x1 - x0) * t * t + w, y: y0 + (y1 - y0) * t)
   }
@@ -168,7 +168,7 @@ extension HymenaeusView {
     let g = d.g, G = geo, px = G.pt(40 + CGFloat(mirror.cloud[Hym.Cloud.pos]) * 310, 0).x, y1 = G.pt(0, 300).y
     for r in 0..<Hym.nr {
       let a = CGFloat(0.28 + min(1, mirror.rings[r].energy) * 0.6) * (r == 1 ? 1 : 0.8)
-      let x1 = px + CGFloat(r - 1) * 36 * G.S
+      let x1 = px + (CGFloat(r) - 0.5) * 50 * G.S
       g.setStrokeColor(col(Hym.ink, a * 0.5)); g.setLineWidth(0.9); g.beginPath()
       for i in 0...40 { let p = threadPoint(r, CGFloat(i) / 40, x1, y1); if i > 0 { g.addLine(to: p) } else { g.move(to: p) } }
       g.strokePath()
@@ -184,7 +184,7 @@ extension HymenaeusView {
   private func drawRings(_ d: Draw, _ now: Double) {
     let g = d.g, G = geo
     for r in 0..<Hym.nr {
-      let c = G.ringCenter(r), R = G.ringRadius(r), w = HymGeo.ringW * G.S, st = mirror.rings[r].structure
+      let c = G.ringCenter(r), R = G.ringR(r), w = HymGeo.ringW * G.S, st = mirror.rings[r].structure
       let e = CGFloat(min(1, mirror.rings[r].energy)), flash = max(0, 1 - CGFloat(now - ringHit[r]) / 0.7)
       let modes = 1 + Int(st * 3.99)                      // моды — концентрические волны внутри ударенного кольца (structure)
       let lit = max(e, flash)
@@ -202,30 +202,33 @@ extension HymenaeusView {
     }
   }
 
+  // Task 6: полная картинка станов (скрипичный ключ, нити удара, застёжка déjà vu, lo/hi); здесь — минимум, чтобы собиралось и играло
   private func drawNecklace(_ d: Draw, _ now: Double) {
     let g = d.g, G = geo, m = mirror, S = G.S
-    let cx = HymGeo.neckC.x, cy = HymGeo.neckC.y, rx = HymGeo.neckRx, ry = HymGeo.neckRy
-    let gap0 = HymGeo.gap0, gap1 = HymGeo.gap1(m.dejavu)   // застёжка déjà vu
-    func at(_ t: CGFloat) -> CGPoint { G.pt(cx + cos(t) * rx, cy + sin(t) * ry) }
-    g.setStrokeColor(col(Hym.ink, 0.35)); g.setLineWidth(0.8); g.beginPath()
-    for i in 0...200 { let p = at(gap1 + CGFloat(i) / 200 * (tau - (gap1 - gap0))); if i > 0 { g.addLine(to: p) } else { g.move(to: p) } }
-    g.strokePath()
-    g.setStrokeColor(col(Hym.ink, 0.6)); g.setLineWidth(0.9)
-    for t in [gap0, gap1] { let p = at(t); circle(g, p.x, p.y, 2.6) }
-    let n = max(1, m.len), played = m.playedIndex
-    for i in 0..<n {
-      let p = G.pearlPoint(i, n: n, dejavu: m.dejavu), q = m.pearls[i]
-      if q.rest { g.setStrokeColor(col(Hym.ink, 0.25)); g.setLineWidth(0.8); circle(g, p.x, p.y, 2.2 * S); continue }
-      let r = CGFloat(4.5 + q.pitch * 5) * S, cur = m.run && i == played
-      g.setFillColor(theme.bg.cgColor); disc(g, p.x, p.y, r)
-      g.setStrokeColor(col(Hym.ink, cur ? 0.95 : 0.55)); g.setLineWidth(1); circle(g, p.x, p.y, r)
-      g.setFillColor(col(Hym.ink, cur ? 0.95 : 0.45)); disc(g, p.x - r * 0.35, p.y - r * 0.35, max(0.7, r * 0.22))   // блик жемчуга
-      if cur {
-        d.glowAt(p.x, p.y, 20 * S, 0.45)
-        let rg = HymMirror.ringFor(q.pitch), c = G.ringCenter(rg), R = G.ringRadius(rg) + 5.5 * S, ang = 0.3 * tau - .pi / 2   // нить удара: к месту на ободе
-        g.setLineDash(phase: 0, lengths: [1.5, 3]); g.setStrokeColor(col(Hym.gold, 0.55)); g.setLineWidth(0.9)
-        g.beginPath(); g.move(to: p); g.addLine(to: CGPoint(x: c.x + cos(ang) * R, y: c.y + sin(ang) * R)); g.strokePath(); g.setLineDash(phase: 0, lengths: [])
+    for t in 0..<Hym.nr {
+      let top = G.staveY(t)
+      g.setStrokeColor(col(Hym.ink, 0.16)); g.setLineWidth(0.8); g.beginPath()
+      for k in 0..<5 {
+        let y = top + CGFloat(k) * HymGeo.staveStep * S
+        g.move(to: CGPoint(x: G.pt(HymGeo.staveL, 0).x, y: y)); g.addLine(to: CGPoint(x: G.pt(HymGeo.staveR, 0).x, y: y))
       }
+      g.strokePath()
+      let n = max(1, m.len[t]), played = m.playedIndex(t)
+      let pts = (0..<n).map { G.pearlPoint(t, $0, n: n, pitch: m.pearls[t][$0].pitch) }
+      g.setStrokeColor(col(Hym.ink, 0.4)); g.setLineWidth(0.8); g.beginPath()
+      for (i, p) in pts.enumerated() { if i > 0 { g.addLine(to: p) } else { g.move(to: p) } }
+      g.strokePath()
+      for i in 0..<n {
+        let p = pts[i], q = m.pearls[t][i]
+        if q.rest { g.setStrokeColor(col(Hym.ink, 0.25)); g.setLineWidth(0.8); circle(g, p.x, p.y, 2.2 * S); continue }
+        let r = 6 * S, cur = m.run && i == played
+        g.setFillColor(theme.bg.cgColor); disc(g, p.x, p.y, r)
+        g.setStrokeColor(col(Hym.ink, cur ? 0.95 : 0.55)); g.setLineWidth(1); circle(g, p.x, p.y, r)
+        g.setFillColor(col(Hym.ink, cur ? 0.95 : 0.45)); disc(g, p.x - r * 0.35, p.y - r * 0.35, max(0.7, r * 0.22))
+        if cur { d.glowAt(p.x, p.y, 20 * S, 0.45) }
+      }
+      let c = G.claspPoint(t, lastPitch: m.pearls[t][n - 1].pitch)
+      g.setStrokeColor(col(Hym.ink, 0.6)); g.setLineWidth(0.9); circle(g, c.x, c.y, 2.6 * S)
     }
   }
 

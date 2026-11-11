@@ -6,11 +6,11 @@ import Foundation
 enum HymGesture: Equatable {
   case cloudDrag(x: Double, y: Double), cloudHold, echoDrag(x: Double)
   case ringStrike(ring: Int, pos: Double), ringAxes(ring: Int, bright: Double, damp: Double), ringPinch(ring: Int, structure: Double)
-  case claspDrag(Double), pearlTap(Int), pearlPitch(Int, Double)
+  case claspDrag(thread: Int, Double), pearlTap(thread: Int, Int), pearlPitch(thread: Int, Int, Double)
 }
 
 enum HymZone: Equatable {
-  case cloud, echo, ring(Int, pos: Double), clasp, pearl(Int)
+  case cloud, echo, ring(Int, pos: Double), clasp(Int), pearl(Int, Int)   // Task 6: печати (loc), mix, линза, удержание на стане
 }
 
 // исходные значения, от которых отсчитывается относительный жест
@@ -22,12 +22,16 @@ enum HymTouch {
 
   static func ok(_ p: CGPoint) -> Bool { p.x.isFinite && p.y.isFinite }
 
-  static func zone(at p: CGPoint, geo: HymGeo, len: Int, dejavu: Double) -> HymZone? {
+  static func zone(at p: CGPoint, geo: HymGeo, mirror m: HymMirror) -> HymZone? {
     guard ok(p) else { return nil }
     if let h = geo.ringAt(p.x, p.y) { return .ring(h.ring, pos: h.pos) }
-    let n = max(1, len), hit = 14 * geo.S
-    for i in 0..<n where hypot(p.x - geo.pearlPoint(i, n: n, dejavu: dejavu).x, p.y - geo.pearlPoint(i, n: n, dejavu: dejavu).y) < hit { return .pearl(i) }
-    for c in geo.claspPoints(dejavu: dejavu) where hypot(p.x - c.x, p.y - c.y) < 16 * geo.S { return .clasp }
+    let hit = 14 * geo.S                                    // Task 6: полная раскладка зон (печати, mix, линза, стан)
+    for t in 0..<Hym.nr {
+      let n = max(1, m.len[t])
+      for i in 0..<n where hypot(p.x - geo.pearlPoint(t, i, n: n, pitch: m.pearls[t][i].pitch).x, p.y - geo.pearlPoint(t, i, n: n, pitch: m.pearls[t][i].pitch).y) < hit { return .pearl(t, i) }
+      let c = geo.claspPoint(t, lastPitch: m.pearls[t][n - 1].pitch)
+      if hypot(p.x - c.x, p.y - c.y) < 16 * geo.S { return .clasp(t) }
+    }
     let cr = geo.cloudsRect
     if cr.contains(p) { return p.y > cr.minY + cr.height * echoStrip ? .echo : .cloud }
     return nil
@@ -44,8 +48,8 @@ enum HymTouch {
     case .cloud: return .cloudDrag(x: unit((to.x - cr.minX) / cr.width), y: unit(1 - (to.y - cr.minY) / (cr.height * CGFloat(echoStrip))))
     case .echo: return .echoDrag(x: unit((to.x - cr.minX) / cr.width))
     case .ring(let r, _): return .ringAxes(ring: r, bright: Hym.clamp(base.bright - Double(dy / dragRing)), damp: Hym.clamp(base.damp + Double(dx / dragRing)))
-    case .clasp: return .claspDrag(Hym.clamp(base.dejavu + Double(dx / dragThread)))
-    case .pearl(let i): return .pearlPitch(i, Hym.clamp(base.pitch - Double(dy / dragPearl)))
+    case .clasp(let t): return .claspDrag(thread: t, Hym.clamp(base.dejavu + Double(dx / dragThread)))
+    case .pearl(let t, let i): return .pearlPitch(thread: t, i, Hym.clamp(base.pitch - Double(dy / dragPearl)))
     }
   }
 
