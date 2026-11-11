@@ -106,6 +106,21 @@ struct T2DApp: App {
     case "portus", "portus-empty", "portus-play", "portus-echo", "portus-star", "portus-bloodmoon", "portus-sheet": shotPortus(T2DApp.shotName); return
     case "cymatica", "cym-empty", "cym-play", "cym-pinch", "cym-steprec", "cym-chance", "cym-drift", "cym-luna": shotCymatica(T2DApp.shotName); return
     case "hymenaeus": host.go(HymenaeusView.slotN); return   // нить играет сама (enter → run)
+    case "hymenaeus-drag", "hymenaeus-ring", "hymenaeus-clasp":     // палец удерживается посреди жеста — видна подпись оси
+      host.go(HymenaeusView.slotN)
+      DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+        guard let v = host.world as? HymenaeusView else { return }
+        let g = v.geo, id = NSObject()
+        func f(_ p: CGPoint, _ q: CGPoint) -> Finger { Finger(id: ObjectIdentifier(id), x: q.x, y: q.y, x0: p.x, y0: p.y, t0: 0, moved: true, touchTime: 1) }
+        let a: CGPoint, b: CGPoint
+        switch T2DApp.shotName {
+        case "hymenaeus-ring": a = CGPoint(x: g.ringCenter(0).x + g.ringRadius(0), y: g.ringCenter(0).y); b = CGPoint(x: a.x + 20 * g.S, y: a.y - 30 * g.S)
+        case "hymenaeus-clasp": a = g.claspPoints(dejavu: v.mirror.dejavu)[0]; b = CGPoint(x: a.x + 30 * g.S, y: a.y)
+        default: a = CGPoint(x: g.cloudsRect.minX + 80 * g.S, y: g.cloudsRect.midY); b = CGPoint(x: a.x + 120 * g.S, y: a.y - 40 * g.S)
+        }
+        v.down(f(a, a)); v.move(f(a, b))
+      }
+      return
     case "tenebrae", "ten-empty", "ten-sun", "ten-hole", "ten-hold", "ten-lfo", "ten-ring", "ten-zoom", "ten-scale": shotTenebrae(T2DApp.shotName); return
     default: break
     }

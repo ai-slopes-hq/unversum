@@ -38,8 +38,24 @@ final class HymenaeusView: World {
   private var now = 0.0
   let dr = HymDrawState()
 
-  struct Hold { var ring: Int?; var pos = 0.0; var x0: CGFloat = 0, y0: CGFloat = 0; var moved = false }
+  struct Hold {
+    var zone: HymZone?; var p0 = CGPoint.zero; var base = HymBase(); var downAt = 0.0
+    var moved = false, frozen = false, pinching = false
+    var last: HymGesture?                                  // жест, который идёт сейчас: по нему подпись
+  }
   private(set) var holds: [ObjectIdentifier: Hold] = [:]
+  var activeLabels: [(text: String, at: CGPoint)] {
+    holds.values.compactMap { h in
+      guard let g = h.last else { return nil }
+      let cr = geo.cloudsRect
+      let y: CGFloat
+      switch h.zone {
+      case .cloud?, .echo?: y = cr.minY + 8 * geo.S
+      default: y = geo.neckRect.minY - 6 * geo.S
+      }
+      return (HymTouch.label(g), CGPoint(x: geo.W / 2, y: y))
+    }
+  }
 
   init(core: Core, readMirror: Reader? = nil, readHeard: Reader? = nil) {
     self.core = core; geo = HymGeo(W: 390, H: 844, topY: 59)
@@ -62,6 +78,9 @@ final class HymenaeusView: World {
   func tick(now: Double, dt: Double) {
     self.now = now
     pullMirror()
+    for (k, h) in holds where h.zone == .cloud && !h.moved && !h.frozen && now - h.downAt > Touch.holdMs / 1000 {
+      holds[k]?.frozen = true; holds[k]?.last = .cloudHold; send(.cloudHold, touchTime: 0)
+    }
     for _ in 0..<4 {                                      // heard: [k, (кольцо, жемчужина) × k]; читаем до пустого, но не бесконечно
       let hn = min(max(0, readHeard(&hbuf)), hbuf.count)
       if hn < 3 { break }
@@ -77,24 +96,80 @@ final class HymenaeusView: World {
   }
 
   // ---------- касания ----------
+  private func baseAt(_ z: HymZone?) -> HymBase {
+    var b = HymBase()
+    switch z {
+    case .ring(let r, _)?: let q = mirror.rings[r]; b.bright = q.bright; b.damp = q.damp; b.structure = q.structure
+    case .clasp?: b.dejavu = mirror.dejavu
+    case .pearl(let i)?: b.pitch = mirror.pearls[i].pitch
+    default: break
+    }
+    return b
+  }
+
   func down(_ f: Finger) {
-    guard let h = geo.ringAt(f.x, f.y) else { holds[f.id] = Hold(ring: nil); return }
-    holds[f.id] = Hold(ring: h.ring, pos: h.pos, x0: f.x, y0: f.y)
+    let p = CGPoint(x: f.x, y: f.y)
+    let z = HymTouch.zone(at: p, geo: geo, len: mirror.len, dejavu: mirror.dejavu)
+    var h = Hold(zone: z, p0: p, base: baseAt(z), downAt: now)
+    if case .ring(let r, _)? = z, let (k, o) = holds.first(where: { sameRing($0.value.zone, r) }) {
+      holds[k]?.pinching = true; holds[k]?.moved = true; h.pinching = true; h.moved = true     // второй палец на том же кольце — щипок
+      h.base = o.base
+    }
+    holds[f.id] = h
+  }
+
+  private func sameRing(_ z: HymZone?, _ r: Int) -> Bool { if case .ring(let q, _)? = z { return q == r } else { return false } }
+
+  private func send(_ g: HymGesture, touchTime: Double) {
+    switch g {
+    case .cloudDrag(let x, let y):
+      core.action(Act.cloud.rawValue, 0, [Double(Hym.Cloud.pos), x], touchTime: touchTime)
+      core.action(Act.cloud.rawValue, 0, [Double(Hym.Cloud.size), y], touchTime: touchTime)
+    case .cloudHold: core.action(Act.cloud.rawValue, 0, [Double(Hym.Cloud.freeze), 1], touchTime: touchTime)
+    case .echoDrag(let x): core.action(Act.cloud.rawValue, 0, [Double(Hym.Cloud.echo), x], touchTime: touchTime)
+    case .ringStrike(let r, let pos): core.action(Act.strike.rawValue, r, [pos, 1], touchTime: touchTime)
+    case .ringAxes(let r, let b, let d):
+      core.action(Act.ring.rawValue, r, [Double(Hym.Ring.bright), b], touchTime: touchTime)
+      core.action(Act.ring.rawValue, r, [Double(Hym.Ring.damp), d], touchTime: touchTime)
+    case .ringPinch(let r, let v): core.action(Act.ring.rawValue, r, [Double(Hym.Ring.structure), v], touchTime: touchTime)
+    case .claspDrag(let v): core.action(Act.thread.rawValue, 0, [0, v], touchTime: touchTime)
+    case .pearlTap(let i): core.action(Act.pearl.rawValue, i, [1, mirror.pearls[i].rest ? 0 : 1], touchTime: touchTime)
+    case .pearlPitch(let i, let v): core.action(Act.pearl.rawValue, i, [0, v], touchTime: touchTime)
+    }
   }
 
   func move(_ f: Finger) {
-    guard var t = holds[f.id] else { return }
-    if hypot(f.x - t.x0, f.y - t.y0) > Touch.tapMove { t.moved = true }
-    holds[f.id] = t
+    guard var h = holds[f.id], let z = h.zone else { return }
+    let p = CGPoint(x: f.x, y: f.y)
+    if !HymTouch.ok(p) { return }
+    if hypot(p.x - h.p0.x, p.y - h.p0.y) > Touch.tapMove { h.moved = true }
+    if h.pinching, case .ring(let r, _) = z,
+       let (_, o) = holds.first(where: { $0.key != f.id && $0.value.pinching && sameRing($0.value.zone, r) }) {
+      let d0 = hypot(h.p0.x - o.p0.x, h.p0.y - o.p0.y), d = hypot(p.x - o.p0.x, p.y - o.p0.y)
+      if let g = HymTouch.pinch(ring: r, d0: d0, d: d, geo: geo, base: h.base) { send(g, touchTime: f.touchTime); h.last = g }
+    } else if h.moved, !h.pinching, let g = HymTouch.drag(z, from: h.p0, to: p, geo: geo, base: h.base) {
+      if h.frozen { h.frozen = false; core.action(Act.cloud.rawValue, 0, [Double(Hym.Cloud.freeze), 0], touchTime: f.touchTime) }
+      send(g, touchTime: f.touchTime); h.last = g
+    }
+    holds[f.id] = h
   }
 
   func up(_ f: Finger) {
-    guard let t = holds.removeValue(forKey: f.id), let r = t.ring, !t.moved else { return }
-    ringHitPos[r] = t.pos
-    core.action(Act.strike.rawValue, r, [t.pos, 1], touchTime: f.touchTime)     // ручной удар поверх нити
+    guard let h = holds.removeValue(forKey: f.id) else { return }
+    if h.frozen { core.action(Act.cloud.rawValue, 0, [Double(Hym.Cloud.freeze), 0], touchTime: f.touchTime) }       // glacies только пока держишь
+    if h.moved { return }
+    switch h.zone {
+    case .ring(let r, let pos)?:
+      ringHitPos[r] = pos
+      send(.ringStrike(ring: r, pos: pos), touchTime: f.touchTime)           // ручной удар поверх нити
+    case .pearl(let i)?: send(.pearlTap(i), touchTime: f.touchTime)
+    default: break
+    }
   }
 
-  func cancel(_ f: Finger) { holds.removeValue(forKey: f.id) }
+  func cancel(_ f: Finger) {
+    if let h = holds.removeValue(forKey: f.id), h.frozen { core.action(Act.cloud.rawValue, 0, [Double(Hym.Cloud.freeze), 0], touchTime: 0) }
+  }
 
   func draw(_ d: Draw, now: Double) { frame(d, now, sun: true) }
   func drawShot(_ d: Draw, now: Double) { frame(d, now, sun: false) }

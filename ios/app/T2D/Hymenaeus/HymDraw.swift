@@ -205,7 +205,7 @@ extension HymenaeusView {
   private func drawNecklace(_ d: Draw, _ now: Double) {
     let g = d.g, G = geo, m = mirror, S = G.S
     let cx = HymGeo.neckC.x, cy = HymGeo.neckC.y, rx = HymGeo.neckRx, ry = HymGeo.neckRy
-    let gap0: CGFloat = -1.05, gap1 = gap0 + 0.15 + CGFloat(1 - m.dejavu) * 0.9   // застёжка déjà vu: чем ближе к 1, тем плотнее замкнута
+    let gap0 = HymGeo.gap0, gap1 = HymGeo.gap1(m.dejavu)   // застёжка déjà vu
     func at(_ t: CGFloat) -> CGPoint { G.pt(cx + cos(t) * rx, cy + sin(t) * ry) }
     g.setStrokeColor(col(Hym.ink, 0.35)); g.setLineWidth(0.8); g.beginPath()
     for i in 0...200 { let p = at(gap1 + CGFloat(i) / 200 * (tau - (gap1 - gap0))); if i > 0 { g.addLine(to: p) } else { g.move(to: p) } }
@@ -214,7 +214,7 @@ extension HymenaeusView {
     for t in [gap0, gap1] { let p = at(t); circle(g, p.x, p.y, 2.6) }
     let n = max(1, m.len), played = m.playedIndex
     for i in 0..<n {
-      let t = gap1 + 0.2 + (n > 1 ? CGFloat(i) / CGFloat(n - 1) : 0.5) * (tau - (gap1 - gap0) - 0.4), p = at(t), q = m.pearls[i]
+      let p = G.pearlPoint(i, n: n, dejavu: m.dejavu), q = m.pearls[i]
       if q.rest { g.setStrokeColor(col(Hym.ink, 0.25)); g.setLineWidth(0.8); circle(g, p.x, p.y, 2.2 * S); continue }
       let r = CGFloat(4.5 + q.pitch * 5) * S, cur = m.run && i == played
       g.setFillColor(theme.bg.cgColor); disc(g, p.x, p.y, r)
@@ -239,6 +239,7 @@ extension HymenaeusView {
     drawThreads(d, now)
     drawNecklace(d, now)
     drawRings(d, now)
+    for l in activeLabels { d.mapText(l.text, l.at.x, l.at.y, 12, 0.85, align: .center) }       // подписи — только пока жест идёт
     guard sun else { return }
     d.quarterSun(G.sun.x, G.sun.y, G.sun.r, side: 1, now: now * 1000, col: Hym.gold, disc: theme.bg)
   }

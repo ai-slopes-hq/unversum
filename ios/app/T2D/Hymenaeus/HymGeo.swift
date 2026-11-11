@@ -39,6 +39,17 @@ struct HymGeo {
     return (i, a)
   }
 
+  // застёжка и жемчужины на эллипсе нити (рисует drawNecklace, касания находят по тем же точкам)
+  static let gap0: CGFloat = -1.05
+  static func gap1(_ dejavu: Double) -> CGFloat { gap0 + 0.15 + CGFloat(1 - Hym.clamp(dejavu)) * 0.9 }   // чем ближе déjà vu к 1, тем плотнее замкнута
+  func neckPt(_ t: CGFloat) -> CGPoint { pt(HymGeo.neckC.x + cos(t) * HymGeo.neckRx, HymGeo.neckC.y + sin(t) * HymGeo.neckRy) }
+  func pearlT(_ i: Int, n: Int, dejavu: Double) -> CGFloat {
+    let g1 = HymGeo.gap1(dejavu), tau = CGFloat.pi * 2
+    return g1 + 0.2 + (n > 1 ? CGFloat(i) / CGFloat(n - 1) : 0.5) * (tau - (g1 - HymGeo.gap0) - 0.4)
+  }
+  func pearlPoint(_ i: Int, n: Int, dejavu: Double) -> CGPoint { neckPt(pearlT(i, n: n, dejavu: dejavu)) }
+  func claspPoints(dejavu: Double) -> [CGPoint] { [neckPt(HymGeo.gap0), neckPt(HymGeo.gap1(dejavu))] }
+
   func cornerHit(_ x: CGFloat, _ y: CGFloat) -> Bool {              // солнце-четверть слева сверху ведёт на карту
     y > sun.y && hypot(x - sun.x, y - sun.y) < sun.r + 6
   }
