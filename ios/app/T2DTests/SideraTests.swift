@@ -5,7 +5,7 @@ import T2DCore
 // Sidera: разбор зеркала, раскладка полос, номера действий, попадание в луну
 final class SideraTests: XCTestCase {
   // 219 чисел по порядку world.hpp: голова 3, по голосу 8 + 16 × (d, a, hd, ha)
-  private func vector() -> [Double] {
+  fileprivate func vector() -> [Double] {
     var m = [Double](repeating: 0, count: Sid.mirrorN)
     m[0] = 0.4; m[1] = 0.6; m[2] = 0.3
     for v in 0..<Sid.nv {
@@ -117,4 +117,79 @@ final class SideraTests: XCTestCase {
     XCTAssertEqual(rec.acts.map { $0.0 }.suffix(2), [SidAct.dice.rawValue, SidAct.clear.rawValue])
     XCTAssertFalse(v.cornerHit(5, 61), "cornerHit — через goMap самой луной")
   }
+
+  // ---------- окно линии и рисование ----------
+  func testWindowCount() {
+    let w = SidWindow.segments(head: 4.3, n: 8, count: 3)
+    XCTAssertEqual(w.map { $0.from }, [2, 3, 4]); XCTAssertEqual(w.map { $0.to }, [3, 4, 5])
+    XCTAssertTrue(zip(w, w.dropFirst()).allSatisfy { $0.alpha < $1.alpha }, "alpha растёт к голове")
+    XCTAssertEqual(w.last?.alpha, 1)
+  }
+
+  func testWindowWraps() {
+    let w = SidWindow.segments(head: 7.5, n: 8, count: 2)
+    XCTAssertEqual(w.map { $0.from }, [6, 7]); XCTAssertEqual(w.map { $0.to }, [7, 0])
+    let w2 = SidWindow.segments(head: 0.2, n: 8, count: 3)
+    XCTAssertEqual(w2.map { $0.from }, [6, 7, 0]); XCTAssertEqual(w2.map { $0.to }, [7, 0, 1])
+  }
+
+  func testWindowSmallN() {
+    let w = SidWindow.segments(head: 1.1, n: 3, count: 3)
+    XCTAssertEqual(Set(w.map { $0.from }).count, 3, "три отрезка без повторов")
+    let w2 = SidWindow.segments(head: 1.1, n: 3, count: 5)
+    XCTAssertLessThanOrEqual(w2.count, 3, "отрезков не больше, чем звёзд")
+    for s in w + w2 { XCTAssertTrue((0..<3).contains(s.from) && (0..<3).contains(s.to)) }
+    for bad in [Double.nan, -3.5, .infinity, 1e12] {
+      for s in SidWindow.segments(head: bad, n: 5, count: 3) { XCTAssertTrue((0..<5).contains(s.from) && (0..<5).contains(s.to), "head \(bad)") }
+    }
+    XCTAssertTrue(SidWindow.segments(head: 0, n: 0, count: 3).isEmpty)
+  }
+
+  func testHeadRateRange() {
+    XCTAssertEqual(sidHeadRate(step: 0), 1); XCTAssertEqual(sidHeadRate(step: 1), 2); XCTAssertEqual(sidHeadRate(step: 0.5), 1.5, accuracy: 1e-9)
+    XCTAssertEqual(sidHeadRate(step: .nan), 1); XCTAssertEqual(sidHeadRate(step: 9), 2); XCTAssertEqual(sidHeadRate(step: -9), 1)
+  }
+
+  func testNoteName() {
+    XCTAssertEqual(sidNoteName(0), "A1"); XCTAssertEqual(sidNoteName(12), "A2"); XCTAssertEqual(sidNoteName(3), "C2"); XCTAssertEqual(sidNoteName(7), "E2")
+    XCTAssertEqual(sidNoteName(.nan), "A1")
+  }
+
+  private func canvas(_ w: Int, _ h: Int) -> (Draw, CGContext) {
+    let g = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue)!
+    g.translateBy(x: 0, y: CGFloat(h)); g.scaleBy(x: 1, y: -1)
+    g.setFillColor(UIColor.black.cgColor); g.fill(CGRect(x: 0, y: 0, width: w, height: h))
+    let d = Draw(g: g, W: CGFloat(w), H: CGFloat(h)); d.setTheme(.base); return (d, g)
+  }
+  private func lit(_ g: CGContext, _ r: CGRect) -> Int {          // сколько пикселей прямоугольника светлее фона
+    guard let data = g.data?.assumingMemoryBound(to: UInt8.self) else { return 0 }
+    let bpr = g.bytesPerRow, h = g.height
+    var n = 0
+    for y in Int(r.minY)..<Int(r.maxY) { for x in Int(r.minX)..<Int(r.maxX) { let o = y * bpr + x * 4; if data[o + 1] > 20 { n += 1 } } }
+    return n
+  }
+
+  func testDrawBandsAndMoon() {
+    let v = SideraView(core: Rec2(), readMirror: { b in let m = self.vector(); for i in 0..<m.count { b[i] = m[i] }; return m.count })
+    v.layout(W: 390, H: 844, topY: 59, safeBot: 34); v.tick(now: 1, dt: 0.016)
+    let (d, g) = canvas(390, 844)
+    v.draw(d, now: 1)
+    for k in 0..<Sid.nv { XCTAssertGreaterThan(lit(g, v.geo.bandRect(k)), 150, "полоса \(k) нарисована") }
+    let m = v.geo.moon
+    let corner = CGRect(x: 0, y: m.c.y, width: m.r, height: m.r)
+    XCTAssertGreaterThan(lit(g, corner), 100, "луна в углу")
+    let (d2, g2) = canvas(390, 844)
+    v.drawShot(d2, now: 1)
+    XCTAssertLessThan(lit(g2, CGRect(x: 0, y: m.c.y + 4, width: m.r * 0.8, height: m.r * 0.8)), 20, "в снимке для карты луны нет (остаются фоновые звёзды)")
+    XCTAssertGreaterThan(lit(g2, v.geo.bandRect(1)), 150)
+  }
+
+  func testDrawSurvivesGarbageMirror() {
+    let v = SideraView(core: Rec2(), readMirror: { _ in 0 })            // зеркало не пришло — нули
+    v.layout(W: 320, H: 568, topY: 20, safeBot: 0); v.tick(now: 0, dt: 0.016)
+    let (d, _) = canvas(320, 568)
+    v.draw(d, now: 3); v.drawShot(d, now: 3)
+  }
 }
+
+private final class Rec2: Core { func action(_ k: Int, _ i: Int, _ a: [Double], touchTime: Double) -> Bool { true } }

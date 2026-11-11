@@ -26,6 +26,8 @@ final class SideraView: World {
   private var mbuf = [Double](repeating: 0, count: 256)
   private(set) var now = 0.0
   private var started = false
+  var heads = [0.0, 1.7, 3.1]                           // позиция головы окна линии по голосам, в отрезках
+  var labelOn = [Bool](repeating: false, count: Sid.nv)   // подпись «нота · N» — пока жест идёт (Task 6)
 
   init(core: Core, readMirror: Reader? = nil) {
     self.core = core
@@ -44,12 +46,17 @@ final class SideraView: World {
   func scale(pcs: [Int]?, root: Int) {}                   // лад читает ядро
   func restored() { started = true }
   func idle() {}
-  func tick(now: Double, dt: Double) { self.now = now; pullMirror() }
+  func tick(now: Double, dt: Double) {
+    self.now = now; pullMirror()
+    let step = min(max(dt, 0), 0.1) * sidHeadRate(step: mirror.step)
+    for v in 0..<Sid.nv { let n = Double(max(mirror.voices[v].n, 1)); heads[v] = fmod(heads[v] + step, n) }
+  }
   func pullMirror() {
     let len = min(max(0, readMirror(&mbuf)), mbuf.count)
     mirror.load(mbuf, n: len)
   }
-  func draw(_ d: Draw, now: Double) {}
+  func draw(_ d: Draw, now: Double) { frame(d, now, moon: true) }
+  func drawShot(_ d: Draw, now: Double) { frame(d, now, moon: false) }
   func down(_ f: Finger) {}
   func move(_ f: Finger) {}
   func up(_ f: Finger) {}
