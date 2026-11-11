@@ -863,6 +863,38 @@ static void hostGridSelect() {
   NEAR(H.clock().grid.t0, t0, 1e-12);
 }
 
+// SNAP / RESTORE идут в аудиопотоке (engine.cpp): каждая операция — доля бюджета блока (128 сэмплов при 48 кГц = 2.67 мс).
+// Замер 11.11 на Mac: до 0.1 мс (снимки ≤ 1 КБ после 400 случайных действий). Порог 25% бюджета ловит регресс, а не железо.
+static void snapshotBudget() {
+  t2d_init(48000, 7);
+  const double budgetUs = 128.0 / 48000.0 * 1e6 * 0.25;
+  unsigned r = 12345;
+  auto rnd = [&r] { r = r * 1664525u + 1013904223u; return (r >> 8) / double(1u << 24); };
+  for (int slot : {1, 2, 4, 5, 7, 8, 9, 10, 11, 12, 13, 15}) {
+    double* a = t2d_args();
+    for (int k = 0; k < 400; k++) {
+      const int n = 1 + static_cast<int>(rnd() * 6);
+      for (int j = 0; j < n; j++) a[j] = rnd();
+      t2d_action(slot, static_cast<int>(rnd() * 12), static_cast<int>(rnd() * 8), a, n);
+    }
+    double worstSnap = 0, worstRestore = 0;
+    int len = 0;
+    for (int rep = 0; rep < 20; rep++) {
+      auto t0 = std::chrono::steady_clock::now();
+      len = t2d_snapshot(slot);
+      auto t1 = std::chrono::steady_clock::now();
+      t2d_restore(slot, len);
+      auto t2 = std::chrono::steady_clock::now();
+      worstSnap = std::max(worstSnap, std::chrono::duration<double, std::micro>(t1 - t0).count());
+      worstRestore = std::max(worstRestore, std::chrono::duration<double, std::micro>(t2 - t1).count());
+    }
+    CHECK(len > 0);
+    if (worstSnap >= budgetUs || worstRestore >= budgetUs) std::printf("snapshotBudget slot %d: snap %.0f us, restore %.0f us, budget %.0f us\n", slot, worstSnap, worstRestore, budgetUs);
+    CHECK(worstSnap < budgetUs);
+    CHECK(worstRestore < budgetUs);
+  }
+}
+
 // vol(): NaN / ±inf игнорируются, отрицательное — в 0; к нулю громкость доходит ровно (без денормалов)
 static void hostVolGuard() {
   H.prepare(48000, 7);
@@ -5001,7 +5033,7 @@ static void appHostMaster() {
 
 int main(int argc, char** argv) {
   if (argc > 1 && std::string(argv[1]) == "--scale") { scaleTable(); return 0; }
-  rng(); onepole(); dc(); clip(); pan(); delay(); echo(); biquad(); json(); reverb(); scaleBasics(); host(); masterClockRebase(); masterBpmClamp(); hostGridSelect(); hostVolSmooth(); hostVolGuard(); firm(); firmSend(); firmIds(); knee(); resonator(); stepclock(); cymWorld(); cymModel(); pingpongAd(); pingpongPortus(); saw(); portusModel(); portusWorld(); chorusMono(); tapeGlide(); glideBlock(); naturaWave(); naturaWorld(); naturaModel(); naturaDice();
+  rng(); onepole(); dc(); clip(); pan(); delay(); echo(); biquad(); json(); reverb(); scaleBasics(); host(); masterClockRebase(); masterBpmClamp(); hostGridSelect(); hostVolSmooth(); hostVolGuard(); snapshotBudget(); firm(); firmSend(); firmIds(); knee(); resonator(); stepclock(); cymWorld(); cymModel(); pingpongAd(); pingpongPortus(); saw(); portusModel(); portusWorld(); chorusMono(); tapeGlide(); glideBlock(); naturaWave(); naturaWorld(); naturaModel(); naturaDice();
   tenebraeTone(); tenebraeWaves(); tenebraeWavesNyquist(); tenebraeMorph(); tenebraeShifter();
   tenebraeVoiceSilent(); tenebraeVoiceExtremes(); tenebraeVoiceNoise(); tenebraeVoiceRelive();
   tenebraeWorldBus(); tenebraeTzfmFollows(); tenebraeLinksClear(); tenebraeMirror(); tenebraeModelPick(); tenebraeActionNan(); tenebraeCycleSafe(); tenebraeStrikeClear(); tenebraeScaleRetune();
