@@ -3,7 +3,8 @@
 //
 // Нить — до 16 жемчужин (высота 0…1, пауза), играют первые len по кругу. Застёжка déjà vu 0…1: на каждом шаге с вероятностью
 // 1 − dejavu жемчужина под курсором перебрасывается (новая высота, пауза с шансом REST_P), иначе остаётся — 1 даёт точный повтор.
-// Высота → полутон (3 октавы от A2) → лад хоста (Scale) → Гц; кольцо выбирает полоса высоты: низкие — большое кольцо 0, высокие — малое 2.
+// Две нити, нить t бьёт кольцо t (0 — modal, 1 — strings); у каждой свои длина, курсор, déjà vu и диапазон высоты lo…hi (ноты MIDI,
+// 24…96, ширина ≥ 5). Высота 0…1 → lo + p·(hi − lo) → лад хоста (Scale) → Гц. Случайность — общая, от одного rng.
 #pragma once
 #include <string>
 
@@ -12,14 +13,20 @@
 
 namespace hymenaeus {
 
-constexpr int NR = 3, PEARL_MAX = 16, PEARL_DEF = 11, NRK = 6;
-enum RingKey { STRUCT, BRIGHT, DAMP, LVL, MODE, POLY };   // MODE 0 modal | 1 strings; POLY 0…1 → 1 / 2 / 4 голоса
+constexpr int NR = 2, PEARL_MAX = 16, PEARL_DEF = 11, NRK = 5, NLOC = 4;
+constexpr int NOTE_MIN = 24, NOTE_MAX = 96, RANGE_MIN_W = 5;
+enum RingKey { STRUCT, BRIGHT, DAMP, LVL, POLY };       // POLY 0…1 → 1 / 2 / 4 голоса
 enum CloudKey { POS, SIZE, DENS, PITCH, FREEZE, ECHO, CLEVEL, SEND, NCK };   // SEND — посыл в общий ревербер
-inline int modeOf(double v) { return v >= 0.5 ? 1 : 0; }
 inline int polyOf(double v) { return v < 1.0 / 3 ? 1 : v < 2.0 / 3 ? 2 : 4; }
 constexpr double REST_P = 0.15;                         // шанс паузы у перебрасываемой жемчужины
 
 struct Pearl { double pitch = 0.5; bool rest = false; };
+struct Thread {
+  Pearl p[PEARL_MAX];
+  int len = PEARL_DEF, cur = 0;
+  double dejavu = 0.7;
+  int lo = 45, hi = 69;
+};
 struct Step { bool hit; int ring; double hz; double vel; int pearl; };
 
 class Model {
@@ -27,38 +34,34 @@ class Model {
   explicit Model(const Scale& scale) : scale_(scale) { reset(); }
   void reset(uint32_t seed = 1);                        // всё по умолчанию, нить заново бросается из зерна
 
-  void setDejaVu(double v);
-  void setLen(int n) { setLen(static_cast<double>(n)); }
-  void setLen(double n);                                // округляется, 1…16; NaN и ±inf игнорируются
-  void togglePearl(int i);
-  void setRest(int i, bool r);
-  void setPearlPitch(int i, double p);
+  // t — номер нити 0…NR−1; вне диапазона — ничего не делает
+  void setDejaVu(int t, double v);
+  void setLen(int t, int n) { setLen(t, static_cast<double>(n)); }
+  void setLen(int t, double n);                         // округляется, 1…16; NaN и ±inf игнорируются
+  void setRange(int t, double lo, double hi);           // ноты MIDI: округление, зажим 24…96, lo > hi — меняются, ширина ≥ 5; NaN — игнор
+  void togglePearl(int t, int i);
+  void setRest(int t, int i, bool r);
+  void setPearlPitch(int t, int i, double p);
   void setRing(int ring, int key, double v);
   void setCloud(int key, double v);
-  void roll();                                          // кубик: вся нить бросается заново
-  void clear();                                         // вся нить — паузы
+  void roll(int t = -1);                                // кубик: нить t (−1 — обе) бросается заново
+  void clear();                                         // все нити — паузы
 
-  Step next();                                          // шаг нити: курсор двигается, жемчужина может перебросится
-  int ringFor(double pitch) const;                      // полоса высоты → кольцо 0…2
-  double hzOf(double pitch) const;                      // высота 0…1 → Гц: полутон (3 октавы от A2), лад хоста
-  bool sounding() const;                                // есть ли среди первых len жемчужин звучащая
+  Step next(int t);                                     // шаг нити t: курсор двигается, жемчужина может перебросится; ring = t
+  double hzOf(int t, double pitch) const;               // высота 0…1 → Гц: lo…hi нити t, лад хоста
+  bool sounding() const;                                // есть ли среди первых len жемчужин какой-нибудь нити звучащая
 
   std::string snapshot() const;
   void restore(const std::string& js);                  // мусор и выход за диапазон зажимаются, не падают
 
-  double dejavu() const { return dejavu_; }
-  int len() const { return len_; }
-  int cursor() const { return cur_; }
-  Pearl pearl(int i) const { return (i >= 0 && i < PEARL_MAX) ? p_[i] : Pearl(); }
+  const Thread& thread(int t) const { return thr_[(t >= 0 && t < NR) ? t : 0]; }
   double ring(int r, int key) const { return (r >= 0 && r < NR && key >= 0 && key < NRK) ? ring_[r][key] : 0; }
   double cloud(int key) const { return (key >= 0 && key < NCK) ? cloud_[key] : 0; }
 
  private:
-  void toss(int i);                                     // бросить жемчужину i
+  void toss(Thread& th, int i);                         // бросить жемчужину i нити th
   const Scale& scale_;
-  Pearl p_[PEARL_MAX];
-  int len_ = PEARL_DEF, cur_ = 0;
-  double dejavu_ = 0.7;
+  Thread thr_[NR];
   double ring_[NR][NRK] = {};
   double cloud_[NCK] = {};
   sdk::Rng rng_{1};

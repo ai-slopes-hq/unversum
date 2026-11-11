@@ -32,7 +32,7 @@ void Sound::setRing(int i, double structure, double bright, double damp, double 
   const auto c01 = [](double x, double d) { return std::isnan(x) ? d : std::min(std::max(x, 0.0), 1.0); };
   structure_[i] = c01(structure, structure_[i]); bright_[i] = c01(bright, bright_[i]); damp_[i] = c01(damp, damp_[i]);
   lvl_[i] = c01(lvl, lvl_[i]);
-  if (!std::isnan(mode)) mode_[i] = modeOf(mode);
+  if (!std::isnan(mode)) mode_[i] = mode >= 0.5 ? 1 : 0;
   if (!std::isnan(poly)) poly_[i] = polyOf(poly);
 }
 
