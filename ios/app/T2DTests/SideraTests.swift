@@ -323,6 +323,32 @@ final class SideraTests: XCTestCase {
     for r in v.legend { XCTAssertNil((r.gesture + r.does).range(of: "[А-Яа-я]", options: .regularExpression)) }
   }
 
+  // CLEAR и отмена в живом ядре: снимок до очистки возвращает голоса (как делает хост: snap → CLEAR → restore)
+  func testClearThenUndoRestoresState() throws {
+    t2d_app_init(48000, 1, 1e9, 1 << 14)
+    let core = AppCore(slot: SideraView.slotN), host = AppHostCore()
+    var l = [Float](repeating: 0, count: 256), r = l, buf = [Double](repeating: 0, count: 256)
+    func render() { for _ in 0..<4 { t2d_app_render(&l, &r, 256, 0) } }
+    func mirror() -> SidMirror { render(); let n = Int(t2d_app_mirror(Int32(SideraView.slotN), &buf, 256)); return SidMirror(Array(buf[0..<n])) ?? .zero }
+    core.action(SidAct.run.rawValue, 0, [1], touchTime: 0)
+    core.action(SidAct.voice.rawValue, 1, [Double(Sid.Key.lvl), 0.8], touchTime: 0)
+    core.action(SidAct.voice.rawValue, 1, [Double(Sid.Key.note), 17], touchTime: 0)
+    let before = mirror()
+    XCTAssertEqual(before.voices[1].lvl, 0.8, accuracy: 1e-9)
+    XCTAssertTrue(host.snap(slot: SideraView.slotN, id: 1))
+    var snap: (id: Int, slot: Int, w: String)?
+    for _ in 0..<20 where snap == nil { render(); snap = host.takeSnap() }
+    let s = try XCTUnwrap(snap)
+    core.action(SidAct.clear.rawValue, 0, [], touchTime: 0)
+    XCTAssertTrue(mirror().voices.allSatisfy { $0.lvl == 0 }, "после CLEAR тишина")
+    XCTAssertTrue(host.restore(slot: SideraView.slotN, s.w))
+    let after = mirror()
+    XCTAssertEqual(after.voices.map { $0.lvl }, before.voices.map { $0.lvl })
+    XCTAssertEqual(after.voices.map { $0.note }, before.voices.map { $0.note })
+    XCTAssertEqual(after.voices.map { $0.n }, before.voices.map { $0.n })
+    XCTAssertEqual(after.voices[1].stars.map { $0.hd }, before.voices[1].stars.map { $0.hd }, "центры рамок не блуждают")
+  }
+
 }
 
 private final class Rec2: Core { func action(_ k: Int, _ i: Int, _ a: [Double], touchTime: Double) -> Bool { true } }

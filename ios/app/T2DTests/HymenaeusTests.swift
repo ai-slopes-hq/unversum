@@ -363,29 +363,5 @@ final class HymenaeusTests: XCTestCase {
     XCTAssertEqual(rec.acts.map { $0.kind }, [HymAct.clear.rawValue])
   }
 
-  // CLEAR и отмена: снимок до очистки возвращает ноты (живое ядро, как делает хост: snap → CLEAR → restore)
-  func testClearThenUndoRestoresState() throws {
-    t2d_app_init(48000, 1, 1e9, 1 << 14)                           // watch — маска слотов: следим за слотом 14
-    let core = AppCore(slot: HymenaeusView.slotN), host = AppHostCore()
-    var l = [Float](repeating: 0, count: 256), r = l, buf = [Double](repeating: 0, count: 128)
-    func render() { for _ in 0..<4 { t2d_app_render(&l, &r, 256, 0) } }
-    func mirror() -> HymMirror { render(); let n = Int(t2d_app_mirror(Int32(HymenaeusView.slotN), &buf, 128)); return HymMirror(Array(buf[0..<n])) }
-    core.action(HymAct.dice.rawValue, 0, [], touchTime: 0)
-    core.action(HymAct.pearl.rawValue, 2, [0, 0, 0.9], touchTime: 0)
-    let before = mirror()
-    XCTAssertTrue(host.snap(slot: HymenaeusView.slotN, id: 1))
-    var snap: (id: Int, slot: Int, w: String)?
-    for _ in 0..<20 where snap == nil { render(); snap = host.takeSnap() }
-    let s = try XCTUnwrap(snap)
-    core.action(HymAct.clear.rawValue, 0, [], touchTime: 0)
-    let cleared = mirror()
-    XCTAssertTrue((0..<Hym.nr).allSatisfy { t in cleared.pearls[t].allSatisfy { $0.rest } })          // после CLEAR тишина
-    XCTAssertFalse(before.pearls[0].prefix(before.len[0]).allSatisfy { $0.rest })
-    XCTAssertTrue(host.restore(slot: HymenaeusView.slotN, s.w))
-    let after = mirror()
-    XCTAssertEqual(after.pearls[0].map { $0.pitch }, before.pearls[0].map { $0.pitch })
-    XCTAssertEqual(after.pearls[1].map { $0.pitch }, before.pearls[1].map { $0.pitch })
-    XCTAssertEqual(after.pearls[0].map { $0.rest }, before.pearls[0].map { $0.rest })
-    XCTAssertEqual(after.len, before.len)
-  }
+  // живое ядро слота 14 теперь у Sidera — проверка CLEAR и отмены переехала в SideraTests.testClearThenUndoRestoresState
 }

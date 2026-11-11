@@ -2,7 +2,7 @@
 
 > **Выключен из релиза (11.11, автор):** запись убрана из `Worlds.all` (`ios/app/T2D/Worlds.swift`), клетка (1, 2) — рубашка. Код, ядро и тесты мира на месте; вернуть — раскомментировать запись и убрать (1, 2) из `backs`.
 
-> **Заменяется (11.11, автор):** картинка двух колец неинтересна, мир XIV (слот 14) будет заменён на Gendyn — GENDYN Ксенакиса, ночное небо-созвездие (`docs/superpowers/specs/2026-11-11-gendyn-design.md`, макет `mockups/sidera-errantia.html`). Код Hymenaeus остаётся в репозитории, пока новый мир не принят на iPhone, потом удаляется вместе с `rings/LICENSE-MI.txt`.
+> **Заменён (11.11, автор) на Sidera** (`docs/worlds/sidera.md`): слот 14 теперь у неё, Hymenaeus отключён от моста и реестра. Картинка двух колец неинтересна; мир XIV (слот 14) был заменён на Gendyn — GENDYN Ксенакиса, ночное небо-созвездие (`docs/superpowers/specs/2026-11-11-gendyn-design.md`, макет `mockups/sidera-errantia.html`). Код Hymenaeus остаётся в репозитории, пока новый мир не принят на iPhone, потом удаляется вместе с `rings/LICENSE-MI.txt`.
 
 **Hymenaeus (мир XIV, только нативный iOS, слот 14; в вебе его нет).** Светлый мир: чернила на слоновой кости, золото на кольцах. Цепочка: две жемчужные нити (Marbles-lite) играют мелодии → два золотых кольца звенят (порт Mutable Instruments Rings) → звон уходит в облака (Clouds-lite: гранулятор, эхо, freeze) и в общий ревербер ядра. Дизайн — `docs/superpowers/specs/2026-11-11-hymenaeus-design.md` (первая версия, три кольца) и `docs/superpowers/specs/2026-11-11-hymenaeus-two-rings-design.md` (две нити, локации, mix; действует он, кроме локаций — их убрали 11.11), макет — `mockups/hymenaeus.html`.
 

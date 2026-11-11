@@ -85,7 +85,7 @@ extension SideraView {
       }
     }
     if labelOn[v] {                                                                               // подпись — только пока жест идёт
-      d.mapText("\(sidNoteName(voice.note)) · \(voice.n)", r.minX + 8, r.minY + 14, 12, 0.8, align: .left)
+      d.mapText("\(sidNoteName(voice.note)) · \(voice.n)", r.maxX - 8, r.minY + 14, 12, 0.8, align: .right)
     }
   }
 
@@ -112,10 +112,10 @@ extension SideraView {
   func frame(_ d: Draw, _ now: Double, moon: Bool) {
     let G = geo
     backStars(d)
+    if moon { drawMoon(d) }                                                                        // под полем: тёмный диск не стирает рамки и подписи
     let f = G.field
     d.hairBox(f.minX - 6, f.minY - 6, f.width + 12, f.height + 12, 0.28)                          // двойная рамка
     d.hairBox(f.minX - 3, f.minY - 3, f.width + 6, f.height + 6, 0.12)
     for v in 0..<Sid.nv { drawVoice(d, v) }
-    if moon { drawMoon(d) }
   }
 }

@@ -152,6 +152,28 @@ struct T2DApp: App {
         v.down(f(a, a)); v.move(f(a, b))
       }
       return
+    case "sidera", "sidera-legend": host.go(SideraView.slotN)
+      if T2DApp.shotName == "sidera-legend" { DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { host.shotState(scl: Scl.off, legendOpen: true) } }
+      return
+    case "sidera-sheet":
+      host.go(SideraView.slotN)
+      DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { if let v = host.world as? SideraView { host.shotSheet(v.voiceSpec(1), lfoKey: "wd"); host.shotLfo(rate: 1, depth: 0.5) } }
+      return
+    case "sidera-drag", "sidera-moon":          // палец удерживается посреди жеста: подпись голоса / луна
+      host.go(SideraView.slotN)
+      DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+        guard let v = host.world as? SideraView else { return }
+        let g = v.geo, id = NSObject()
+        func f(_ p: CGPoint, _ q: CGPoint) -> Finger { Finger(id: ObjectIdentifier(id), x: q.x, y: q.y, x0: p.x, y0: p.y, t0: 0, moved: true, touchTime: 1) }
+        if T2DApp.shotName == "sidera-moon" {
+          let a = CGPoint(x: g.moon.c.x + 12, y: g.moon.c.y + 12), b = CGPoint(x: g.moon.c.x + 30 * g.S, y: g.moon.c.y + 30 * g.S)
+          v.down(f(a, a)); v.move(f(a, b))
+        } else {
+          let a = g.starPoint(0, v.mirror.voices[0], 2), b = CGPoint(x: a.x + 20 * g.S, y: a.y - 12 * g.S)
+          v.down(f(a, a)); v.move(f(a, b))
+        }
+      }
+      return
     case "tenebrae", "ten-empty", "ten-sun", "ten-hole", "ten-hold", "ten-lfo", "ten-ring", "ten-zoom", "ten-scale": shotTenebrae(T2DApp.shotName); return
     default: break
     }
