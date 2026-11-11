@@ -163,6 +163,7 @@ void Host::masterRun(float* L, float* R, int n) {
     r = lpf_[1].step(hp_[1].step(r));
     comp_.run(l, r);
     volNow_ += (volTarget_ - volNow_) * volCoef_;       // громкость шагает к цели каждый сэмпл (без треска)
+    if (volTarget_ == 0 && volNow_ < 1e-9) volNow_ = 0; // хвост к нулю не уходит в денормалы
     const double amp = 0.8 * volNow_ * 0.5;             // masterG веба и limitIn
     l *= amp; r *= amp;
     knee_.run(l, r);

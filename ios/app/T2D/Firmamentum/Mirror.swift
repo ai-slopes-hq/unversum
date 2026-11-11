@@ -23,7 +23,7 @@ struct FirmMirror {
     m.time = b[0]; m.comets = Int(b[1])
     if b[2] != 0 { m.comet = ((b[3], b[4]), (b[5], b[6]), b[7], b[8]) }
     m.fx = Array(b[9..<(9 + nfx)])
-    let n = min(Int(b[16]), (b.count - head) / starN)
+    let n = max(0, min(b[16].isFinite ? Int(b[16]) : 0, (b.count - head) / starN))
     for k in 0..<n {
       let o = head + k * starN
       m.stars.append(Star(slot: Int(b[o]), id: Int(b[o + 1]), h: b[o + 2], u: b[o + 3], cyc: b[o + 4], win: b[o + 5], mask: b[o + 6],

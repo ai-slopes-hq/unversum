@@ -20,6 +20,8 @@
 //   - Часы: не задали time — хост ведёт время сам (+n/sr за блок).
 // Цена блока — миры + 4 ревербератора (они работают всегда, даже без посыла) + мастер, если зовут; аллокаций нет.
 #pragma once
+#include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <cstring>
 #include <vector>
@@ -65,7 +67,7 @@ class Host {
   void masterRun(float* L, float* R, int n);            // мастер на месте (цепь — в шапке)
   void masterLpf(double hz);                            // срез LPF, 10 Гц … 0.45·sr (на Найквисте биквад вырождается)
   void masterComp(double thr, double ratio);            // компрессор: порог дБ, отношение ≥ 1 (колено 10 дБ, атака 0.01, релиз 0.4 с)
-  void vol(double g) { volTarget_ = g; }                // громкость мастера: усиление (1 = 0 дБ, по умолчанию), к цели за ~30 мс
+  void vol(double g) { if (std::isfinite(g)) volTarget_ = std::max(0.0, g); }                // громкость мастера: усиление (1 = 0 дБ, по умолчанию), к цели за ~30 мс
   double volNow() const { return volNow_; }             // текущее сглаженное усиление (для тестов)
   void masterCeil(double db);                           // усиление после knee, дБ (−12…0, по умолчанию 0)
   double masterMakeup() const { return comp_.makeup; }  // авто-подъём компрессора (1/fullRangeGain)^0.6: Chromium даёт его и ниже порога

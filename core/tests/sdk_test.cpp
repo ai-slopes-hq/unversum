@@ -863,6 +863,18 @@ static void hostGridSelect() {
   NEAR(H.clock().grid.t0, t0, 1e-12);
 }
 
+// vol(): NaN / ±inf игнорируются, отрицательное — в 0; к нулю громкость доходит ровно (без денормалов)
+static void hostVolGuard() {
+  H.prepare(48000, 7);
+  H.vol(std::nan("")); H.vol(INFINITY); H.vol(-INFINITY);
+  float l = 0, r = 0;
+  H.masterRun(&l, &r, 1);
+  CHECK(H.volNow() == 1.0 || std::fabs(H.volNow() - 1.0) < 1e-3);
+  H.vol(-3.0);
+  for (int i = 0; i < 48000; i++) { l = r = 0; H.masterRun(&l, &r, 1); }
+  CHECK(H.volNow() == 0.0);
+}
+
 static void hostVolSmooth() {
   const double sr = 48000;
   H.prepare(sr, 7);
@@ -4989,7 +5001,7 @@ static void appHostMaster() {
 
 int main(int argc, char** argv) {
   if (argc > 1 && std::string(argv[1]) == "--scale") { scaleTable(); return 0; }
-  rng(); onepole(); dc(); clip(); pan(); delay(); echo(); biquad(); json(); reverb(); scaleBasics(); host(); masterClockRebase(); masterBpmClamp(); hostGridSelect(); hostVolSmooth(); firm(); firmSend(); firmIds(); knee(); resonator(); stepclock(); cymWorld(); cymModel(); pingpongAd(); pingpongPortus(); saw(); portusModel(); portusWorld(); chorusMono(); tapeGlide(); glideBlock(); naturaWave(); naturaWorld(); naturaModel(); naturaDice();
+  rng(); onepole(); dc(); clip(); pan(); delay(); echo(); biquad(); json(); reverb(); scaleBasics(); host(); masterClockRebase(); masterBpmClamp(); hostGridSelect(); hostVolSmooth(); hostVolGuard(); firm(); firmSend(); firmIds(); knee(); resonator(); stepclock(); cymWorld(); cymModel(); pingpongAd(); pingpongPortus(); saw(); portusModel(); portusWorld(); chorusMono(); tapeGlide(); glideBlock(); naturaWave(); naturaWorld(); naturaModel(); naturaDice();
   tenebraeTone(); tenebraeWaves(); tenebraeWavesNyquist(); tenebraeMorph(); tenebraeShifter();
   tenebraeVoiceSilent(); tenebraeVoiceExtremes(); tenebraeVoiceNoise(); tenebraeVoiceRelive();
   tenebraeWorldBus(); tenebraeTzfmFollows(); tenebraeLinksClear(); tenebraeMirror(); tenebraeModelPick(); tenebraeActionNan(); tenebraeCycleSafe(); tenebraeStrikeClear(); tenebraeScaleRetune();

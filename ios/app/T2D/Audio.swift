@@ -116,7 +116,7 @@ final class Audio {
     nc.addObserver(forName: AVAudioSession.interruptionNotification, object: nil, queue: .main) { [weak self] n in
       guard let self, let raw = n.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt, let type = AVAudioSession.InterruptionType(rawValue: raw) else { return }
       self.log.add("audio", "interruption \(type == .began ? "began" : "ended")")
-      if type == .ended { try? self.session.setActive(true); self.handle(.interruptionEnded, "interruption ended") }
+      if type == .ended { do { try self.session.setActive(true) } catch { self.log.add("audio", "setActive error \(error)") }; self.handle(.interruptionEnded, "interruption ended") }
     }
     nc.addObserver(forName: AVAudioSession.routeChangeNotification, object: nil, queue: .main) { [weak self] n in
       guard let self else { return }
@@ -127,8 +127,7 @@ final class Audio {
     nc.addObserver(forName: AVAudioSession.mediaServicesWereResetNotification, object: nil, queue: .main) { [weak self] _ in
       guard let self else { return }
       self.log.add("audio", "media services reset")
-      try? self.session.setCategory(Audio.category, options: Audio.options)
-      try? self.session.setActive(true)
+      do { try self.session.setCategory(Audio.category, options: Audio.options); try self.session.setActive(true) } catch { self.log.add("audio", "reset error \(error)") }
       self.handle(.mediaServicesReset, "media services reset")
     }
     // смена железа вывода (наушники, частота, каналы): движок сам останавливается, и route change об этом может не сказать.
