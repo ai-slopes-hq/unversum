@@ -1,4 +1,4 @@
-# Gendyn (рабочее имя «Sidera errantia»): замена Hymenaeus — спека (черновик)
+# Sidera (синтез GENDYN): замена Hymenaeus — спека (черновик)
 
 Дата 2026-11-11. Ветка `native`. Мир только на iOS, слот 14 (место Hymenaeus). Эскиз вида — `mockups/sidera-errantia.html` (статичный, снимок одного момента: окно линии, луна, рамки). Статус: черновик, решения автора отделены от предложений.
 
@@ -42,7 +42,7 @@
 
 ## Замена Hymenaeus (точки касания)
 
-`core/bridge/api.cpp` (слот 14, `hym`), `core/build.sh`, `core/tests/hymenaeus_test.cpp`, `core/tests/sdk_test.cpp`, `core/sdk/melody.hpp` (остаётся — общий с Cymatica), `ios/app/T2D/Hymenaeus/`, `App.swift`, `World.swift`, `Worlds.swift` (запись снята с релиза 11.11), `Host/TopBar.swift`, `shot.sh`, `project.yml`, `T2DTests/MapTests.swift`, `T2DTests/HymenaeusTests.swift`, документы: `docs/worlds/hymenaeus.md`, `CLAUDE.md` (строка XIV), `docs/sdk-inventory.md`. Предложение: код Hymenaeus не удалять, пока новый мир не принят на iPhone; потом удалить вместе с `rings/LICENSE-MI.txt`.
+`core/bridge/api.cpp` (слот 14, `hym`), `core/build.sh`, `core/tests/hymenaeus_test.cpp`, `core/tests/sdk_test.cpp`, `core/sdk/melody.hpp` (остаётся — общий с Cymatica), `ios/app/T2D/Hymenaeus/`, `App.swift`, `World.swift`, `Worlds.swift` (запись снята с релиза 11.11), `Host/TopBar.swift`, `shot.sh`, `project.yml`, `T2DTests/MapTests.swift`, `T2DTests/HymenaeusTests.swift`, документы: `docs/worlds/hymenaeus.md`, `CLAUDE.md` (строка XIV), `docs/sdk-inventory.md`. Код Hymenaeus остаётся в репозитории, но не включается (решение автора 11.11); `rings/LICENSE-MI.txt` остаётся с ним.
 
 ## Тесты
 
@@ -54,12 +54,12 @@
 
 Вторичные блуждания; свободный дрейф высоты; оверсэмплинг; остальные распределения; веб-версия; перенос LFO-привязок Hymenaeus.
 
-## Открытые вопросы
+## Закрытые вопросы (автор, 11.11)
 
-1. **Скорость окна:** (a) спокойная, ~1–2 отрезка в секунду, привязана к фазе луны — украшение, а не физика; (b) фаза звука, снятая на частоте кадров, — честно, но стробоскопический алиасинг даст нервное движение. Предлагаю (a).
-2. **Имя мира** (латиницей, как у остальных).
-3. **Корзина:** все голоса в тишину (предложено) или сброс к умолчанию со звуком.
-4. **Hymenaeus:** удалить код после приёмки (предложено) или оставить неподключённым.
+1. **Скорость окна:** спокойная, ~1–2 отрезка в секунду, привязана к фазе луны (украшение, не физика).
+2. **Имя мира:** **Sidera**.
+3. **Корзина:** все голоса в тишину.
+4. **Hymenaeus:** код остаётся в репозитории, но мир не включается (не удалять).
 
 ## Риски
 
