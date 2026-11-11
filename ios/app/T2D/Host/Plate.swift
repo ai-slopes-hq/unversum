@@ -20,27 +20,33 @@ struct TransportState {
   var canUndo = false, diceOn = true, recycleOn = true, diceSpin = false
 }
 
-enum PlateHit: Equatable { case tab(PlateTab), content(CGFloat, CGFloat), close, none }
+enum PlateHit: Equatable { case tab(PlateTab), content(CGFloat, CGFloat), sizeBtn, foldBtn, pass, close, none }
 
 struct Plate {
+  enum Size { case small, full, strip }                  // малый — по содержимому; полный — от шапки до низа; полоска — только вкладки
   var tab: PlateTab
   var scroll: CGFloat = 0
+  var size = Size.small
 
   // fx — только в мире, и только если у мира есть веер
   static func tabs(hasFx: Bool, onMap: Bool) -> [PlateTab] {
     PlateTab.allCases.filter { $0 != .fx || (hasFx && !onMap) }
   }
 
-  // что под пальцем: выше полосы вкладок — закрыть, полоса — вкладка, ниже — содержимое
+  // что под пальцем: выше полосы вкладок — закрыть (у полоски — мимо, поле живое), полоса — кружки и вкладки, ниже — содержимое
   static func hit(_ g: PlateGeo, x: CGFloat, y: CGFloat) -> PlateHit {
-    if y < g.stripTop { return .close }
-    if y < g.top { return g.tabs.first { x >= $0.rect.minX && x < $0.rect.maxX }.map { .tab($0.tab) } ?? .none }
+    if y < g.stripTop { return g.size == .strip ? .pass : .close }
+    if y < g.top || g.size == .strip {
+      if abs(x - g.foldBtn.x) <= PlateGeo.btnHit { return .foldBtn }
+      if g.expandable, abs(x - g.sizeBtn.x) <= PlateGeo.btnHit { return .sizeBtn }
+      return g.tabs.first { x >= $0.rect.minX && x < $0.rect.maxX }.map { .tab($0.tab) } ?? .none
+    }
     return .content(x, y)
   }
 
   // лад под пальцем в содержимом scale; .outside — не на строке и не на тонике
   // вкладка mix: окно из visibleRows строк; scroll сдвигает список вверх
-  static func maxScroll(rows n: Int) -> CGFloat { CGFloat(max(0, n - Mixer.visibleRows)) * Mixer.rowH }
+  static func maxScroll(rows n: Int, visible: Int = Mixer.visibleRows) -> CGFloat { CGFloat(max(0, n - visible)) * Mixer.rowH }
   // вкладка transport: старт/стоп часов, темп, бросок, отмена, очистка
   enum TransportRow: CaseIterable { case play, bpm, dice, undo, recycle
     var label: String {
@@ -72,7 +78,7 @@ struct Plate {
   enum MixHit: Equatable { case mute(Int), fader(Mixer.Key), none }
   static func mixHit(_ g: PlateGeo, scroll: CGFloat, keys: [Mixer.Key], x: CGFloat, y: CGFloat) -> MixHit {
     let y0 = g.top + 8
-    guard y >= y0, y < y0 + CGFloat(Mixer.visibleRows) * Mixer.rowH else { return .none }
+    guard y >= y0, y < y0 + CGFloat(g.visRows) * Mixer.rowH else { return .none }
     let i = Int(floor((y - y0 + scroll) / Mixer.rowH))
     guard keys.indices.contains(i) else { return .none }
     if case .world(let s) = keys[i], x > g.mixTx1 + 40 { return .mute(s) }
@@ -95,14 +101,20 @@ struct Plate {
 
 struct PlateGeo {
   static let stripH: CGFloat = 40, itemH: CGFloat = 46, listW: CGFloat = 150, tonW: CGFloat = 56
+  static let btnW: CGFloat = 76, btnHit: CGFloat = 17      // справа в полосе вкладок два кружка: ↕ (малый ↔ полный) и ⌄ (в полоску)
   struct SclGeo { let rows: Int; let top, bx, rx, cw, ch: CGFloat }
   let x, w, bottom, stripTop, top: CGFloat       // полоса вкладок [stripTop, top), содержимое [top, bottom]
   let tabs: [(tab: PlateTab, rect: CGRect)]
   let scl: SclGeo
   let mixTx0, mixTx1, mixMx: CGFloat                // вкладка mix: дорожка фейдера и кружок mute
+  let size: Plate.Size
+  let visRows: Int                                  // строк mix в окне: в полном размере больше
+  let sizeBtn, foldBtn: CGPoint                     // центры кружков в полосе вкладок
+  let expandable: Bool                            // у fx содержимое задаёт Sheet мира — полный размер не меняет высоту, кружок ↕ скрыт
 
-  // rows — строки содержимого (fx: строки веера, scale: игнорируется); extra — панель LFO под веером
-  static func make(_ p: Plate, W: CGFloat, H: CGFloat, safeBot: CGFloat, rows: Int, extra: CGFloat = 0,
+  // rows — строки содержимого (fx: строки веера, scale: игнорируется); extra — панель LFO под веером;
+  // headY — низ шапки: полный размер растёт от неё до низа
+  static func make(_ p: Plate, W: CGFloat, H: CGFloat, safeBot: CGFloat, rows: Int, extra: CGFloat = 0, headY: CGFloat = 0,
                    tabs ts: [PlateTab] = PlateTab.allCases) -> PlateGeo {
     let bottom = H - safeBot - 8, x: CGFloat = 16, w = W - 32
     let n = Scales.labels.count + 1
@@ -114,13 +126,20 @@ struct PlateGeo {
     case .mix: body = 16 + CGFloat(Mixer.visibleRows) * Mixer.rowH
     case .sys: body = 16 + CGFloat(Plate.SysRow.allCases.count) * itemH
     }
-    let top = bottom - body, stripTop = top - stripH
+    let smallTop = bottom - body
+    var top = smallTop
+    if p.tab != .fx && p.size == .full { top = min(smallTop, headY + stripH) }
+    if p.size == .strip { top = bottom }
+    let stripTop = top - stripH
+    let visRows = p.tab == .mix && p.size == .full ? max(Mixer.visibleRows, Int((bottom - top - 16) / Mixer.rowH)) : Mixer.visibleRows
     let cw = tonW, rx = x + w - 2 * cw, ch = CGFloat(n) * itemH / 6
-    let tw = W / CGFloat(max(1, ts.count))
+    let tw = (W - btnW) / CGFloat(max(1, ts.count))
     let rects = ts.enumerated().map { (tab: $1, rect: CGRect(x: CGFloat($0) * tw, y: stripTop, width: tw, height: stripH)) }
     return PlateGeo(x: x, w: w, bottom: bottom, stripTop: stripTop, top: top, tabs: rects,
                     scl: SclGeo(rows: n, top: top + 8, bx: x, rx: rx, cw: cw, ch: ch),
-                    mixTx0: x + 118, mixTx1: x + w - 80, mixMx: x + w - 16)
+                    mixTx0: x + 118, mixTx1: x + w - 80, mixMx: x + w - 16, size: p.size, visRows: visRows,
+                    sizeBtn: CGPoint(x: W - 58, y: stripTop + stripH / 2), foldBtn: CGPoint(x: W - 24, y: stripTop + stripH / 2),
+                    expandable: p.tab != .fx)
   }
 }
 
@@ -132,6 +151,25 @@ enum PlateDraw {
     g.addArc(center: CGPoint(x: bx, y: y), radius: 8, startAngle: -0.3, endAngle: .pi * 1.6, clockwise: false); g.strokePath()
     let tx = bx + 8 * cos(-0.3), ty = y + 8 * sin(-0.3)
     g.beginPath(); g.move(to: CGPoint(x: tx - 4, y: ty - 1)); g.addLine(to: CGPoint(x: tx, y: ty)); g.addLine(to: CGPoint(x: tx + 1, y: ty - 4.5)); g.strokePath()
+  }
+
+  // два тонких кружка справа в полосе вкладок: ↕ (малый ↔ полный) и ⌄ (в полоску; в полоске — ⌃ обратно). Едва заметные
+  static func sizeButtons(_ d: Draw, _ g: PlateGeo) {
+    let c = d.g
+    c.setStrokeColor(d.ink(0.5)); c.setLineWidth(1); c.setLineCap(.round); c.setLineJoin(.round)
+    if g.expandable && g.size != .strip {
+      let p = g.sizeBtn, up = g.size == .full
+      d.ring(p.x, p.y, 10, 0.28, 1)
+      c.beginPath()
+      c.move(to: CGPoint(x: p.x, y: p.y - 4)); c.addLine(to: CGPoint(x: p.x, y: p.y + 4))
+      c.move(to: CGPoint(x: p.x - 2.5, y: p.y - 1.5 - (up ? 1 : 0))); c.addLine(to: CGPoint(x: p.x, y: p.y - 4)); c.addLine(to: CGPoint(x: p.x + 2.5, y: p.y - 1.5 - (up ? 1 : 0)))
+      c.move(to: CGPoint(x: p.x - 2.5, y: p.y + 1.5 + (up ? 1 : 0))); c.addLine(to: CGPoint(x: p.x, y: p.y + 4)); c.addLine(to: CGPoint(x: p.x + 2.5, y: p.y + 1.5 + (up ? 1 : 0)))
+      c.strokePath()
+    }
+    let q = g.foldBtn, s: CGFloat = g.size == .strip ? -1 : 1
+    d.ring(q.x, q.y, 10, 0.28, 1)
+    c.beginPath(); c.move(to: CGPoint(x: q.x - 4, y: q.y - 1.5 * s)); c.addLine(to: CGPoint(x: q.x, y: q.y + 2.5 * s)); c.addLine(to: CGPoint(x: q.x + 4, y: q.y - 1.5 * s)); c.strokePath()
+    c.setLineCap(.butt)
   }
 
   // fx рисует SheetDraw (панель от g.top); здесь — полоса вкладок и содержимое scale
@@ -148,7 +186,12 @@ enum PlateDraw {
           c.beginPath(); c.move(to: CGPoint(x: t.rect.midX - 22, y: t.rect.maxY - 6.5)); c.addLine(to: CGPoint(x: t.rect.midX + 22, y: t.rect.maxY - 6.5)); c.strokePath()
         }
       }
-      if p.tab == .fx { return }
+      sizeButtons(d, g)
+      if g.size == .strip {
+        c.setStrokeColor(d.ink(0.35)); c.setLineWidth(1)
+        c.beginPath(); c.move(to: CGPoint(x: 0, y: g.stripTop + 0.5)); c.addLine(to: CGPoint(x: d.W, y: g.stripTop + 0.5)); c.strokePath()
+      }
+      if p.tab == .fx || g.size == .strip { return }
       c.setFillColor(d.paper(0.97)); c.fill(CGRect(x: 0, y: g.top, width: d.W, height: g.bottom + 8 - g.top))   // ниже — нижний бар
       c.setStrokeColor(d.ink(0.35)); c.setLineWidth(1)
       c.beginPath(); c.move(to: CGPoint(x: 0, y: g.top + 0.5)); c.addLine(to: CGPoint(x: d.W, y: g.top + 0.5)); c.strokePath()
@@ -241,7 +284,7 @@ enum PlateDraw {
   }
 
   private static func drawMix(_ d: Draw, _ p: Plate, _ g: PlateGeo, _ mix: Mix, _ lv: [Float], _ current: Int?, _ vol: Double) {
-    let c = d.g, keys = Mixer.rows(current: current), y0 = g.top + 8, h = CGFloat(Mixer.visibleRows) * Mixer.rowH
+    let c = d.g, keys = Mixer.rows(current: current), y0 = g.top + 8, h = CGFloat(g.visRows) * Mixer.rowH
     c.saveGState()
     c.clip(to: CGRect(x: 0, y: y0, width: d.W, height: h))
     for (i, k) in keys.enumerated() {
@@ -274,7 +317,7 @@ enum PlateDraw {
       }
     }
     c.restoreGState()
-    let mx = Plate.maxScroll(rows: keys.count)
+    let mx = Plate.maxScroll(rows: keys.count, visible: g.visRows)
     if mx > 0 {   // тонкая полоса прокрутки у правого края
       let th = h * h / (h + mx), ty = y0 + (h - th) * p.scroll / mx
       c.setFillColor(d.ink(0.3)); c.fill(CGRect(x: d.W - 5, y: ty, width: 1.5, height: th))

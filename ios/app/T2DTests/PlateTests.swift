@@ -36,8 +36,8 @@ final class PlateTests: XCTestCase {
     let g = geo(.fx), y = g.stripTop + 20
     XCTAssertEqual(Plate.hit(g, x: 10, y: y), .tab(.transport))
     XCTAssertEqual(Plate.hit(g, x: 120, y: y), .tab(.fx))
-    XCTAssertEqual(Plate.hit(g, x: 200, y: y), .tab(.scale))
-    XCTAssertEqual(Plate.hit(g, x: 380, y: y), .tab(.sys))
+    XCTAssertEqual(Plate.hit(g, x: 160, y: y), .tab(.scale))
+    XCTAssertEqual(Plate.hit(g, x: 290, y: y), .tab(.sys))
     XCTAssertEqual(Plate.hit(g, x: 100, y: g.top + 5), .content(100, g.top + 5))
   }
 
@@ -81,5 +81,41 @@ final class PlateTests: XCTestCase {
   func testTransportBodyHeight() {
     let g = geo(.transport)
     XCTAssertEqual(g.bottom - g.top, 16 + 5 * PlateGeo.itemH)
+  }
+
+  // размеры плашки: малый — по содержимому, полный — от шапки, полоска — только вкладки
+  private func sized(_ tab: PlateTab, _ size: Plate.Size) -> PlateGeo {
+    var p = Plate(tab: tab); p.size = size
+    return PlateGeo.make(p, W: 390, H: 844, safeBot: 34, rows: 3, headY: 100)
+  }
+
+  func testSizeGeometry() {
+    let small = sized(.sys, .small), full = sized(.sys, .full), strip = sized(.sys, .strip)
+    XCTAssertEqual(full.stripTop, 100)
+    XCTAssertEqual(full.top, 100 + PlateGeo.stripH)
+    XCTAssertEqual(full.bottom, small.bottom)
+    XCTAssertLessThan(full.stripTop, small.stripTop)
+    XCTAssertEqual(strip.top, strip.bottom)
+    XCTAssertEqual(strip.stripTop, strip.bottom - PlateGeo.stripH)
+    XCTAssertEqual(sized(.mix, .small).visRows, Mixer.visibleRows)
+    XCTAssertGreaterThan(sized(.mix, .full).visRows, Mixer.visibleRows)
+    XCTAssertEqual(sized(.fx, .full).top, sized(.fx, .small).top)   // fx — высота от Sheet
+    XCTAssertFalse(sized(.fx, .full).expandable)
+  }
+
+  func testSizeButtons() {
+    let g = sized(.scale, .small), y = g.stripTop + 20
+    XCTAssertEqual(Plate.hit(g, x: g.sizeBtn.x, y: y), .sizeBtn)
+    XCTAssertEqual(Plate.hit(g, x: g.foldBtn.x, y: y), .foldBtn)
+    XCTAssertEqual(Plate.hit(g, x: g.sizeBtn.x, y: g.stripTop - 1), .close)    // закрытие выше полосы не затронуто
+    let fx = sized(.fx, .small)
+    XCTAssertEqual(Plate.hit(fx, x: fx.sizeBtn.x, y: fx.stripTop + 20), .none)
+  }
+
+  func testStripHit() {
+    let g = sized(.mix, .strip), y = g.stripTop + 20
+    XCTAssertEqual(Plate.hit(g, x: 200, y: g.stripTop - 30), .pass)             // поле мира живое
+    XCTAssertEqual(Plate.hit(g, x: 10, y: y), .tab(.transport))
+    XCTAssertEqual(Plate.hit(g, x: g.foldBtn.x, y: y), .foldBtn)
   }
 }

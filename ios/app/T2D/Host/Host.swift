@@ -157,7 +157,7 @@ final class Host {
 
   private func mapDown(_ f: Finger) -> Route? {
     guard !nav.busy(now) else { return nil }               // во время перехода касания съедены
-    if plate != nil { return plateRoute(f) }
+    if plate != nil, let r = plateRoute(f) { return r }
     switch bar.hit(f.x, f.y, titleW: 0, enabled: mapEnabled) {
     case .btn(let b): return .btn(b)
     case .title: return nil                                // имя карты — не кнопка
@@ -220,8 +220,8 @@ final class Host {
   private func route(_ f: Finger) -> Route {
     guard let w = world else { return .eat }
     if legendOpen { return .title }
-    if plate != nil { return plateRoute(f) }
-    if let s = sheet { return .sheet(sheetHit(s, geo(s), x: f.x, y: f.y, fxBtn: bar.pos(.fx))) }
+    if plate != nil, let r = plateRoute(f) { return r }
+    if let s = sheet, plate?.size != .strip { return .sheet(sheetHit(s, geo(s), x: f.x, y: f.y, fxBtn: bar.pos(.fx))) }
     switch bar.hit(f.x, f.y, titleW: titleW, enabled: barEnabled) {
     case .title: return .title
     case .btn(let b): return .btn(b)
@@ -440,18 +440,26 @@ final class Host {
   // кнопка бара: вкладка открыта — закрыть; другая — переключить; закрыта — открыть (нет такой вкладки — как lastTab)
   func togglePlate(_ tab: PlateTab) {
     if plate?.tab == tab { plate = nil; return }
-    if plateTabs.contains(tab) { plate = Plate(tab: tab) } else if plate == nil { openPlate() } else { plate = nil }
+    if plateTabs.contains(tab) { plate = Plate(tab: tab, size: keptSize) } else if plate == nil { openPlate() } else { plate = nil }
   }
-  func selectTab(_ t: PlateTab) { if plateTabs.contains(t), plate?.tab != t { plate = Plate(tab: t) } }
+  // размер плашки переживает смену вкладки; из полоски вкладка открывается малой
+  private var keptSize: Plate.Size { plate.map { $0.size == .strip ? .small : $0.size } ?? .small }
+  func selectTab(_ t: PlateTab) {
+    if plateTabs.contains(t), plate?.tab != t || plate?.size == .strip { plate = Plate(tab: t, size: keptSize) }
+  }
+  // ↕: малый ↔ полный (из полоски — малый); ⌄: в полоску (из полоски — малый)
+  func toggleSize() { if let s = plate?.size { plate?.size = s == .small ? .full : .small; plate?.scroll = 0 } }
+  func toggleStrip() { if let s = plate?.size { plate?.size = s == .strip ? .small : .strip; plate?.scroll = 0 } }
 
   private func plateGeo(_ p: Plate) -> PlateGeo {
     var rows = 0, extra: CGFloat = 0
     if p.tab == .fx, let s = sheet { rows = s.spec.rows.count; extra = s.spec.lfo != nil && s.lfoKey != nil ? 196 : 0 }
-    return PlateGeo.make(p, W: W, H: H, safeBot: safeBot, rows: rows, extra: extra, tabs: plateTabs)
+    return PlateGeo.make(p, W: W, H: H, safeBot: safeBot, rows: rows, extra: extra, headY: top + 44, tabs: plateTabs)
   }
 
   // касание при открытой плашке: вкладка — переключить, мимо — закрыть, содержимое — fx (Sheet) или лад
-  private func plateRoute(_ f: Finger) -> Route {
+  // nil — касание мимо полоски: поле мира под ней живое
+  private func plateRoute(_ f: Finger) -> Route? {
     guard let p = plate else { return .eat }
     let g = plateGeo(p)
     if case .btn(let b)? = bar.hit(f.x, f.y, titleW: 0, enabled: barEnabled), b != .back || !onMap { return .btn(b) }   // кнопки бара работают и при плашке
@@ -459,7 +467,11 @@ final class Host {
     case .close: plate = nil; return .eat
     case .tab(let t): selectTab(t); return .eat
     case .none: return .eat
+    case .sizeBtn: toggleSize(); return .eat
+    case .foldBtn: toggleStrip(); return .eat
+    case .pass: return nil
     case .content:
+      if p.size == .strip { return .eat }
       if p.tab == .fx, let s = sheet { return .sheet(sheetHit(s, geo(s), x: f.x, y: f.y, fxBtn: bar.pos(.fx))) }
       if p.tab == .scale { return .list(g) }
       if p.tab == .sys { sysDown(Plate.sysHit(g, x: f.x, y: f.y)); return .eat }
@@ -508,7 +520,7 @@ final class Host {
       switch k { case .world(let s): mix.g[s] = v; case .volume: setMasterVol(v); case .master(let m): mix[m] = v }
       applyMix()
     } else if d.mode == 2 {
-      plate?.scroll = min(max(d.scroll0 - dy, 0), Plate.maxScroll(rows: mixKeys.count))
+      plate?.scroll = min(max(d.scroll0 - dy, 0), Plate.maxScroll(rows: mixKeys.count, visible: plateGeo(p).visRows))
     }
   }
 
@@ -782,7 +794,7 @@ final class Host {
     d.setTheme(w.theme)                                      // MapDraw оставляет базовую
     w.draw(d, now: now)
     titleW = bar.draw(d, barState(w), now: now * 1000)
-    if let s = sheet {
+    if let s = sheet, plate?.size != .strip {
       var held: SheetHit?
       for r in routes.values { if case .sheet(let h) = r { held = h } }
       SheetDraw.draw(d, s, geo(s), lfos: lfos, held: held, sample: core.lfoSample)
