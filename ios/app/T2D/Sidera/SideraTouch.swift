@@ -9,7 +9,7 @@ private func finite(_ p: CGPoint) -> Bool { p.x.isFinite && p.y.isFinite }
 // что под пальцем: луна, ближайшая звезда (в пределах захвата), полоса голоса
 func sidPick(_ g: SidGeo, _ m: SidMirror, _ p: CGPoint) -> SidPick {
   guard finite(p) else { return .none }
-  if g.cornerHit(p.x, p.y) { return .moon }
+  if g.moonHit(p.x, p.y) { return .moon }
   var best: (d: CGFloat, v: Int, i: Int)?
   let reach = 26 * g.S
   for v in 0..<Sid.nv where g.bandRect(v).insetBy(dx: -reach, dy: -reach).contains(p) {
@@ -39,10 +39,11 @@ func sidHomeFromPoint(_ g: SidGeo, voice v: Int, _ voice: SidVoice, pt: Int, _ p
   return SidHome(ha: ha, prev: (pt - 1, Sid.clamp(x, Sid.dMin, 1)))
 }
 
-// положение пальца на дуге луны: 0 — вправо от центра, 1 — вниз
-func sidMoonStep(_ g: SidGeo, _ p: CGPoint) -> Double {
-  guard finite(p) else { return 0 }
-  return Sid.clamp(atan2(Double(p.y - g.moon.c.y), Double(p.x - g.moon.c.x)) / (Double.pi / 2))
+// фаза луны по пальцу: золотой круг идёт за пальцем по горизонтали. 0,5 — круги друг на друге (eclipse), вправо — ascend, влево — descend,
+// на краях (0 и 1) круги врозь — full moon
+func sidMoonPhase(_ g: SidGeo, _ p: CGPoint) -> Double {
+  guard finite(p), g.moonSpan > 0 else { return 0.5 }
+  return 0.5 + 0.5 * Sid.clamp(Double((p.x - g.moon.c.x) / g.moonSpan), -1, 1)
 }
 
 // два пальца на полосе: расстояние по горизонтали ведёт ширину рамок (wd), по вертикали — высоту (wa)
@@ -100,7 +101,7 @@ extension SideraView {
     guard f.moved else { return }
     switch h.kind {
     case .moon:
-      h.moved = true; send(.moon, 0, [sidMoonStep(geo, p)])
+      h.moved = true; send(.moon, 0, [sidMoonPhase(geo, p)])
     case .star(let v, let i):
       h.moved = true; labelOn[v] = true
       let vo = mirror.voices[v], home = sidHomeFromPoint(geo, voice: v, vo, pt: i, p)

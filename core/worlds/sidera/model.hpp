@@ -5,6 +5,7 @@
 //
 // Высота голоса — нота лада хоста (NOTE, полутоны от A1 55 Гц, 0…60): период нормируется под sr / f0, блуждает только тембр.
 #pragma once
+#include <cmath>
 #include <string>
 
 #include "../../host/scale.hpp"
@@ -30,7 +31,7 @@ class Model {
   // v — голос 0…NV−1; вне диапазона и NaN — ничего; ±inf зажимается; N, NOTE, DIST округляются
   void setVoice(int v, int key, double val);
   void moveHome(int v, int pt, double hd, double ha);   // центр рамки точки: hd 0.02…1, ha −1…1; точка (d, a) подтягивается внутрь рамки
-  void setStep(double s);                               // общий масштаб шага (луна) 0…1
+  void setStep(double s);                               // фаза луны 0…1: 0 и 1 — полнолуние, 0,5 — затмение; <0,5 — descend, >0,5 — ascend
   void roll(int v = -1);                                // кубик: голос v (−1 — все): новые нота, N, рамки, панорама, закон, октава и положение звёзд, блуждание сеется заново; при −1 ещё луна и FX
   void kick(int v, int pt);                             // встряска: точка pt голоса v (−1 — все) прыгает в случайное место рамки, рамка чуть сдвигается
   void setFx(int key, double val);                      // FxKey, значение 0…1; вне диапазона и NaN — ничего
@@ -44,7 +45,8 @@ class Model {
   std::string snapshot() const;
   void restore(const std::string& js);                  // мусор и выход за диапазон зажимаются, не падают
 
-  double step() const { return step_; }
+  double step() const { return step_; }                // фаза луны
+  double wander() const { return std::fabs(2 * step_ - 1); }   // масштаб блуждания: затмение — стоят, полнолуние — на полную
   double voice(int v, int key) const { return (v >= 0 && v < NV && key >= 0 && key < NVK) ? prm_[v][key] : 0; }
   Point pt(int v, int i) const { return (v >= 0 && v < NV && i >= 0 && i < NPT_MAX) ? pts_[v][i] : Point(); }
 
@@ -54,7 +56,7 @@ class Model {
   const Scale& scale_;
   double prm_[NV][NVK] = {};
   Point pts_[NV][NPT_MAX];
-  double step_ = 0.15;
+  double step_ = 0.575;                                 // фаза: ascend, блуждание 0,15
   double fx_[NFX] = {0.25, 0.3, 0.35, 1.0, 0.3};
   sdk::Rng rng_{1};                                     // мастер: семена голосов при roll
   sdk::Rng vrng_[NV] = {sdk::Rng(1), sdk::Rng(1), sdk::Rng(1)};

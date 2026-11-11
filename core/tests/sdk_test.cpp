@@ -2896,7 +2896,7 @@ static void bridgeSidera() {
   CHECK(peak > 0.01f);                                                    // голоса играют сами
   CHECK(send > 0.0001f);                                                  // и уходят в ревербер
   CHECK(t2d_mirror(14) == sidera::MIRROR_N);
-  CHECK(t2d_mbuf()[1] == 0.15);                                           // step по умолчанию
+  CHECK(t2d_mbuf()[1] == 0.575);                                           // step по умолчанию
   const int len = t2d_snapshot(14);
   CHECK(len > 0);
   const std::string snap(t2d_str_buf(), static_cast<size_t>(len));
@@ -2904,7 +2904,7 @@ static void bridgeSidera() {
   t2d_mirror(14); CHECK(t2d_mbuf()[1] == 1.0);
   std::memcpy(t2d_str_buf(), snap.data(), snap.size());
   t2d_restore(14, len);
-  t2d_mirror(14); CHECK(t2d_mbuf()[1] == 0.15);                           // снимок вернул прежнее
+  t2d_mirror(14); CHECK(t2d_mbuf()[1] == 0.575);                           // снимок вернул прежнее
   t2d_action(14, sidera::CLEAR, 0, t2d_args(), 0);
   for (int b = 0; b < 400; b++) t2d_process(128);
   const float* d = t2d_dry(14, 0);

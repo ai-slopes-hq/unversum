@@ -59,7 +59,7 @@ final class SideraTests: XCTestCase {
       for v in 0..<Sid.nv {
         let r = g.bandRect(v)
         XCTAssertGreaterThan(r.height, 40, "\(W)x\(H) band \(v)")
-        XCTAssertGreaterThanOrEqual(r.minY, g.moon.c.y + g.moon.r * 1.28, "под луной и её дугой \(W)")
+        XCTAssertGreaterThanOrEqual(r.minY, g.moon.c.y + g.moon.r, "под луной \(W)")
         XCTAssertLessThanOrEqual(r.maxY, barTop, "над нижним баром \(W)x\(H)")
         XCTAssertGreaterThanOrEqual(r.minX, 0); XCTAssertLessThanOrEqual(r.maxX, W)
         if v > 0 { XCTAssertFalse(r.intersects(g.bandRect(v - 1)), "bands \(v) \(W)") }
@@ -108,12 +108,15 @@ final class SideraTests: XCTestCase {
     XCTAssertNil(g.bandAt(CGPoint(x: 195, y: 5)))
   }
 
-  func testCornerHitOnMoon() {
+  func testMoonHit() {
     let g = SidGeo(W: 390, H: 844, topY: 59, safeBot: 34)
-    XCTAssertTrue(g.cornerHit(g.moon.c.x + 10, g.moon.c.y + 10))
+    XCTAssertEqual(g.moon.c.x, 195, "луна по центру")
+    XCTAssertTrue(g.moonHit(g.moon.c.x, g.moon.c.y))
+    XCTAssertTrue(g.moonHit(g.moon.c.x + g.moonSpan, g.moon.c.y), "золотой круг на краю хода")
     let r = g.bandRect(1)
-    XCTAssertFalse(g.cornerHit(r.midX, r.midY))
-    XCTAssertFalse(g.cornerHit(g.moon.c.x + 10, g.moon.c.y - 20), "выше верхнего края луны — нет")
+    XCTAssertFalse(g.moonHit(r.midX, r.midY))
+    XCTAssertFalse(g.moonHit(g.moon.c.x, g.moon.c.y - g.moon.r - 20), "выше луны — нет")
+    XCTAssertGreaterThan(g.moon.c.y - g.moon.r, 59, "под строкой заголовка")
   }
 
   func testRegistrationAndEnter() {
@@ -158,8 +161,8 @@ final class SideraTests: XCTestCase {
   }
 
   func testHeadRateRange() {
-    XCTAssertEqual(sidHeadRate(step: 0), 1); XCTAssertEqual(sidHeadRate(step: 1), 2); XCTAssertEqual(sidHeadRate(step: 0.5), 1.5, accuracy: 1e-9)
-    XCTAssertEqual(sidHeadRate(step: .nan), 1); XCTAssertEqual(sidHeadRate(step: 9), 2); XCTAssertEqual(sidHeadRate(step: -9), 1)
+    XCTAssertEqual(sidHeadRate(phase: 0.5), 1); XCTAssertEqual(sidHeadRate(phase: 1), 2); XCTAssertEqual(sidHeadRate(phase: 0), -2); XCTAssertEqual(sidHeadRate(phase: 0.75), 1.5, accuracy: 1e-9); XCTAssertEqual(sidHeadRate(phase: 0.25), -1.5, accuracy: 1e-9)
+    XCTAssertEqual(sidHeadRate(phase: .nan), 1); XCTAssertEqual(sidHeadRate(phase: 9), 2); XCTAssertEqual(sidHeadRate(phase: -9), -2)
   }
 
   func testNoteName() {
@@ -188,11 +191,11 @@ final class SideraTests: XCTestCase {
     v.draw(d, now: 1)
     for k in 0..<Sid.nv { XCTAssertGreaterThan(lit(g, v.geo.bandRect(k)), 150, "полоса \(k) нарисована") }
     let m = v.geo.moon
-    let corner = CGRect(x: 0, y: m.c.y, width: m.r, height: m.r)
-    XCTAssertGreaterThan(lit(g, corner), 100, "луна в углу")
+    let disc = CGRect(x: m.c.x - m.r, y: m.c.y - m.r, width: 2 * m.r, height: 2 * m.r)
+    XCTAssertGreaterThan(lit(g, disc.insetBy(dx: -m.r * 2.5, dy: 0)), 100, "луна по центру")
     let (d2, g2) = canvas(390, 844)
     v.drawShot(d2, now: 1)
-    XCTAssertLessThan(lit(g2, CGRect(x: 0, y: m.c.y + 4, width: m.r * 0.8, height: m.r * 0.8)), 20, "в снимке для карты луны нет (остаются фоновые звёзды)")
+    XCTAssertLessThan(lit(g2, disc.insetBy(dx: m.r * 0.3, dy: m.r * 0.3)), 20, "в снимке для карты луны нет (остаются фоновые звёзды)")
     XCTAssertGreaterThan(lit(g2, v.geo.bandRect(1)), 150)
   }
 
@@ -222,7 +225,7 @@ final class SideraTests: XCTestCase {
 
   func testPickMoon() {
     let (g, m) = geoAndMirror()
-    XCTAssertEqual(sidPick(g, m, CGPoint(x: g.moon.c.x + 12, y: g.moon.c.y + 12)), .moon)
+    XCTAssertEqual(sidPick(g, m, CGPoint(x: g.moon.c.x + 12, y: g.moon.c.y + 4)), .moon)
   }
 
   func testHomeFromPointRoundTrip() {
@@ -246,13 +249,15 @@ final class SideraTests: XCTestCase {
     XCTAssertTrue(nan.ha.isFinite); XCTAssertNil(nan.prev, "не число — звезду не трогаем")
   }
 
-  func testMoonStepRange() {
+  func testMoonPhase() {
     let (g, _) = geoAndMirror(), c = g.moon.c
-    XCTAssertEqual(sidMoonStep(g, CGPoint(x: c.x + 50, y: c.y)), 0, accuracy: 1e-9)
-    XCTAssertEqual(sidMoonStep(g, CGPoint(x: c.x, y: c.y + 50)), 1, accuracy: 1e-9)
-    XCTAssertEqual(sidMoonStep(g, CGPoint(x: c.x + 35, y: c.y + 35)), 0.5, accuracy: 1e-6)
-    XCTAssertEqual(sidMoonStep(g, CGPoint(x: c.x + 50, y: c.y - 80)), 0); XCTAssertEqual(sidMoonStep(g, CGPoint(x: c.x - 50, y: c.y + 10)), 1)
-    XCTAssertEqual(sidMoonStep(g, CGPoint(x: CGFloat.nan, y: CGFloat.nan)), 0)
+    XCTAssertEqual(sidMoonPhase(g, c), 0.5, accuracy: 1e-9)
+    XCTAssertEqual(sidMoonPhase(g, CGPoint(x: c.x + g.moonSpan, y: c.y)), 1, accuracy: 1e-9)
+    XCTAssertEqual(sidMoonPhase(g, CGPoint(x: c.x - g.moonSpan, y: c.y)), 0, accuracy: 1e-9)
+    XCTAssertEqual(sidMoonPhase(g, CGPoint(x: c.x + 900, y: c.y)), 1); XCTAssertEqual(sidMoonPhase(g, CGPoint(x: c.x - 900, y: 0)), 0)
+    XCTAssertEqual(sidMoonPhase(g, CGPoint(x: CGFloat.nan, y: CGFloat.nan)), 0.5)
+    XCTAssertEqual(sidMoonName(0.5), "eclipsis"); XCTAssertEqual(sidMoonName(1), "luna plena"); XCTAssertEqual(sidMoonName(0), "luna plena")
+    XCTAssertEqual(sidMoonName(0.8), "ascendens"); XCTAssertEqual(sidMoonName(0.2), "descendens")
   }
 
   func testPinchWidensBox() {
@@ -287,10 +292,10 @@ final class SideraTests: XCTestCase {
     rec.acts.removeAll()
     var mapped = 0; v.goMap = { mapped += 1 }
     let c = g.moon.c
-    var mf = at(fs[0], CGPoint(x: c.x + 12, y: c.y + 12), moved: false); v.down(mf)
-    mf = at(mf, CGPoint(x: c.x + 20, y: c.y + 45)); v.move(mf); v.up(mf)
+    var mf = at(fs[0], CGPoint(x: c.x + 12, y: c.y + 4), moved: false); v.down(mf)
+    mf = at(mf, CGPoint(x: c.x + 60, y: c.y + 4)); v.move(mf); v.up(mf)
     XCTAssertEqual(rec.acts.last?.kind, SidAct.moon.rawValue); XCTAssertEqual(mapped, 0)
-    let tf = at(fs[0], CGPoint(x: c.x + 12, y: c.y + 12), moved: false); v.down(tf); v.up(tf)
+    let tf = at(fs[0], CGPoint(x: c.x + 12, y: c.y + 4), moved: false); v.down(tf); v.up(tf)
     XCTAssertEqual(mapped, 1, "тап по луне — карта")
   }
 

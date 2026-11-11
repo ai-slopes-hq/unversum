@@ -1,7 +1,7 @@
 import CoreGraphics
 import Foundation
 
-// геометрия Sidera: три полосы голосов друг под другом, луна в левом верхнем углу (четверть диска, как солнце других миров).
+// геометрия Sidera: три полосы голосов друг под другом, луна по центру над ними (тёмный и золотой круги).
 // Звезда i голоса — вершина ломаной: x — накопленная длительность (SidVoice.frac), y — амплитуда; рамка звезды — коробка центра (hd, ha).
 struct SidGeo {
   let W, H, S, topY, safeBot: CGFloat
@@ -11,11 +11,11 @@ struct SidGeo {
   init(W: CGFloat, H: CGFloat, topY: CGFloat, safeBot: CGFloat) {
     self.W = W; self.H = H; self.topY = topY; self.safeBot = safeBot
     S = min(W / 390, H / 844)
-    moon = (CGPoint(x: 0, y: topY + 10 * S), 34 * S)       // ниже заголовка и меньше: ни диск, ни дуга фазы (1,28 r) не лезут под имя мира
+    moon = (CGPoint(x: W / 2, y: topY + 10 * S + 24 * S), 24 * S)   // по центру под заголовком, над звёздами: тёмный круг стоит, золотой ездит влево-вправо
   }
 
   var field: CGRect {                                      // от под луны до над нижним баром
-    let top = topY + 10 * S + 34 * S * 1.28 + 10, bottom = H - safeBot - TopBar.barH - 12
+    let top = moon.c.y + moon.r + 10, bottom = H - safeBot - TopBar.barH - 12
     return CGRect(x: SidGeo.side, y: top, width: W - 2 * SidGeo.side, height: max(1, bottom - top))
   }
   func bandRect(_ v: Int) -> CGRect {
@@ -38,8 +38,9 @@ struct SidGeo {
     return CGRect(x: c.x - w / 2, y: c.y - h / 2, width: w, height: h)
   }
 
-  func cornerHit(_ x: CGFloat, _ y: CGFloat) -> Bool {      // луна-четверть слева сверху
-    y > moon.c.y && hypot(x - moon.c.x, y - moon.c.y) < moon.r + 6
+  var moonSpan: CGFloat { moon.r * 2.2 }                   // на сколько золотой круг уходит от тёмного: дальше — круги врозь, полнолуние
+  func moonHit(_ x: CGFloat, _ y: CGFloat) -> Bool {         // полоса луны: оба круга и ход золотого между ними
+    abs(x - moon.c.x) < moonSpan + moon.r + 10 && abs(y - moon.c.y) < moon.r + 8
   }
 }
 

@@ -14,8 +14,17 @@ enum SidWindow {
   }
 }
 
-// скорость головы, отрезков в секунду: спокойная, привязана к фазе луны (1…2)
-func sidHeadRate(step: Double) -> Double { 1 + Sid.clamp(step) }
+// фаза луны 0…1: 0 и 1 — полнолуние, 0,5 — затмение; блуждание — расстояние от затмения, 0…1
+func sidWander(_ phase: Double) -> Double { phase.isFinite ? abs(2 * Sid.clamp(phase) - 1) : 0 }
+// ascend (фаза > 0,5): голова бежит вперёд по ломаной, descend — назад
+func sidMoonName(_ phase: Double) -> String {
+  let w = sidWander(phase)
+  if w < 0.08 { return "eclipsis" }
+  if w > 0.92 { return "luna plena" }
+  return phase > 0.5 ? "ascendens" : "descendens"
+}
+// скорость головы, отрезков в секунду, со знаком: спокойная (1…2 от блуждания), вперёд при ascend, назад при descend
+func sidHeadRate(phase: Double) -> Double { (1 + sidWander(phase)) * (phase.isFinite && phase < 0.5 ? -1 : 1) }
 
 // нота голоса: полутоны от A1 (55 Гц) → имя и октава (MIDI 33 + полутоны)
 func sidNoteName(_ semi: Double) -> String {
@@ -101,24 +110,28 @@ extension SideraView {
     g.setStrokeColor(Draw.color(Tria.gold, 0.85)); g.setLineWidth(1.2 * G.S); g.strokePath()
   }
 
-  // луна: четверть диска в углу; фаза — шаг блужданий (серп → полнолуние), свечение и толщина серпа — уровень выхода
+  // луна: тёмный круг стоит по центру, золотой ездит за пальцем. Золотой под тёмным: рядом — серп (ascend справа, descend слева),
+  // друг на друге — затмение (только золотая корона), врозь — полнолуние. Свечение и яркость золота — уровень выхода
   private func drawMoon(_ d: Draw) {
     let G = geo, g = d.g, c = G.moon.c, r = G.moon.r
-    let lv = CGFloat(min(1, mirror.level * 3)), p = CGFloat(Sid.clamp(mirror.step))
-    d.glowAt(c.x + r * 0.45, c.y + r * 0.45, r * (1.1 + lv * 0.4), 0.04 + 0.22 * lv)
-    g.saveGState()
-    g.clip(to: CGRect(x: c.x, y: c.y, width: r * 3, height: r * 3))                               // видна четверть вправо-вниз
-    g.setFillColor(d.ink(0.12 + 0.6 * lv)); g.fillEllipse(in: CGRect(x: c.x - r, y: c.y - r, width: 2 * r, height: 2 * r))
-    let cut = r * 1.75 * (1 - p) * (1 - 0.4 * lv)                                                 // сдвиг тени: 0 — полный диск
-    g.setFillColor(theme.bg.cgColor)
-    g.fillEllipse(in: CGRect(x: c.x - r + cut * 0.7, y: c.y - r + cut * 0.7, width: 2 * r, height: 2 * r))
-    g.setStrokeColor(d.ink(0.85)); g.setLineWidth(1.4); g.strokeEllipse(in: CGRect(x: c.x - r, y: c.y - r, width: 2 * r, height: 2 * r))
-    g.restoreGState()
-    // дуга фазы: за неё тянут луну; точка — где сейчас шаг
-    g.setStrokeColor(d.ink(0.2)); g.setLineWidth(1)
-    g.beginPath(); g.addArc(center: c, radius: r * 1.28, startAngle: 0, endAngle: .pi / 2, clockwise: false); g.strokePath()
-    let ang = Double(p) * .pi / 2
-    d.dot(c.x + r * 1.28 * CGFloat(cos(ang)), c.y + r * 1.28 * CGFloat(sin(ang)), 2 * G.S + 0.6, 0.7)
+    let lv = CGFloat(min(1, mirror.level * 3)), ph = CGFloat(Sid.clamp(mirror.step))
+    let off = (ph - 0.5) * 2 * G.moonSpan, gc = CGPoint(x: c.x + off, y: c.y)
+    let w = CGFloat(sidWander(Double(ph)))
+    g.setStrokeColor(d.ink(0.12)); g.setLineWidth(1); g.beginPath()                                // ход золотого круга
+    g.move(to: CGPoint(x: c.x - G.moonSpan, y: c.y)); g.addLine(to: CGPoint(x: c.x + G.moonSpan, y: c.y)); g.strokePath()
+    d.glowAt(gc.x, gc.y, r * (1.3 + lv * 0.4), (0.04 + 0.2 * lv) * (0.3 + 0.7 * w))
+    g.setFillColor(Draw.color(Tria.gold, 0.55 + 0.4 * lv)); g.fillEllipse(in: CGRect(x: gc.x - r, y: gc.y - r, width: 2 * r, height: 2 * r))
+    g.setStrokeColor(Draw.color(Tria.gold, 0.9)); g.setLineWidth(1.2); g.strokeEllipse(in: CGRect(x: gc.x - r, y: gc.y - r, width: 2 * r, height: 2 * r))
+    let dark = CGRect(x: c.x - r, y: c.y - r, width: 2 * r, height: 2 * r)
+    g.setFillColor(theme.bg.cgColor); g.fillEllipse(in: dark)                                      // тёмный круг закрывает золотой
+    g.setFillColor(d.ink(0.07)); g.fillEllipse(in: dark)
+    g.setStrokeColor(d.ink(0.6)); g.setLineWidth(1.2); g.strokeEllipse(in: dark)
+    if w < 0.5 {                                                                                   // затмение: корона вокруг тёмного
+      g.setStrokeColor(Draw.color(Tria.gold, 0.6 * (1 - 2 * w))); g.setLineWidth(2.2); g.strokeEllipse(in: dark.insetBy(dx: -1.5, dy: -1.5))
+    }
+    if holds.values.contains(where: { if case .moon = $0.kind { return true } else { return false } }) {   // имя фазы — пока тянешь
+      d.mapText(sidMoonName(Double(ph)), c.x, c.y + r + 16, 12, 0.8, align: .center)
+    }
   }
 
   func frame(_ d: Draw, _ now: Double, moon: Bool) {

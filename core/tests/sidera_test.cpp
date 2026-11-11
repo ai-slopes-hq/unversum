@@ -48,7 +48,7 @@ static void modelBarriersHold() {
 }
 
 static void modelStepZeroStatic() {
-  Scale sc; Model m(sc); m.setStep(0);
+  Scale sc; Model m(sc); m.setStep(0.5);
   const Point before = m.pt(0, 2);
   for (int s = 0; s < 100; s++) for (int v = 0; v < NV; v++) m.walk(v);
   const Point after = m.pt(0, 2);
@@ -193,7 +193,7 @@ static void voiceNoDc() {
 
 static void voiceFiniteExtremes() {
   Scale sc;
-  for (int note : {0, 60}) for (int n : {3, 16}) for (double step : {0.0, 1.0}) for (int dist = 0; dist < NDIST; dist++) {
+  for (int note : {0, 60}) for (int n : {3, 16}) for (double step : {0.5, 1.0}) for (int dist = 0; dist < NDIST; dist++) {
     Model m(sc); m.reset(4); m.setStep(step); m.setVoice(0, NOTE, note); m.setVoice(0, N, n); m.setVoice(0, DIST, dist); m.setVoice(0, WA, 1); m.setVoice(0, WD, 1);
     Voice vo; vo.prepare(48000);
     Buf b; b.render(vo, m, 0, 96000);
@@ -204,7 +204,7 @@ static void voiceFiniteExtremes() {
 }
 
 static void voiceStepZeroPeriodic() {
-  Scale sc; Model m(sc); m.setStep(0); m.setVoice(1, LVL, 0); m.setVoice(2, LVL, 0);
+  Scale sc; Model m(sc); m.setStep(0.5); m.setVoice(1, LVL, 0); m.setVoice(2, LVL, 0);
   Voice vo; vo.prepare(44000);                                                   // f0 55 Гц → период ровно 800 сэмплов
   Buf b; b.render(vo, m, 0, 800 * 20);
   double worst = 0;
@@ -264,6 +264,14 @@ static void voiceSilenceThenResume() {
   CHECK(pk > 0.01);
   bool fin = true; for (float x : c.L) fin = fin && std::isfinite(x);
   CHECK(fin);
+}
+
+static void moonPhaseWander() {                           // фаза луны: полнолуние по краям, затмение (стоят) в середине
+  Scale sc; Model m(sc);
+  m.setStep(0); CHECK(m.wander() == 1); m.setStep(1); CHECK(m.wander() == 1);
+  m.setStep(0.5); CHECK(m.wander() == 0); m.setStep(0.25); CHECK(std::fabs(m.wander() - 0.5) < 1e-12);
+  m.setStep(0.75); CHECK(std::fabs(m.wander() - 0.5) < 1e-12);
+  m.reset(1); CHECK(std::fabs(m.wander() - 0.15) < 1e-12);
 }
 
 static void diceRebuildsEverything() {                    // автор: кубик ничего не менял — теперь нота, N, рамки, луна и FX меняются
@@ -328,7 +336,7 @@ static void worldMirrorSize() {
   CHECK(MIRROR_N == 227);
   CHECK(w.mirror(buf.data(), MIRROR_N) == MIRROR_N);
   CHECK(buf[219] == 0.25 && buf[220] == 0.3 && buf[221] == 0.35 && buf[222] == 1 && buf[223] == 0.3 && buf[224] == 0 && buf[226] == 0 && buf[2] == 0.3);   // FX по умолчанию; send = SPACE
-  CHECK(buf[1] == 0.15);                                                         // step по умолчанию
+  CHECK(buf[1] == 0.575);                                                         // step по умолчанию
   CHECK(buf[3 + 1] == 5);                                                        // N голоса 0
   CHECK(buf[3 + 72 + 1] == 8 && buf[3 + 144 + 1] == 12);
   CHECK(buf[MIRROR_N] == -99);                                                   // за пределы не пишет
@@ -519,7 +527,7 @@ static void worldFxKickActions() {
 int main() {
   modelSeedDeterministic(); modelBarriersHold(); modelStepZeroStatic(); modelCollapsedBox(); modelClamps(); modelMoveHome(); modelSilence();
   modelRollResetsToHome(); modelSnapshotRoundTrip(); modelRestoreGarbage(); modelHzFollowsScale();
-  voiceSumOfSegments(); voiceNoDc(); voiceFiniteExtremes(); voiceStepZeroPeriodic(); voiceLevelZeroSilent(); voiceNoteChangeAtBoundary(); voicePeriodShorterThanN(); voiceSilenceThenResume(); voiceResumeRampsFromZero(); diceAfterClearWakesVoices(); diceRebuildsEverything();
+  voiceSumOfSegments(); voiceNoDc(); voiceFiniteExtremes(); voiceStepZeroPeriodic(); voiceLevelZeroSilent(); voiceNoteChangeAtBoundary(); voicePeriodShorterThanN(); voiceSilenceThenResume(); voiceResumeRampsFromZero(); diceAfterClearWakesVoices(); diceRebuildsEverything(); moonPhaseWander();
   worldMirrorSize(); worldActionDispatch(); worldSilentUntilRun(); worldClearSilent(); worldDiceReseeds(); worldLfoKeys(); worldSnapshotRoundTrip(); worldRestoreGarbage(); worldOutputBounded(); modelFxKickDrift(); worldFxKickActions(); modelOctave(); worldFilter();
   std::printf("sidera-test: %d checks, %d failed\n", checks, fails);
   return fails ? 1 : 0;

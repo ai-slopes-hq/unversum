@@ -166,7 +166,7 @@ struct T2DApp: App {
         let g = v.geo, id = NSObject()
         func f(_ p: CGPoint, _ q: CGPoint) -> Finger { Finger(id: ObjectIdentifier(id), x: q.x, y: q.y, x0: p.x, y0: p.y, t0: 0, moved: true, touchTime: 1) }
         if T2DApp.shotName == "sidera-moon" {
-          let a = CGPoint(x: g.moon.c.x + 12, y: g.moon.c.y + 12), b = CGPoint(x: g.moon.c.x + 30 * g.S, y: g.moon.c.y + 30 * g.S)
+          let a = CGPoint(x: g.moon.c.x + 12, y: g.moon.c.y), b = CGPoint(x: g.moon.c.x + 0.45 * g.moonSpan, y: g.moon.c.y)
           v.down(f(a, a)); v.move(f(a, b))
         } else {
           let a = g.starPoint(0, v.mirror.voices[0], 2), b = CGPoint(x: a.x + 20 * g.S, y: a.y - 12 * g.S)

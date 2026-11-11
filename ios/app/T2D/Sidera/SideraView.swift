@@ -21,7 +21,7 @@ final class SideraView: World {
     LegendRow(glyph: .drag, gesture: "drag a star", does: "moves its box: pitch of the bend, length of the step"),
     LegendRow(glyph: .two, gesture: "two fingers on a band", does: "← → box width, ↑ ↓ box height"),
     LegendRow(glyph: .hold, gesture: "hold a band or a star", does: "its sheet: note, stars, level, pan, law"),
-    LegendRow(glyph: .drag, gesture: "drag the moon", does: "along the arc: how fast the stars wander"),
+    LegendRow(glyph: .drag, gesture: "drag the gold moon", does: "← descend · eclipse (still) · ascend → · full moon at the ends: wander and direction of the line"),
     LegendRow(glyph: .tap, gesture: "tap the moon", does: "map of worlds"),
   ]
 
@@ -57,8 +57,8 @@ final class SideraView: World {
   func idle() {}
   func tick(now: Double, dt: Double) {
     self.now = now; pullMirror(); tickHolds()
-    let step = min(max(dt, 0), 0.1) * sidHeadRate(step: mirror.step)
-    for v in 0..<Sid.nv { let n = Double(max(mirror.voices[v].n, 1)); heads[v] = fmod(heads[v] + step, n) }
+    let step = min(max(dt, 0), 0.1) * sidHeadRate(phase: mirror.step)
+    for v in 0..<Sid.nv { let n = Double(max(mirror.voices[v].n, 1)); heads[v] = (fmod(heads[v] + step, n) + n).truncatingRemainder(dividingBy: n) }
   }
   func pullMirror() {
     let len = min(max(0, readMirror(&mbuf)), mbuf.count)

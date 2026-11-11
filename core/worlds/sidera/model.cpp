@@ -49,7 +49,7 @@ void Model::fit(Point& p, int v) const {
 }
 
 void Model::reset(uint32_t seed) {
-  step_ = 0.15;
+  step_ = 0.575;
   fx_[DRIFT] = 0.25; fx_[SPACE] = 0.3; fx_[TONE] = 0.35; fx_[CUTOFF] = 1.0; fx_[RESO] = 0.3;
   rng_ = sdk::Rng(seed);
   for (int v = 0; v < NV; v++) {
@@ -113,7 +113,7 @@ void Model::roll(int v) {
     }
   }
   if (v < 0) {
-    setStep(in(0.05, 0.9));
+    setStep(in(0.05, 0.95));
     setFx(DRIFT, in(0.1, 0.7)); setFx(SPACE, in(0.1, 0.6)); setFx(TONE, in(0.2, 0.8));
     setFx(CUTOFF, in(0.55, 1)); setFx(RESO, in(0, 0.4));
   }
@@ -144,7 +144,7 @@ void Model::walk(int v) {
   if (v < 0 || v >= NV) return;
   const int n = static_cast<int>(prm_[v][N]);
   const int kind = static_cast<int>(prm_[v][DIST]);
-  const double s = step_ * prm_[v][VSTEP], wd = prm_[v][WD], wa = prm_[v][WA];
+  const double s = wander() * prm_[v][VSTEP], wd = prm_[v][WD], wa = prm_[v][WA];
   for (int i = 0; i < n; i++) {
     Point& p = pts_[v][i];
     const double ud = vrng_[v].next(), ua = vrng_[v].next();
