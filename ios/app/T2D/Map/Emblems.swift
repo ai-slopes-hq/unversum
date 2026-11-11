@@ -4,7 +4,7 @@ import CoreText
 // лица карточек мира и рубашка на карте Universum: порт host/map.js emblemFor (:82-257) и cardBack (:259-282).
 // Рисуется один раз на размер и плотность (кеш). Начало контекста — слева сверху, как у canvas 2D.
 // EMB_LINE (латинская строка под названием) только при pw > 100 — на телефоне карточка уже, не рисуем.
-// В реестре iOS нет слотов 3, 6, 17, 18 (выключены, в архиве, DLC закрыт) — их лица не портируем.
+// В реестре iOS нет слотов 3, 15, 17, 18 (выключены, DLC закрыт) — их лица не портируем.
 enum Emblems {
   private static var faces: [String: CGImage] = [:]
   private static var backs: [String: CGImage] = [:]
@@ -132,6 +132,10 @@ enum Emblems {
         }
       }
       g.setStrokeColor(rgb(185, 210, 223, 0.8)); g.beginPath(); ell(g, cx, cy + R * 1.05, R * 0.25, 3.5); g.strokePath()
+    case 6:                                               // сферы рая вокруг розы: пять эллипсов, восемь кружков
+      for k in 0..<5 { S(0.75 - CGFloat(k) * 0.1); g.beginPath(); ell(g, cx, cy, R * (0.45 + CGFloat(k) * 0.2), R * (0.62 + CGFloat(k) * 0.27)); g.strokePath() }
+      S(0.85)
+      for j in 0..<8 { let a = CGFloat(j) / 8 * T2; g.beginPath(); arc(g, cx + cos(a) * R * 0.2, cy + sin(a) * R * 0.22, R * 0.12); g.strokePath() }
     case 7:                                               // монохорд: ящик, три струны, подставка, дуги интервалов справа
       let bw = R * 0.62, bh = R * 2.3, y0 = cy - bh / 2
       S(0.8); g.stroke(CGRect(x: cx - bw / 2, y: y0, width: bw, height: bh))

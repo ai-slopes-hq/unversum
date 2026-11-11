@@ -46,6 +46,7 @@ struct T2DApp: App {
     case OceanusView.slotN:
       return OceanusView(core: AppCore(slot: slot), geo: OceanGeo(W: 390, H: 844, topY: 59, safeBot: 34),
                          readMirror: OceanusView.appMirror)
+    case ParadisusView.slotN: return ParadisusView(core: AppCore(slot: slot))
     case MonochordView.slotN: return MonochordView(core: AppCore(slot: slot))
     case HorologiumView.slotN: return HorologiumView(core: AppCore(slot: slot))
     case ArcadiaView.slotN: return ArcadiaView(core: AppCore(slot: slot))
@@ -105,6 +106,26 @@ struct T2DApp: App {
     case "natura", "natura-play", "natura-fx", "natura-res", "natura-skiff", "natura-ducks-away", "natura-sheet", "natura-menu": shotNatura(T2DApp.shotName); return
     case "portus", "portus-empty", "portus-play", "portus-echo", "portus-star", "portus-bloodmoon", "portus-sheet": shotPortus(T2DApp.shotName); return
     case "cymatica", "cym-empty", "cym-play", "cym-pinch", "cym-steprec", "cym-chance", "cym-drift", "cym-luna": shotCymatica(T2DApp.shotName); return
+    case "paradisus", "paradisus-fan", "paradisus-sheet", "paradisus-drag":     // два оставленных ангела, роза раскрыта хором; палец ведёт третьего
+      host.go(ParadisusView.slotN)
+      let core = AppCore(slot: ParadisusView.slotN)
+      for (id, k, v) in [(1, 3, 1.2), (2, 5, 3.4)] as [(Int, Int, Double)] {
+        core.action(ParAct.touch.rawValue, id, [Double(k), v], touchTime: 0); core.action(ParAct.pin.rawValue, id, [], touchTime: 0)
+      }
+      for (key, val) in [(0, 0.6), (7, 0.7), (5, 0.4)] as [(Int, Double)] { core.action(ParAct.fx.rawValue, 0, [Double(key), val], touchTime: 0) }
+      DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+        guard let v = host.world as? ParadisusView else { return }
+        switch T2DApp.shotName {
+        case "paradisus-fan": if let fx = v.fx { host.shotSheet(fx, lfoKey: "shimmer"); host.shotLfo(rate: 1, depth: 0.5) }
+        case "paradisus-sheet": if let a = v.mirror.angels.first(where: \.pinned) { host.shotSheet(v.angelSpec(a.id)) }
+        case "paradisus-drag":
+          let g = v.geo, id = NSObject(), a = g.angelPos(7, 0.6), b = g.angelPos(7, 1.8)
+          v.down(Finger(id: ObjectIdentifier(id), x: a.x, y: a.y, x0: a.x, y0: a.y, t0: 0, moved: true, touchTime: 1))
+          v.move(Finger(id: ObjectIdentifier(id), x: b.x, y: b.y, x0: a.x, y0: a.y, t0: 0, moved: true, touchTime: 1))
+        default: break
+        }
+      }
+      return
     case "hymenaeus": host.go(HymenaeusView.slotN); return   // нить играет сама (enter → run)
     case "hymenaeus-fan", "hymenaeus-ring-sheet", "hymenaeus-legend":
       host.go(HymenaeusView.slotN)
