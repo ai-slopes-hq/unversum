@@ -125,6 +125,8 @@ final class HymenaeusTests: XCTestCase {
     v.tick(now: 5, dt: 0.016)
     XCTAssertEqual(v.ringHit[0], 5); XCTAssertEqual(v.ringHit[1], 5)
     XCTAssertEqual(v.notes.filter { $0.born == 5 }.count, 2)
+    XCTAssertEqual(v.notes.first { $0.born == 5 && $0.ring == 0 }?.pearl, 4, "нота помнит свою жемчужину")
+    XCTAssertEqual(v.notes.first { $0.born == 5 && $0.ring == 1 }?.pearl, -1, "ручной удар — без жемчужины")
   }
 
   // ---------- жесты по осям ----------
@@ -336,6 +338,17 @@ final class HymenaeusTests: XCTestCase {
     XCTAssertEqual(hit(CGPoint(x: g.cloudsRect.midX, y: g.cloudsRect.maxY - 3)), .echo)
     XCTAssertEqual(hit(g.pt(20, 560)), HymHit.none)
     XCTAssertEqual(hit(CGPoint(x: CGFloat.nan, y: 1)), HymHit.none)
+  }
+
+  func testHitPicksNearestPearl() {
+    var mv = vector(); mv[6] = 16                                                        // len 16: соседи ~19 пт друг от друга
+    let (v, _) = make(mv), g = v.geo, m = v.mirror
+    let n = m.len[0]
+    XCTAssertEqual(n, 16)
+    let a = g.pearlPoint(0, 4, n: n, pitch: m.pearls[0][4].pitch), b = g.pearlPoint(0, 5, n: n, pitch: m.pearls[0][5].pitch)
+    let p = CGPoint(x: a.x + (b.x - a.x) * 0.6, y: a.y + (b.y - a.y) * 0.6)              // ближе к 5-й, но обе в радиусе 14·S
+    XCTAssertLessThan(hypot(p.x - a.x, p.y - a.y), 14 * g.S, "обе жемчужины в радиусе — тест имеет смысл")
+    XCTAssertEqual(HymTouch.hit(p, geo: g, mirror: m), .pearl(0, 5))
   }
 
   func testPitchGestureSendsAct() {

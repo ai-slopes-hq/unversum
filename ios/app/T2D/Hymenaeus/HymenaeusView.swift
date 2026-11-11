@@ -28,7 +28,7 @@ final class HymenaeusView: World {
     LegendRow(glyph: .tap, gesture: "tap the sun", does: "map of worlds"),
   ]
 
-  struct Note { var ring = 0; var born = -1e9 }
+  struct Note { var ring = 0; var pearl = -1; var born = -1e9 }   // pearl: откуда ушла нота (−1 — ручной удар по кольцу, без полёта)
   static let noteLife = 1.1, noteMax = 12
   private(set) var notes = [Note](repeating: Note(), count: HymenaeusView.noteMax)
   private var noteAt = 0
@@ -119,7 +119,7 @@ final class HymenaeusView: World {
         guard r >= 0 && r < Hym.nr else { continue }
         ringHit[r] = now
         if pearl >= 0 { ringHitPos[r] = 0.3 }
-        notes[noteAt] = Note(ring: r, born: now); noteAt = (noteAt + 1) % HymenaeusView.noteMax
+        notes[noteAt] = Note(ring: r, pearl: pearl, born: now); noteAt = (noteAt + 1) % HymenaeusView.noteMax
       }
     }
   }

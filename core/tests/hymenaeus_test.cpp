@@ -353,6 +353,14 @@ static void modelTimbreKeepsNotes() {
   CHECK(changed);
 }
 
+static void modelTimbreDoesNotShiftMelody() {      // кость timbre не двигает общий rng: будущие мелодии те же
+  Scale sc; Model a(sc), b(sc); a.reset(9); b.reset(9);
+  for (int n = 0; n < 5; n++) b.rollTimbre();
+  a.roll(); b.roll();
+  CHECK(sameNotes(a.thread(0), b.thread(0)) && sameNotes(a.thread(1), b.thread(1)));
+  for (int i = 0; i < 40; i++) { const Step x = a.next(0), y = b.next(0); CHECK(x.hit == y.hit && x.hz == y.hz); }
+}
+
 static void modelMixClamp() {
   Scale sc; Model m(sc);
   CHECK(m.mix() == 0.5);
@@ -1072,7 +1080,7 @@ int main() {
   modelSeedDeterministic(); modelDejaVuOneRepeats(); modelDejaVuZeroVaries(); modelRestsSilent();
   modelRingsCount(); modelDefaultRanges(); modelTwoThreadsIndependent(); modelRangeClamp(); modelPitchWithinRange(); modelDeterministic(); modelScaleSnap(); modelScaleSnapLowRange(); modelClamps(); modelLenOne();
   modelSnapshotRoundTrip(); modelRestoreGarbage(); modelRollAndClear(); modelClearAllIsEmpty(); modelClearUndoRestores(); modelClearTwice(); modelCloudSend();
-  modelLocSwapKeepsSound(); modelLocKeepsEdits(); modelLocOutOfRange(); modelLocsDiffer(); modelDiceKeepsTimbre(); modelTimbreKeepsNotes(); modelMixClamp(); modelLocSnapshotRoundTrip(); modelLocRestoreGarbage();
+  modelLocSwapKeepsSound(); modelLocKeepsEdits(); modelLocOutOfRange(); modelLocsDiffer(); modelDiceKeepsTimbre(); modelTimbreKeepsNotes(); modelTimbreDoesNotShiftMelody(); modelMixClamp(); modelLocSnapshotRoundTrip(); modelLocRestoreGarbage();
   ringsRingsDown(); ringsDampingMonotone(); ringsBrightnessCentroid(); ringsStable(); ringsIdleCheap(); ringsNoAlloc(); ringsPluckerBurst();
   cloudSilentIn(); cloudEchoesInput(); cloudFreezeHolds(); cloudFreezeEmpty(); cloudEchoDecays(); cloudNoNan(); cloudDensityBounded(); cloudSleepsAgain();
   worldSilentWhenStopped(); worldStepsInTime(); worldStrikeSounds(); worldNoStepFlood(); worldStopNoStuck(); worldSnapshotRoundTrip();

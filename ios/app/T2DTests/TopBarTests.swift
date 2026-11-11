@@ -89,6 +89,20 @@ final class TopBarTests: XCTestCase {
     XCTAssertLessThanOrEqual(TopBar.titleX + w, 320 - 16 + 0.5)
   }
 
+  func testTimbreNeverOverlapsAtNarrowWidths() {
+    for W in [CGFloat(320), 375, 393] {
+      let b = TopBar(W: W, top: 47, H: 800, safeBot: 0), t = b.pos(.timbre)
+      for k in Btn.allCases where k != .timbre {
+        let p = b.pos(k)
+        XCTAssertGreaterThanOrEqual(hypot(p.x - t.x, p.y - t.y), p.r + t.r + 2, "timbre / \(k) at \(W)")
+      }
+      XCTAssertEqual(b.hit(t.x, t.y, titleW: 60, enabled: Set(Btn.allCases)), .btn(.timbre), "timbre ловит касание \(W)")
+      XCTAssertGreaterThan(t.x, 0); XCTAssertLessThan(t.x + t.r, W)
+    }
+    let wide = TopBar(W: 393, top: 47, H: 852, safeBot: 34)
+    XCTAssertEqual(wide.pos(.timbre).y, wide.pos(.back).y, "на широком экране — в нижнем ряду")
+  }
+
   // красная яркость пикселя (x, y) кадра: фон — чёрный, знаки — светлые
   private func render(_ s: TopBar.State) -> (CGContext, (CGFloat, CGFloat) -> Int) {
     let c = CGContext(data: nil, width: 390, height: 844, bitsPerComponent: 8, bytesPerRow: 0,

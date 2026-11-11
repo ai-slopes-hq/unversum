@@ -41,7 +41,9 @@ struct TopBar {
     case .clear: return (W - 182, y, TopBar.clrR)
     case .undo: return (W - 220, y, TopBar.clrR)
     case .dice: return (W - 258, y, TopBar.clrR)
-    case .timbre: return (W - 296, y, TopBar.clrR)               // вторая кость, только у миров с hasTimbre
+    case .timbre:                                                // вторая кость, только у миров с hasTimbre
+      if W - 296 >= 26 + 2 * TopBar.clrR + 2 { return (W - 296, y, TopBar.clrR) }       // влезает в ряд правее back
+      return (W - 27, top + 22, TopBar.clrR)                    // узкий экран (320): ряд полон — в правый верхний угол, заголовок слева короче
     }
   }
 

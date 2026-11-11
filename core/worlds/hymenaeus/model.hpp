@@ -74,6 +74,7 @@ class Model {
   int curLoc_ = 0;
   double mix_ = 0.5;
   sdk::Rng rng_{1};
+  sdk::Rng trng_{1};                                    // отдельный поток для кости timbre: мелодии déjà vu не зависят от бросков
 };
 
 }  // namespace hymenaeus

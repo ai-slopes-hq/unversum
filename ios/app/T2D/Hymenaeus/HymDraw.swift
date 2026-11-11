@@ -5,6 +5,11 @@ import UIKit
 final class HymDrawState {
   struct WallKey: Equatable { var W, H, sc: CGFloat }
   var wall: CGImage?, wallKey: WallKey?, wallBuilds = 0
+  struct CircKey: Hashable { var cx, cy, sc: CGFloat; var seed: Int? }
+  var circles: [CircKey: [(x: CGFloat, y: CGFloat, r: CGFloat)]] = [:]       // круги облаков — чистая геометрия, считаем один раз
+  struct LensKey: Equatable { var cx, cy, sc, dens, W, H: CGFloat }
+  var lensKey: LensKey?, lensClipA: CGPath?, lensClipB: CGPath?, lensHatch: CGPath?   // линза: два клипа и штриховка, пересобираются при смене плотности
+  var lensBuilds = 0
 }
 
 private struct HymRnd {                                  // тот же генератор, что seed * 16807 % 2147483647 в макете
@@ -17,6 +22,7 @@ private let tau = CGFloat.pi * 2
 
 extension HymenaeusView {
   var wallBuilds: Int { dr.wallBuilds }
+  var lensBuilds: Int { dr.lensBuilds }
 
   private func col(_ c: RGB, _ a: CGFloat) -> CGColor { Draw.color(c, a) }
   private func circle(_ g: CGContext, _ x: CGFloat, _ y: CGFloat, _ r: CGFloat) { g.strokeEllipse(in: CGRect(x: x - r, y: y - r, width: 2 * r, height: 2 * r)) }
@@ -34,6 +40,9 @@ extension HymenaeusView {
   // облако — объединение кругов: контур только там, где дуга не внутри соседа; снизу — штриховка-тень (макет cloud())
   private typealias Circles = [(x: CGFloat, y: CGFloat, r: CGFloat)]
   private func cloudCircles(_ cx: CGFloat, _ cy: CGFloat, _ scale: CGFloat, seed: Int? = nil) -> Circles {
+    let key = HymDrawState.CircKey(cx: cx, cy: cy, sc: scale, seed: seed)
+    if let c = dr.circles[key] { return c }
+    if dr.circles.count > 32 { dr.circles.removeAll() }
     var rnd = HymRnd(seed ?? Int((cx * 7 + cy).rounded()))
     var C: Circles = []
     let n = 7
@@ -42,6 +51,7 @@ extension HymenaeusView {
       C.append((cx + t * 120 * scale, cy - cos(t * .pi) * 14 * scale + (rnd.next() - 0.5) * 8 * scale, (17 + cos(t * .pi) * 15 + rnd.next() * 6) * scale))
     }
     C.append((cx - 25 * scale, cy + 8 * scale, 20 * scale)); C.append((cx + 22 * scale, cy + 9 * scale, 19 * scale))
+    dr.circles[key] = C
     return C
   }
 
@@ -144,14 +154,22 @@ extension HymenaeusView {
     }
     if m.cloud[Hym.Cloud.freeze] > 0.5 { cloud(g, cloudA.x, cloudA.y, sc, 0.65, frozen: true) }
     // линза пересечения: штриховка, чем гуще densitas — тем чаще штрихи (площадь линзы — число гранул)
-    let A = cloudCircles(cloudA.x, cloudA.y, sc), Bc = cloudCircles(B.x, B.y, sc)
-    g.saveGState()
-    for C in [A, Bc] { g.beginPath(); for c in C { g.addEllipse(in: CGRect(x: c.x - c.r, y: c.y - c.r, width: 2 * c.r, height: 2 * c.r)) }; g.clip() }
-    g.setStrokeColor(col(Hym.ink, 0.5)); g.setLineWidth(0.8); g.beginPath()
-    let lens = G.lensRect.insetBy(dx: -20 * S, dy: -20 * S), step = (6 - dens * 3.6) * S
-    var y = lens.minY
-    while y < lens.maxY { g.move(to: CGPoint(x: lens.minX, y: y)); g.addLine(to: CGPoint(x: lens.maxX, y: y)); y += step }
-    g.strokePath(); g.restoreGState()
+    let key = HymDrawState.LensKey(cx: cloudA.x, cy: cloudA.y, sc: sc, dens: dens, W: G.W, H: G.H)
+    if dr.lensKey != key {
+      dr.lensKey = key; dr.lensBuilds += 1
+      func ell(_ C: Circles) -> CGPath { let p = CGMutablePath(); for c in C { p.addEllipse(in: CGRect(x: c.x - c.r, y: c.y - c.r, width: 2 * c.r, height: 2 * c.r)) }; return p }
+      dr.lensClipA = ell(cloudCircles(cloudA.x, cloudA.y, sc)); dr.lensClipB = ell(cloudCircles(B.x, B.y, sc))
+      let h = CGMutablePath(), lens = G.lensRect.insetBy(dx: -20 * S, dy: -20 * S), step = (6 - dens * 3.6) * S
+      var y = lens.minY
+      while y < lens.maxY { h.move(to: CGPoint(x: lens.minX, y: y)); h.addLine(to: CGPoint(x: lens.maxX, y: y)); y += step }
+      dr.lensHatch = h
+    }
+    if let ca = dr.lensClipA, let cb = dr.lensClipB, let h = dr.lensHatch {
+      g.saveGState()
+      g.beginPath(); g.addPath(ca); g.clip(); g.beginPath(); g.addPath(cb); g.clip()
+      g.setStrokeColor(col(Hym.ink, 0.5)); g.setLineWidth(0.8); g.beginPath(); g.addPath(h); g.strokePath()
+      g.restoreGState()
+    }
     let px = G.pt(40 + pos * 310, 0).x, y0 = G.pt(0, 108).y, y1 = G.pt(0, 244).y        // позиция чтения: нить сверху вниз через облака
     if e > 0.02 { d.glowAt(px, G.pt(0, 175).y, 70 * S, e * 0.35) }   // облако дышит громкостью
     g.setLineDash(phase: 0, lengths: [2, 4]); g.setStrokeColor(col(Hym.ink, 0.35)); g.setLineWidth(1)
@@ -183,19 +201,23 @@ extension HymenaeusView {
   private func drawStrikes(_ d: Draw, _ now: Double) {
     let g = d.g, G = geo, m = mirror
     for r in 0..<Hym.nr {
-      let n = max(1, m.len[r]), i = m.playedIndex(r), from = G.pearlPoint(r, i, n: n, pitch: m.pearls[r][i].pitch)
+      let n = max(1, m.len[r])
       let c = G.ringCenter(r), ang = CGFloat(ringHitPos[r]) * tau - .pi / 2, rr = G.ringR(r) + HymGeo.ringW * G.S / 2
       let to = CGPoint(x: c.x + cos(ang) * rr, y: c.y + sin(ang) * rr)
       let flash = max(0, 1 - CGFloat(now - ringHit[r]) / 0.9)
-      if flash > 0.02 && !m.pearls[r][i].rest {
-        g.setLineDash(phase: 0, lengths: [1.5, 3]); g.setStrokeColor(col(Hym.gold, 0.85 * flash)); g.setLineWidth(1.1)
-        g.beginPath(); g.move(to: from); g.addLine(to: to); g.strokePath(); g.setLineDash(phase: 0, lengths: [])
-      }
-      for n in notes where n.ring == r {
-        let age = now - n.born
+      var newest: Note?
+      for nt in notes where nt.ring == r && nt.pearl >= 0 && nt.pearl < n && nt.pearl < m.pearls[r].count && !m.pearls[r][nt.pearl].rest {
+        let age = now - nt.born
         guard age >= 0 && age < HymenaeusView.noteLife else { continue }
+        if newest == nil || nt.born > newest!.born { newest = nt }
+        let from = G.pearlPoint(r, nt.pearl, n: n, pitch: m.pearls[r][nt.pearl].pitch)
         let t = CGFloat(age / HymenaeusView.noteLife), p = CGPoint(x: from.x + (to.x - from.x) * min(1, t * 2.2), y: from.y + (to.y - from.y) * min(1, t * 2.2))
         star4(g, p.x, p.y, 3 + 3 * (1 - t), col(Hym.gold, 0.9 * (1 - t * 0.7)))
+      }
+      if flash > 0.02, let nt = newest {                  // пунктир — от жемчужины последнего удара
+        let from = G.pearlPoint(r, nt.pearl, n: n, pitch: m.pearls[r][nt.pearl].pitch)
+        g.setLineDash(phase: 0, lengths: [1.5, 3]); g.setStrokeColor(col(Hym.gold, 0.85 * flash)); g.setLineWidth(1.1)
+        g.beginPath(); g.move(to: from); g.addLine(to: to); g.strokePath(); g.setLineDash(phase: 0, lengths: [])
       }
     }
   }

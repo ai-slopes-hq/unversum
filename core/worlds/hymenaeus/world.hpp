@@ -25,7 +25,7 @@ namespace hymenaeus {
 
 enum Act { RING, CLOUD, PEARL, STRIKE, THREAD, DICE, CLEAR, RUN, BPM, TIMBRE, LOC, MIX };
 constexpr int MIRROR_HEAD = 14, MIRROR_RING = 6, MIRROR_N = MIRROR_HEAD + NR * 2 * PEARL_MAX + NR * MIRROR_RING + NCK + 1;
-constexpr int MAX_EV = 4, HEARD_MAX = 32;
+constexpr int MAX_EV = 4, HEARD_MAX = 32, MAN_MAX = 8, EV_CAP = NR * MAX_EV + MAN_MAX;   // шаги: обе нити × MAX_EV за блок + ручные удары
 
 class World : public sdk::World {
  public:
@@ -50,7 +50,7 @@ class World : public sdk::World {
   Sound sound_;
   sdk::Steps steps_;
   const sdk::Clock* clk_ = nullptr;
-  Ev man_[8]; int nman_ = 0;                             // ручные удары, ждут следующего блока
+  Ev man_[MAN_MAX]; int nman_ = 0;                             // ручные удары, ждут следующего блока
   int hr_[HEARD_MAX] = {}, hp_[HEARD_MAX] = {}, nh_ = 0;
   bool run_ = false;
   double bpm_ = 90, sr_ = 48000, now_ = 0;

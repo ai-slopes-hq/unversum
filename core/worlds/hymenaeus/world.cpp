@@ -37,7 +37,7 @@ void World::action(int kind, int i, const double* a, int n) {
       if (i < 0 || i >= NR) break;
       const double pos = (has(1) && !std::isnan(a[0])) ? std::min(std::max(a[0], 0.0), 1.0) : 0.3;
       const double vel = (has(2) && !std::isnan(a[1])) ? std::min(std::max(a[1], 0.0), 1.0) : 1.0;
-      queue(man_, nman_, 8, Ev{0, i, -1, model_.hzOf(i, 0.5), pos, vel});
+      queue(man_, nman_, MAN_MAX, Ev{0, i, -1, model_.hzOf(i, 0.5), pos, vel});
       break;
     }
     case THREAD: {                                             // i = нить, a = [0 déjà vu | 1 длина | 2 lo | 3 hi, v]
@@ -83,8 +83,8 @@ void World::process(const sdk::Out& out, int n) {
   double cl[NCK]; for (int k = 0; k < NCK; k++) cl[k] = model_.cloud(k);
   sound_.setCloud(cl); sound_.setMix(model_.mix());
 
-  Ev ev[MAX_EV + 8]; int ne = 0;
-  for (int j = 0; j < nman_; j++) queue(ev, ne, MAX_EV + 8, man_[j]);
+  Ev ev[EV_CAP]; int ne = 0;
+  for (int j = 0; j < nman_; j++) queue(ev, ne, EV_CAP, man_[j]);
   nman_ = 0;
   if (run_) {
     static const sdk::Grid none;
@@ -99,7 +99,7 @@ void World::process(const sdk::Out& out, int n) {
                    const Step s = model_.next(th);
                    if (!s.hit) continue;
                    const int off = std::min(std::max(static_cast<int>((t - now) * sr_), 0), n - 1);
-                   queue(ev, ne, MAX_EV + 8, Ev{off, s.ring, s.pearl, s.hz, 0.3, s.vel});
+                   queue(ev, ne, EV_CAP, Ev{off, s.ring, s.pearl, s.hz, 0.3, s.vel});
                  }
                });
   }

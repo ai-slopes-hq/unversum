@@ -28,12 +28,17 @@ enum HymTouch {
   static func hit(_ p: CGPoint, geo: HymGeo, mirror m: HymMirror) -> HymHit {
     guard ok(p) else { return .none }
     let hit = 14 * geo.S
+    var best: (t: Int, i: Int, d: CGFloat)?               // ближайшая жемчужина в радиусе — соседи на len 16 стоят в ~19 пт
     for t in 0..<Hym.nr {
       let n = max(1, m.len[t])
       for i in 0..<n {
-        let q = geo.pearlPoint(t, i, n: n, pitch: m.pearls[t][i].pitch)
-        if hypot(p.x - q.x, p.y - q.y) < hit { return .pearl(t, i) }
+        let q = geo.pearlPoint(t, i, n: n, pitch: m.pearls[t][i].pitch), d = hypot(p.x - q.x, p.y - q.y)
+        if d < hit && d < (best?.d ?? .infinity) { best = (t, i, d) }
       }
+    }
+    if let b = best { return .pearl(b.t, b.i) }
+    for t in 0..<Hym.nr {
+      let n = max(1, m.len[t])
       let c = geo.claspPoint(t, lastPitch: m.pearls[t][n - 1].pitch)
       if hypot(p.x - c.x, p.y - c.y) < 16 * geo.S { return .clasp(t) }
     }

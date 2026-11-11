@@ -70,6 +70,7 @@ void Model::toss(Thread& th, int i) {
 
 void Model::reset(uint32_t seed) {
   rng_ = sdk::Rng(seed);
+  trng_ = sdk::Rng(seed ^ 0x9E3779B9u);
   for (int t = 0; t < NR; t++) {
     Thread& th = thr_[t];
     th.len = PEARL_DEF; th.cur = 0; th.dejavu = 0.7; th.lo = LO_DEF[t]; th.hi = HI_DEF[t];
@@ -99,7 +100,7 @@ void Model::setLoc(int slot) {
 void Model::setMix(double v) { if (!std::isnan(v)) mix_ = clamp01(v); }
 
 void Model::rollTimbre() {
-  const auto draw = [&]() { return 0.1 + 0.8 * rng_.next(); };   // подальше от краёв ручек
+  const auto draw = [&]() { return 0.1 + 0.8 * trng_.next(); };   // подальше от краёв ручек
   for (int r = 0; r < NR; r++) for (int k : {int(STRUCT), int(BRIGHT), int(DAMP)}) ring_[r][k] = draw();
   for (int k : {int(POS), int(SIZE), int(DENS), int(PITCH)}) cloud_[k] = draw();
 }
@@ -180,6 +181,7 @@ std::string Model::snapshot() const {
   using sdk::Json;
   Json o = Json::object();
   o.set("rng", Json::num(rng_.state));
+  o.set("trng", Json::num(trng_.state));
   o.set("curLoc", Json::num(curLoc_));
   o.set("mix", Json::num(mix_));
   Json ts = Json::array();
@@ -216,6 +218,8 @@ void Model::restore(const std::string& js) {
   double t = 1;
   if (const Json* v = j.get("rng")) if (v->type == Json::Num && finite(v->n)) t = v->n;
   rng_ = sdk::Rng(static_cast<uint32_t>(t < 0 ? 0 : t > 4294967295.0 ? 4294967295.0 : t));
+  trng_ = sdk::Rng(static_cast<uint32_t>(t) ^ 0x9E3779B9u);
+  if (const Json* v = j.get("trng")) if (v->type == Json::Num && finite(v->n)) trng_ = sdk::Rng(static_cast<uint32_t>(v->n < 0 ? 0 : v->n > 4294967295.0 ? 4294967295.0 : v->n));
   if (const Json* v = j.get("curLoc")) if (v->type == Json::Num && finite(v->n) && v->n >= 0 && v->n < NLOC) curLoc_ = static_cast<int>(v->n);
   if (const Json* v = j.get("mix")) if (v->type == Json::Num) setMix(v->n);
   if (const Json* ls = j.get("loc")) if (ls->type == Json::Arr)     // слоты; активный перезапишут живые нити ниже
