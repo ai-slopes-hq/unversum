@@ -203,7 +203,7 @@ static void worldPeakBounded() {
       pre = std::fmax(pre, w.sound().prePeak());
     }
     CHECK(st.finite); CHECK(st.pk < 1.0 && st.spk < 1.0); CHECK(st.pk > 0.05);
-    CHECK(pre < 1.6);                                     // колено не должно быть основным лимитом: до него — не выше ~1.6 (измерено, см. отчёт)
+    CHECK(pre < 1.3);                                     // колено не должно быть основным лимитом: до него — не выше ~1.3 (измерено, см. отчёт)
     std::printf("  peak sr=%.0f: out %.3f send %.3f pre-knee %.3f rms %.3f\n", sr, st.pk, st.spk, pre, std::sqrt(st.e / st.n));
   }
 }
@@ -289,6 +289,31 @@ static void worldRestoreAnyInput() {
   }
   World w(sc); w.prepare(48000, 1); w.restore(in[7]);
   CHECK(w.model().count() == 1 && w.model().angel(0).pinned && w.model().fx().shimmer == 0.5 && w.model().angel(0).singers == 3);
+}
+
+static void worldRestoreKeepsSung() {                     // restore с теми же отрицательными id, пока живые голоса ещё есть: ангел должен петь
+  Scale sc; World w(sc); w.prepare(48000, 21); Bufs b; Stat st;
+  act(w, FX, 0, {double(GLORIA), 0}); act(w, FX, 0, {double(ORBITS), 1});
+  act(w, TOUCH, 0, {5, 2.3}); act(w, PIN, 0, {}); run(w, b, 1.5, 128, 48000, st);
+  const std::string js = w.snapshot();
+  w.restore(js); run(w, b, 1.5, 128, 48000, st);
+  CHECK(w.model().count() == 1 && w.model().angel(0).sung && w.model().angel(0).lvl > 0.9);
+  CHECK(w.sound().voicesUsed() >= 1);
+  int chimes = 0; double h[100];
+  for (int s = 0; s < 30; s++) { run(w, b, 1.0, 128, 48000, st); const int n = w.heard(h, 100); for (int j = 0; j < (n ? int(h[0]) : 0); j++) chimes += h[1 + 2 * j] == H_CHIME; }
+  CHECK(chimes >= 1);
+}
+
+static void worldCrowdBounded() {
+  Scale sc; World w(sc); w.prepare(48000, 22); Bufs b; Stat st;
+  pinFour(w);
+  for (int a = 0; a < 4; a++) { const int id = w.model().angel(a).id; for (int k = 0; k < 4; k++) act(w, ANGEL, id, {double(k), 1}); }
+  for (int i = 0; i < 12; i++) act(w, TOUCH, 10 + i, {double(i % 9), i * 0.4});
+  for (int k = 0; k < NFX; k++) act(w, FX, 0, {double(k), 1});
+  double pre = 0;
+  for (int s = 0; s < 20; s++) { if (s % 3 == 0) act(w, ROSE, 0, {}); run(w, b, 1.0, 128, 48000, st); pre = std::fmax(pre, w.sound().prePeak()); }
+  CHECK(w.model().count() == MAX_ANGEL); CHECK(st.finite); CHECK(st.pk < 1.0 && st.spk < 1.0);
+  std::printf("  crowd 4 pins + 12 temp: out %.3f send %.3f pre-knee %.3f\n", st.pk, st.spk, pre);
 }
 
 static void worldPinKeepsVoice() {
@@ -386,7 +411,7 @@ int main() {
   harmMapping(); formantsInterpolate(); pinLimit(); hzOfScaleOff(); snapshotRoundTrip(); restoreGarbage();
   orbitsAndChime(); driftBounded(); diceDeterministic(); miscClamps();
   worldPeakBounded(); worldBlocksAnySize(); worldSilentWhenIdle(); worldVowelChangesSpectrum(); worldDeterministic(); worldSnapshotRoundTrip(); worldRestoreAnyInput();
-  worldPinKeepsVoice(); worldReleaseFades(); worldHeardEvents(); worldGloria(); worldMirrorLayout(); worldBadActions(); worldNoAllocInProcess();
+  worldRestoreKeepsSung(); worldCrowdBounded(); worldPinKeepsVoice(); worldReleaseFades(); worldHeardEvents(); worldGloria(); worldMirrorLayout(); worldBadActions(); worldNoAllocInProcess();
   std::printf("paradisus-test: %d checks, %d failed\n", checks, fails);
   return fails ? 1 : 0;
 }

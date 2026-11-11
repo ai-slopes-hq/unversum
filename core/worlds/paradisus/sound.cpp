@@ -105,6 +105,7 @@ void Sound::step(Model& m, double dt) {
       begin(*v, m, a);
       m.setSung(a.id, true);
     } else {
+      if (!a.sung) m.setSung(a.id, true);                 // голос уже есть (id совпал после restore) — ангел всё равно поёт
       aim(*v, m, a, false);
       v->hz += (v->tHz - v->hz) * cHz;
       v->bodyHz += (v->tBodyHz - v->bodyHz) * cBody;
