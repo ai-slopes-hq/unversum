@@ -32,6 +32,7 @@
   `setCloud(pos, size, density, freeze, echo)`. `state` фасада — только через них. Случайность — `sdk::Rng`, без `Math.random`.
 
 ### Звук (`sound`)
+- **Режимы колец (автор, 11.11):** у каждого кольца свой режим — modal или sympathetic strings («жёлтый» Rings) — и полифония 1 / 2 / 4 (переключатель). В strings `structure` двигает аккорд и строй струн: развёртка (рукой или LFO) даёт характерный глайд Rings. Порт `string` и таблицы аккордов из `part.cc`; Task 4b плана.
 - Кольца: порт Rings (`dsp/resonator`, `string`, `plucker`) с `~/code/mutableinstruments/rings` (MIT — в экран лицензий релиза).
   Три голоса, 24–32 моды (не 64), удар через plucker; неслышимое кольцо отцеплено.
   Таблицы (`lut_stiffness` и др.) — только нужные, не весь `resources.cc`.
@@ -69,4 +70,4 @@
 
 ## Вне объёма
 
-Веб-версия; режимы Rings (string synth, FM voice) и 4-голосная полифония; вокодер и pitch shifter Clouds; режимы XY и T-генератор Marbles; многоканальный выход.
+Веб-версия; режимы Rings FM voice и string synth; вокодер и pitch shifter Clouds; режимы XY и T-генератор Marbles; многоканальный выход.

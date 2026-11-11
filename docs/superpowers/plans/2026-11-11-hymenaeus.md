@@ -124,6 +124,27 @@
 
 ---
 
+### Task 4b: Режимы колец — sympathetic strings и полифония 1 / 2 / 4 (автор, 11.11)
+
+Риск: высокий — звук и состояние ядра. Ревью: `sonnet` после задачи.
+
+Автор хочет «жёлтый режим» Rings со своей полифонией и автоматизацию `structure` ради характерного глайда. Решения: режим **свой у каждого кольца** (modal | strings), полифония **1 / 2 / 4 на кольцо** переключателем; в строковом режиме `structure` двигает аккорд и строй струн (развёртка = глайд), LFO на `structure` уже есть (ключ `ring·STRUCT`).
+
+**Files:**
+- Create: `core/worlds/hymenaeus/rings/string.hpp` (порт `rings/dsp/string.cc/h`, без `FM`), `rings/chords.hpp` (таблица аккордов из `part.cc`)
+- Modify: `model.{hpp,cpp}` (RingKey `MODE`, `POLY`; snapshot; зажим), `sound.{hpp,cpp}` (голоса по кругу, струнный путь по `part.cc`: sympathetic strings), `world.{hpp,cpp}` (ключи действий, зеркало: +2 числа на кольцо → `MIRROR_N`), `core/tests/hymenaeus_test.cpp`; `core/build.sh` (wasm пересобрать), `ios/app/T2D/Hymenaeus/HymMirror.swift` (`ringN`, `mirrorN`)
+- Лицензия MI — тот же `rings/LICENSE-MI.txt`
+
+**Interfaces:**
+- Produces: `RingKey { STRUCT, BRIGHT, DAMP, LVL, MODE, POLY }` (`NRK = 6`; MODE 0 = modal, 1 = strings; POLY 0…1 → 1 / 2 / 4); зеркало кольца: `struct, bright, damp, lvl, mode, poly, energy` (7 чисел).
+- Consumes: Task 2–4 (`Resonator`, `Plucker`, `Sound::strike`).
+
+- [ ] **Step 1: Failing tests** — `modelRingModePoly` (зажим, snapshot round-trip, мусор), `soundStringsSound` (в режиме strings удар звучит, пик < 4, затухает), `soundStructureGlide` (развёртка `structure` 0→1 за 2 с в strings: спектральный центр движется монотонно без щелчков — нет скачков > порога между блоками), `soundPolyVoices` (poly 4: четыре удара подряд звучат одновременно, пятый забирает самый старый), `soundModeSwitchLive` (смена режима на звенящем кольце — без NaN и щелчка), `worldMirrorSize`.
+- [ ] **Step 2: Run** — падает.
+- [ ] **Step 3: Реализовать** порт `String` и таблицу аккордов (по `part.cc` ProcessInternal для `RESONATOR_MODEL_SYMPATHETIC_STRING`), голоса кольца по кругу, MODE/POLY в модели, действие `RING` с ключами 4–5, LFO-ключи расширить до `NR·NRK`.
+- [ ] **Step 4: Run** — всё зелёно; `core/build.sh`; sdk-test, mix-cli.
+- [ ] **Step 5: Commit** (с `t2d.wasm`); Swift: `ringN = 7`, `mirrorN = 5 + 32 + NR·7 + NCK + 1 = 67`, тест зеркала.
+
 ## Этап 3. Вид и жесты (Swift)
 
 ### Task 5: Каркас — регистрация, зеркало, вид по макету, тап-удар
