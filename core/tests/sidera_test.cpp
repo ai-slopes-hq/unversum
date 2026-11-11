@@ -223,19 +223,36 @@ static void voiceLevelZeroSilent() {
 }
 
 static void voiceNoteChangeAtBoundary() {
-  Scale sc; Model m(sc); m.setStep(1); Voice vo; vo.prepare(48000);
-  Buf b;
-  for (int blk = 0; blk < 400; blk++) {
-    m.setVoice(0, NOTE, (blk * 7) % 61); m.setVoice(0, N, 3 + (blk * 5) % 14);
-    b.render(vo, m, 0, 128);
-  }
-  bool ok = true; double jump = 0;
-  for (size_t i = 0; i < b.L.size(); i++) {
-    ok = ok && std::isfinite(b.L[i]) && std::isfinite(b.R[i]);
-    if (i) jump = std::max(jump, static_cast<double>(std::fabs(b.L[i] - b.L[i - 1])));
-  }
+  Scale sc;
+  auto run = [&](bool change) {
+    Model m(sc); m.reset(2); m.setStep(1); Voice vo; vo.prepare(48000);
+    Buf b;
+    for (int blk = 0; blk < 400; blk++) {
+      if (change) { m.setVoice(0, NOTE, (blk * 7) % 61); m.setVoice(0, N, 3 + (blk * 5) % 14); }
+      b.render(vo, m, 0, 128);
+    }
+    return b;
+  };
+  const Buf a = run(true), ref = run(false);
+  auto jumpOf = [](const Buf& b, bool& fin) {
+    double j = 0; fin = true;
+    for (size_t i = 0; i < b.L.size(); i++) { fin = fin && std::isfinite(b.L[i]) && std::isfinite(b.R[i]); if (i) j = std::max(j, static_cast<double>(std::fabs(b.L[i] - b.L[i - 1]))); }
+    return j;
+  };
+  bool f1, f2;
+  const double ja = jumpOf(a, f1), jr = jumpOf(ref, f2);
+  CHECK(f1 && f2);
+  CHECK(ja <= 2.0 * jr + 0.05);                                                  // смена ноты и N на ходу не рвёт сильнее самого блуждания (шаг 1)
+}
+
+static void voicePeriodShorterThanN() {                                          // Review Focus: период короче N сэмплов
+  Scale sc; Model m(sc); m.setVoice(0, NOTE, 60); m.setVoice(0, N, 16); m.setStep(1); m.setVoice(0, WA, 1); m.setVoice(0, WD, 1);
+  Voice vo; vo.prepare(1001);                                                    // f0 1760 Гц при 1001 Гц: sr / f0 < 1
+  Buf b; b.render(vo, m, 0, 20000);
+  CHECK(vo.period() >= vo.segs());
+  bool ok = true; for (size_t i = 0; i < b.L.size(); i++) ok = ok && std::isfinite(b.L[i]) && std::fabs(b.L[i]) <= 4;
   CHECK(ok);
-  CHECK(jump <= 2.0);
+  for (int i = 0; i < vo.segs(); i++) CHECK(vo.seg(i) >= 1.0);
 }
 
 static void voiceSilenceThenResume() {
@@ -393,7 +410,7 @@ static void worldOutputBounded() {
 int main() {
   modelSeedDeterministic(); modelBarriersHold(); modelStepZeroStatic(); modelCollapsedBox(); modelClamps(); modelMoveHome(); modelSilence();
   modelRollResetsToHome(); modelSnapshotRoundTrip(); modelRestoreGarbage(); modelHzFollowsScale();
-  voiceSumOfSegments(); voiceNoDc(); voiceFiniteExtremes(); voiceStepZeroPeriodic(); voiceLevelZeroSilent(); voiceNoteChangeAtBoundary(); voiceSilenceThenResume();
+  voiceSumOfSegments(); voiceNoDc(); voiceFiniteExtremes(); voiceStepZeroPeriodic(); voiceLevelZeroSilent(); voiceNoteChangeAtBoundary(); voicePeriodShorterThanN(); voiceSilenceThenResume();
   worldMirrorSize(); worldActionDispatch(); worldSilentUntilRun(); worldClearSilent(); worldDiceReseeds(); worldLfoKeys(); worldSnapshotRoundTrip(); worldRestoreGarbage(); worldOutputBounded();
   std::printf("sidera-test: %d checks, %d failed\n", checks, fails);
   return fails ? 1 : 0;
