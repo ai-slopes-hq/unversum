@@ -5,7 +5,7 @@ import ObjectiveC
 
 // Sidera: разбор зеркала, раскладка полос, номера действий, попадание в луну
 final class SideraTests: XCTestCase {
-  // 222 числа по порядку world.hpp: голова 3, по голосу 8 + 16 × (d, a, hd, ha), в конце drift / space / tone
+  // 227 чисел по порядку world.hpp: голова 3, по голосу 8 + 16 × (d, a, hd, ha), потом drift / space / tone / cutoff / reso, потом oct голосов
   fileprivate func vector() -> [Double] {
     var m = [Double](repeating: 0, count: Sid.mirrorN)
     m[0] = 0.4; m[1] = 0.6; m[2] = 0.3
@@ -22,7 +22,7 @@ final class SideraTests: XCTestCase {
   }
 
   func testMirrorDecode() {
-    XCTAssertEqual(Sid.mirrorN, 222)
+    XCTAssertEqual(Sid.mirrorN, 227)
     let m = SidMirror(vector())!
     XCTAssertEqual(m.level, 0.4, accuracy: 1e-9); XCTAssertEqual(m.step, 0.6, accuracy: 1e-9); XCTAssertEqual(m.send, 0.3, accuracy: 1e-9)
     XCTAssertEqual(m.voices.map { $0.n }, [5, 8, 11])
@@ -295,9 +295,22 @@ final class SideraTests: XCTestCase {
     if let last = rec.acts.last, last.kind == SidAct.kick.rawValue { XCTAssertEqual(last.a.count, 1) } else { XCTFail("kick") }
     rec.acts.removeAll()
     let spec = v.fx!
-    XCTAssertEqual(spec.rows.map(\.key), ["drift", "space", "tone"]); XCTAssertEqual(spec.rows.map(\.code), [13, 14, 15])
+    XCTAssertEqual(spec.rows.map(\.key), ["drift", "space", "tone", "cutoff", "reso"]); XCTAssertEqual(spec.rows.map(\.code), [13, 14, 15, 16, 17])
     spec.set("space", 0.7)
     XCTAssertEqual(rec.acts.last?.kind, SidAct.fx.rawValue); XCTAssertEqual(rec.acts.last?.a, [1, 0.7])
+  }
+
+  func testOctaveRowAndMirror() {
+    var vec = vector(); let o = Sid.head + Sid.nv * Sid.voiceN + Sid.fxN
+    vec[o] = -2; vec[o + 1] = 1; vec[o + 2] = 99
+    let m = SidMirror(vec)!
+    XCTAssertEqual(m.voices.map { $0.oct }, [-2, 1, 2]); XCTAssertEqual(m.fx.count, 5)
+    let (v, rec, _) = rig()
+    let spec = v.voiceSpec(1)
+    XCTAssertTrue(spec.rows.contains { $0.key == "oct" })
+    spec.set("oct", 1)                                                                // край шкалы → +2
+    XCTAssertEqual(rec.acts.last?.kind, SidAct.voice.rawValue); XCTAssertEqual(rec.acts.last?.a, [Double(Sid.Key.oct), 2])
+    spec.set("oct", 0.5); XCTAssertEqual(rec.acts.last?.a, [Double(Sid.Key.oct), 0])
   }
 
   func testTwoFingersWidenAndHoldOpensSheet() {
@@ -320,7 +333,7 @@ final class SideraTests: XCTestCase {
   func testVoiceSheet() {
     let (v, rec, _) = rig()
     let spec = v.voiceSpec(2)
-    XCTAssertEqual(spec.rows.map { $0.key }, ["note", "n", "lvl", "pan", "wd", "wa", "dist"])
+    XCTAssertEqual(spec.rows.map { $0.key }, ["note", "oct", "n", "lvl", "pan", "wd", "wa", "dist"])
     XCTAssertEqual(spec.rows.first { $0.key == "lvl" }?.code, Sid.Lfo.code(2, 0)); XCTAssertEqual(spec.rows.first { $0.key == "wa" }?.code, Sid.Lfo.code(2, 3))
     XCTAssertEqual(spec.text("note"), sidNoteName(14)); XCTAssertEqual(spec.text("n"), "11 stellae")
     for r in spec.rows { XCTAssertTrue((0.0...1).contains(spec.get(r.key)), r.key) }

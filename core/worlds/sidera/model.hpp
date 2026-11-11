@@ -15,9 +15,10 @@ namespace sidera {
 constexpr int NV = 3, NPT_MIN = 3, NPT_MAX = 16;
 constexpr double D_MIN = 0.02;                          // меньшая длительность отрезка (до нормировки)
 enum Dist { CAUCHY, LOGISTIC, UNIFORM, NDIST };
-enum VKey { NOTE, N, WD, WA, LVL, PAN, DIST, VSTEP, NVK };   // NOTE 0…60 (целые), N 3…16, WD WA LVL 0…1, PAN −1…1, DIST 0…2, VSTEP 0…2
+enum VKey { NOTE, N, WD, WA, LVL, PAN, DIST, VSTEP, OCT, NVK };   // NOTE 0…60 (целые), N 3…16, WD WA LVL 0…1, PAN −1…1, DIST 0…2, VSTEP 0…2, OCT −2…2 (целые, октавы поверх лада)
 
-enum FxKey { DRIFT, SPACE, TONE, NFX };                 // общие FX мира 0…1: DRIFT — вторичное блуждание рамок, SPACE — посыл в ревербер, TONE — яркость (фильтр голоса)
+enum FxKey { DRIFT, SPACE, TONE, CUTOFF, RESO, NFX };  // общие FX мира 0…1: DRIFT — вторичное блуждание рамок, SPACE — посыл в ревербер, TONE — яркость (фильтр голоса),
+                                                        // CUTOFF (1 — открыт) и RESO — мастер-фильтр lowpass с резонансом, без огибающей
 
 struct Point { double d = 0.5, a = 0, hd = 0.5, ha = 0; };   // d — 0.02…1, a — −1…1, hd/ha — центр рамки
 
@@ -54,7 +55,7 @@ class Model {
   double prm_[NV][NVK] = {};
   Point pts_[NV][NPT_MAX];
   double step_ = 0.15;
-  double fx_[NFX] = {0.25, 0.3, 0.35};
+  double fx_[NFX] = {0.25, 0.3, 0.35, 1.0, 0.1};
   sdk::Rng rng_{1};                                     // мастер: семена голосов при roll
   sdk::Rng vrng_[NV] = {sdk::Rng(1), sdk::Rng(1), sdk::Rng(1)};
 };

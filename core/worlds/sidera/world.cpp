@@ -20,6 +20,8 @@ void World::prepare(double sr, uint32_t seed) {
   model_.reset(seed);
   for (Voice& v : voice_) v.prepare(sr_);
   env_ = 0; run_ = false;
+  for (sdk::Biquad& f : flt_) f.reset();
+  cut_ = model_.fx(CUTOFF); res_ = model_.fx(RESO);
 }
 
 void World::action(int kind, int i, const double* a, int n) {
@@ -60,6 +62,14 @@ void World::process(const sdk::Out& out, int n) {
   for (int k = 0; k < n; k++) out.L[k] = out.R[k] = out.sL[k] = out.sR[k] = 0.f;
   if (!run_) { env_ *= 0.9; return; }
   for (int v = 0; v < NV; v++) voice_[v].render(model_, v, out.L, out.R, out.sL, out.sR, n, model_.fx(SPACE));
+  cut_ += (model_.fx(CUTOFF) - cut_) * 0.3; res_ += (model_.fx(RESO) - res_) * 0.3;     // сглаживание по блокам: без щелчка
+  const double hz = 30.0 * std::pow(18000.0 / 30.0, cut_), qdb = -3.0 + 24.0 * res_;       // срез 30 Гц…18 кГц по экспоненте; Q в дБ (−3 — без горба)
+  for (sdk::Biquad& f : flt_) f.set(sdk::Biquad::lowpass, std::min(hz, 0.45 * sr_), qdb, sr_);
+  for (int k = 0; k < n; k++) {
+    out.L[k] = static_cast<float>(flt_[0].step(out.L[k])); out.R[k] = static_cast<float>(flt_[1].step(out.R[k]));
+    out.sL[k] = static_cast<float>(flt_[2].step(out.sL[k])); out.sR[k] = static_cast<float>(flt_[3].step(out.sR[k]));
+  }
+  for (sdk::Biquad& f : flt_) f.flushTiny(1e-15);
   double sum = 0;
   for (int k = 0; k < n; k++) {
     out.L[k] = static_cast<float>(KNEE(out.L[k]));
@@ -79,6 +89,7 @@ int World::mirror(double* buf, int cap) const {
     for (int i = 0; i < NPT_MAX; i++) { const Point q = model_.pt(v, i); *p++ = q.d; *p++ = q.a; *p++ = q.hd; *p++ = q.ha; }
   }
   for (int k = 0; k < NFX; k++) *p++ = model_.fx(k);
+  for (int v = 0; v < NV; v++) *p++ = model_.voice(v, OCT);
   return MIRROR_N;
 }
 

@@ -312,9 +312,9 @@ struct Blocks {                                         // прогон мира
 static void worldMirrorSize() {
   Scale sc; World w(sc); w.prepare(48000, 1);
   std::vector<double> buf(MIRROR_N + 10, -99);
-  CHECK(MIRROR_N == 222);
+  CHECK(MIRROR_N == 227);
   CHECK(w.mirror(buf.data(), MIRROR_N) == MIRROR_N);
-  CHECK(buf[219] == 0.25 && buf[220] == 0.3 && buf[221] == 0.35 && buf[2] == 0.3);   // FX по умолчанию; send = SPACE
+  CHECK(buf[219] == 0.25 && buf[220] == 0.3 && buf[221] == 0.35 && buf[222] == 1 && buf[223] == 0.1 && buf[224] == 0 && buf[226] == 0 && buf[2] == 0.3);   // FX по умолчанию; send = SPACE
   CHECK(buf[1] == 0.15);                                                         // step по умолчанию
   CHECK(buf[3 + 1] == 5);                                                        // N голоса 0
   CHECK(buf[3 + 72 + 1] == 8 && buf[3 + 144 + 1] == 12);
@@ -391,7 +391,7 @@ static void worldLfoKeys() {
   a[0] = 1 + 4 * 1 + 2; a[1] = 0.5; w.action(sdk::ACT_LFO, -1, a, 2); w.mirror(m.data(), MIRROR_N);
   CHECK(m[3 + 72 + WD] == 0.5);
   const std::vector<double> before = m;
-  a[0] = 16; w.action(sdk::ACT_LFO, -1, a, 2); a[0] = -3; w.action(sdk::ACT_LFO, -1, a, 2); a[0] = 0; w.action(sdk::ACT_LFO, 4, a, 2);   // вне диапазона и obj ≠ −1
+  a[0] = 18; w.action(sdk::ACT_LFO, -1, a, 2); a[0] = -3; w.action(sdk::ACT_LFO, -1, a, 2); a[0] = 0; w.action(sdk::ACT_LFO, 4, a, 2);   // вне диапазона и obj ≠ −1
   w.mirror(m.data(), MIRROR_N);
   CHECK(m == before);
 }
@@ -458,6 +458,39 @@ static void modelFxKickDrift() {
   CHECK(r.fx(DRIFT) == 1 && r.fx(SPACE) == 0 && r.fx(TONE) == 0.35);
 }
 
+static void modelOctave() {
+  Scale sc; Model m(sc); m.reset(1);
+  const double h0 = m.hzOf(0);
+  m.setVoice(0, OCT, 1); CHECK(std::fabs(m.hzOf(0) - 2 * h0) < 1e-9);
+  m.setVoice(0, OCT, -2); CHECK(std::fabs(m.hzOf(0) - h0 / 4) < 1e-9);
+  m.setVoice(0, OCT, 9); CHECK(m.voice(0, OCT) == 2);
+  m.setVoice(0, OCT, -7.4); CHECK(m.voice(0, OCT) == -2);
+  m.setVoice(0, OCT, 0.4); CHECK(m.voice(0, OCT) == 0);
+  m.setVoice(0, OCT, NAN); CHECK(m.voice(0, OCT) == 0);
+  m.setVoice(1, OCT, 1); CHECK(m.voice(2, OCT) == 0 && m.voice(1, OCT) == 1);        // октавы независимы по голосам
+  Model r(sc); r.restore(m.snapshot()); CHECK(r.voice(1, OCT) == 1);
+}
+
+static void worldFilter() {
+  Scale sc;
+  auto energy = [&](double cut, double res) {
+    World w(sc); w.prepare(48000, 1); go(w);
+    double a[2] = {double(CUTOFF), cut}; w.action(FX, 0, a, 2); a[0] = RESO; a[1] = res; w.action(FX, 0, a, 2);
+    float L[128], R[128], sL[128], sR[128]; sdk::Out o{L, R, sL, sR};
+    double hi = 0, mx = 0;
+    for (int b = 0; b < 600; b++) {
+      w.process(o, 128);
+      if (b < 300) continue;
+      for (int k = 1; k < 128; k++) { hi += std::fabs(L[k] - L[k - 1]); mx = std::max(mx, double(std::fabs(L[k]))); }
+    }
+    CHECK(std::isfinite(hi) && mx <= 1.0);
+    return hi;
+  };
+  const double open = energy(1, 0.1), shut = energy(0.1, 0.1), reson = energy(0.45, 1.0);
+  CHECK(shut < open * 0.8);                                                       // закрытый фильтр срезает верх (разность соседних сэмплов — мера яркости)
+  CHECK(std::isfinite(reson) && reson > shut);                                    // резонанс на срезе поднимает звук
+}
+
 static void worldFxKickActions() {
   Scale sc; World w(sc); w.prepare(48000, 1); go(w);
   double a[2] = {1, 0.8}; w.action(FX, 0, a, 2);
@@ -473,7 +506,7 @@ int main() {
   modelSeedDeterministic(); modelBarriersHold(); modelStepZeroStatic(); modelCollapsedBox(); modelClamps(); modelMoveHome(); modelSilence();
   modelRollResetsToHome(); modelSnapshotRoundTrip(); modelRestoreGarbage(); modelHzFollowsScale();
   voiceSumOfSegments(); voiceNoDc(); voiceFiniteExtremes(); voiceStepZeroPeriodic(); voiceLevelZeroSilent(); voiceNoteChangeAtBoundary(); voicePeriodShorterThanN(); voiceSilenceThenResume(); voiceResumeRampsFromZero(); diceAfterClearWakesVoices();
-  worldMirrorSize(); worldActionDispatch(); worldSilentUntilRun(); worldClearSilent(); worldDiceReseeds(); worldLfoKeys(); worldSnapshotRoundTrip(); worldRestoreGarbage(); worldOutputBounded(); modelFxKickDrift(); worldFxKickActions();
+  worldMirrorSize(); worldActionDispatch(); worldSilentUntilRun(); worldClearSilent(); worldDiceReseeds(); worldLfoKeys(); worldSnapshotRoundTrip(); worldRestoreGarbage(); worldOutputBounded(); modelFxKickDrift(); worldFxKickActions(); modelOctave(); worldFilter();
   std::printf("sidera-test: %d checks, %d failed\n", checks, fails);
   return fails ? 1 : 0;
 }

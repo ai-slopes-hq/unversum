@@ -5,15 +5,16 @@
 //   VOICE i = голос, a = [VKey, v];  STAR i = голос, a = [точка, hd, ha] (центр рамки: hd 0.02…1, ha −1…1);
 //   DICE a = [голос] (пусто или −1 — все): точки в центры рамок, блуждание сеется заново (вне диапазона — ничего);
 //   CLEAR — LVL всех голосов в 0 (точки целы);  MOON a = [step 0…1];  RUN a = [on] — пока не включено, мир молчит (как Hymenaeus: звук начинается со входа в мир);
-//   KICK i = голос, a = [точка] (−1 — все): встряска звезды;  FX a = [FxKey, v 0…1] (DRIFT, SPACE, TONE).
-//   ACT_LFO (i == −1) a = [key, v], v 0…1: key 0 — шаг луны; 1 + 4·голос + {0 LVL, 1 PAN (0…1 → −1…1), 2 WD, 3 WA}; 13 + {0 DRIFT, 1 SPACE, 2 TONE}.
+//   KICK i = голос, a = [точка] (−1 — все): встряска звезды;  FX a = [FxKey, v 0…1] (DRIFT, SPACE, TONE, CUTOFF, RESO).
+//   ACT_LFO (i == −1) a = [key, v], v 0…1: key 0 — шаг луны; 1 + 4·голос + {0 LVL, 1 PAN (0…1 → −1…1), 2 WD, 3 WA}; 13 + {0 DRIFT, 1 SPACE, 2 TONE, 3 CUTOFF, 4 RESO}.
 //   Act-номера зеркалит Swift (SidAct): порядок enum Act менять нельзя.
-// Зеркало (MIRROR_N = 222 числа), порядок:
+// Зеркало (MIRROR_N = 227 чисел), порядок:
 //   [0] энергия выхода 0…1  [1] step  [2] send (доля посыла в ревербер = SPACE)
 //   по голосу v с 3 + 72·v: [NOTE, N, WD, WA, LVL, PAN, DIST, энергия голоса] (8), затем NPT_MAX × (d, a, hd, ha) (64)
-//   в конце с 219: [DRIFT, SPACE, TONE]
+//   в конце с 219: [DRIFT, SPACE, TONE, CUTOFF, RESO], с 224: OCT голосов 0…2
 // heard: ничего (вспышек нет).
 #pragma once
+#include "../../sdk/biquad.hpp"
 #include "../../sdk/world.hpp"
 #include "model.hpp"
 #include "voice.hpp"
@@ -21,7 +22,7 @@
 namespace sidera {
 
 enum Act { VOICE, STAR, DICE, CLEAR, MOON, RUN, KICK, FX };
-constexpr int MIRROR_HEAD = 3, MIRROR_VOICE = 8 + NPT_MAX * 4, MIRROR_FX = MIRROR_HEAD + NV * MIRROR_VOICE, MIRROR_N = MIRROR_FX + NFX;   // 3 + 3·72 + 3 = 222
+constexpr int MIRROR_HEAD = 3, MIRROR_VOICE = 8 + NPT_MAX * 4, MIRROR_FX = MIRROR_HEAD + NV * MIRROR_VOICE, MIRROR_OCT = MIRROR_FX + NFX, MIRROR_N = MIRROR_OCT + NV;   // 3 + 3·72 + 5 + 3 = 227
 
 class World : public sdk::World {
  public:
@@ -39,6 +40,8 @@ class World : public sdk::World {
  private:
   Model model_;
   Voice voice_[NV];
+  sdk::Biquad flt_[4];                                  // мастер-фильтр: L, R, посыл L, посыл R (одни коэффициенты)
+  double cut_ = 1, res_ = 0.1;                          // сглаженные CUTOFF и RESO
   double sr_ = 48000, env_ = 0;
   bool run_ = false;                                    // мир молчит, пока его не включили (RUN); в снимке
 };

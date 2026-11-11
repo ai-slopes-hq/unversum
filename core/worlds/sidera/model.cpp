@@ -27,7 +27,7 @@ double dist(int kind, double u) {
     default: return 0.1 * std::tan(PI * (u - 0.5));    // Коши
   }
 }
-constexpr double DEF[NVK] = {0, 5, 0.25, 0.3, 0.5, 0, CAUCHY, 1};
+constexpr double DEF[NVK] = {0, 5, 0.25, 0.3, 0.5, 0, CAUCHY, 1, 0};
 constexpr double DEF_NOTE[NV] = {0, 7, 19}, DEF_N[NV] = {5, 8, 12}, DEF_LVL[NV] = {0.5, 0.4, 0.3}, DEF_PAN[NV] = {-0.5, 0, 0.5};
 }  // namespace
 
@@ -50,7 +50,7 @@ void Model::fit(Point& p, int v) const {
 
 void Model::reset(uint32_t seed) {
   step_ = 0.15;
-  fx_[DRIFT] = 0.25; fx_[SPACE] = 0.3; fx_[TONE] = 0.35;
+  fx_[DRIFT] = 0.25; fx_[SPACE] = 0.3; fx_[TONE] = 0.35; fx_[CUTOFF] = 1.0; fx_[RESO] = 0.1;
   rng_ = sdk::Rng(seed);
   for (int v = 0; v < NV; v++) {
     for (int k = 0; k < NVK; k++) prm_[v][k] = DEF[k];
@@ -74,6 +74,7 @@ void Model::setVoice(int v, int key, double val) {
     case PAN: prm_[v][key] = clampd(val, -1, 1); break;
     case DIST: prm_[v][key] = clampd(std::round(val), 0, NDIST - 1); break;
     case VSTEP: prm_[v][key] = clampd(val, 0, 2); break;
+    case OCT: prm_[v][key] = clampd(std::round(val), -2, 2); break;
     default: prm_[v][key] = clampd(val, 0, 1); break;  // WD WA LVL
   }
   if (key == WD || key == WA) for (int i = 0; i < NPT_MAX; i++) fit(pts_[v][i], v);
@@ -146,7 +147,7 @@ double Model::hzOf(int v) const {
     const double shift = semi < 12 ? 12 * std::ceil((12 - semi) / 12) : 0;
     semi = scale_.snapSemi(semi + shift) - shift;
   }
-  return 55.0 * std::pow(2.0, semi / 12);
+  return 55.0 * std::pow(2.0, semi / 12 + prm_[v][OCT]);
 }
 
 bool Model::sounding() const {
