@@ -53,7 +53,7 @@
 #include "../worlds/horologium/model.hpp"
 #include "../worlds/horologium/sound.hpp"
 #include "../worlds/horologium/world.hpp"
-#include "../worlds/hymenaeus/world.hpp"
+#include "../worlds/sidera/world.hpp"
 #include "../worlds/paradisus/world.hpp"
 #include "../worlds/tenebrae/tone.hpp"
 #include "../worlds/tenebrae/waves.hpp"
@@ -2878,16 +2878,38 @@ static void bridgeNative() {
   CHECK(sound);
 }
 
-// Hymenaeus (XIV) в слоте 14 общего моста: ручной удар по кольцу — зеркало нужной длины и звук в dry
-static void bridgeHymenaeus() {
+// Sidera (XIV) в слоте 14 общего моста: звук в dry и в посыл, зеркало нужной длины, снимок через мост туда и обратно
+static void bridgeSidera() {
   t2d_init(48000, 1);
-  t2d_args()[0] = 0.3; t2d_args()[1] = 1;
-  t2d_action(14, hymenaeus::STRIKE, 1, t2d_args(), 2);
-  float peak = 0;
-  for (int b = 0; b < 40; b++) { t2d_process(128); const float* d = t2d_dry(14, 0); for (int k = 0; k < 128; k++) peak = std::max(peak, std::fabs(d[k])); }
-  CHECK(peak > 0.01f);
-  CHECK(t2d_mirror(14) == hymenaeus::MIRROR_N);
-  CHECK(t2d_mbuf()[1] == 90);                                             // bpm по умолчанию
+  float quiet = 0;
+  for (int b = 0; b < 10; b++) { t2d_process(128); const float* d0 = t2d_dry(14, 0); for (int k = 0; k < 128; k++) quiet = std::max(quiet, std::fabs(d0[k])); }
+  CHECK(quiet == 0.f);                                                    // до RUN слот молчит
+  t2d_args()[0] = 1; t2d_action(14, sidera::RUN, 0, t2d_args(), 1);
+  float peak = 0, send = 0;
+  for (int b = 0; b < 40; b++) {
+    t2d_process(128);
+    const float* d = t2d_dry(14, 0);
+    for (int k = 0; k < 128; k++) peak = std::max(peak, std::fabs(d[k]));
+    const float* r = t2d_ret(0);
+    for (int k = 0; k < 128; k++) send = std::max(send, std::fabs(r[k]));
+  }
+  CHECK(peak > 0.01f);                                                    // голоса играют сами
+  CHECK(send > 0.0001f);                                                  // и уходят в ревербер
+  CHECK(t2d_mirror(14) == sidera::MIRROR_N);
+  CHECK(t2d_mbuf()[1] == 0.15);                                           // step по умолчанию
+  const int len = t2d_snapshot(14);
+  CHECK(len > 0);
+  const std::string snap(t2d_str_buf(), static_cast<size_t>(len));
+  t2d_args()[0] = 1.0; t2d_action(14, sidera::MOON, 0, t2d_args(), 1);
+  t2d_mirror(14); CHECK(t2d_mbuf()[1] == 1.0);
+  std::memcpy(t2d_str_buf(), snap.data(), snap.size());
+  t2d_restore(14, len);
+  t2d_mirror(14); CHECK(t2d_mbuf()[1] == 0.15);                           // снимок вернул прежнее
+  t2d_action(14, sidera::CLEAR, 0, t2d_args(), 0);
+  for (int b = 0; b < 400; b++) t2d_process(128);
+  const float* d = t2d_dry(14, 0);
+  bool zero = true; for (int k = 0; k < 128; k++) zero = zero && d[k] == 0.f;
+  CHECK(zero);
 }
 
 // Paradisus (VI) в слоте 6 общего моста: ангел поёт — зеркало нужной длины, звук в dry, посыл в собор; ретурн конечен и без перегруза при максимуме
@@ -5192,7 +5214,7 @@ int main(int argc, char** argv) {
   tenebraeTone(); tenebraeWaves(); tenebraeWavesNyquist(); tenebraeMorph(); tenebraeShifter();
   tenebraeVoiceSilent(); tenebraeVoiceExtremes(); tenebraeVoiceNoise(); tenebraeVoiceRelive();
   tenebraeWorldBus(); tenebraeTzfmFollows(); tenebraeLinksClear(); tenebraeMirror(); tenebraeModelPick(); tenebraeActionNan(); tenebraeCycleSafe(); tenebraeStrikeClear(); tenebraeScaleRetune();
-  shimmer(); shaper(); shaperOs4(); shaperChromium2(); bpbank(); noise(); infernoModel(); infernoSound(); bridgeNative(); bridgeHymenaeus(); bridgeParadisus(); mixWebUntouched(); mixSum(); mixMaster();
+  shimmer(); shaper(); shaperOs4(); shaperChromium2(); bpbank(); noise(); infernoModel(); infernoSound(); bridgeNative(); bridgeSidera(); bridgeParadisus(); mixWebUntouched(); mixSum(); mixMaster();
   appSpscThreads(); appTripleThreads(); appChunking(); appVsBridge(); appHeardAccumulates(); appMidiClock(); appMidiTime(); appMidiOverflow(); appOverflow(); appLatency(); appReinitRate();
   appHostOrder(); appSnapRoundtrip(); appRestoreGarbage(); appHeavyOnePerBlock(); appStrOverflow(); appHostVolScale(); appStrCap();
   lfoForms(); lfoRandom(); hostLfo(); lfoApply(); lfoUnits(); lfoOff(); lfoOrder(); lfoDeadObj(); lfoSpecNan(); lfoForeign(); oceanLfo(); oceanLfoIgnores(); monoLfo(); monoLfoIgnores(); monoDice(); horoLfo(); horoFilterMap(); horoFilterAudio(); horoFilterTail(); horoFilterExtremes(); horoModelFltGarbage(); horoLfoFlt(); horoDiceFlt(); horoModelInst(); horoModelLen(); horoModelDefaults(); horoModelGarbage(); horoSoundGarbage(); horoModelPitch(); horoModelPitchGarbage(); drumVoices(); drumGlitch(); horoLfoIgnores(); sdkEuclid(); sdkMelody(); horoOnsets(); horoBackward(); horoBackwardJump(); horoRot(); horoLenSwitch(); horoNonFiniteTempo(); horoConcursus(); horoAttacksPerTurn(); horoCeiling(); horoKitPeak(); horoKitRms(); horoTailOff(); horoInstSwitch(); horoDice(); horoRetiredActions(); horoLockNeedsRunOnly(); hostTwoWorldsSamePhase(); hostMasterBpmChange(); horoLockNoMidi(); cymaticaGridNoLock(); cymaticaLockOverriddenByGrid(); arcLfo(); arcLfoIgnores(); triaLfo(); triaLfoIgnores(); infLfo(); infLfoIgnores(); portusLfo(); portusLfoIgnores(); portusDice(); arcPicSame(); arcPicMeta(); arcPicRiverName(); arcName(); arcRouteSame(); arcPicFixture(); appScaleSteps(); appLfo(); appLevels(); appLevelsPreFader(); appHostFader(); appHostFaderSmooth(); appHostMaster();

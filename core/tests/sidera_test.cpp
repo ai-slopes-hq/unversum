@@ -8,6 +8,7 @@
 #include "../host/scale.hpp"
 #include "../worlds/sidera/model.hpp"
 #include "../worlds/sidera/voice.hpp"
+#include "../worlds/sidera/world.hpp"
 
 static int checks = 0, fails = 0;
 #define CHECK(c) do { checks++; if (!(c)) { fails++; std::printf("FAIL %s:%d  %s\n", __FILE__, __LINE__, #c); } } while (0)
@@ -248,10 +249,152 @@ static void voiceSilenceThenResume() {
   CHECK(fin);
 }
 
+// ---------- Task 3: мир ----------
+
+static void go(World& w, double on = 1) { w.action(RUN, 0, &on, 1); }
+
+struct Blocks {                                         // прогон мира блоками по 128; пик, конечность и сумма модулей
+  double peak = 0, sumAbs = 0; bool finite = true;
+  void run(World& w, int blocks) {
+    std::vector<float> l(128), r(128), sl(128), sr(128);
+    for (int b = 0; b < blocks; b++) {
+      for (int k = 0; k < 128; k++) l[k] = r[k] = sl[k] = sr[k] = 7.f;           // мусор: process обязан писать целиком
+      w.process(sdk::Out{l.data(), r.data(), sl.data(), sr.data()}, 128);
+      for (int k = 0; k < 128; k++) {
+        finite = finite && std::isfinite(l[k]) && std::isfinite(r[k]) && std::isfinite(sl[k]) && std::isfinite(sr[k]);
+        peak = std::max(peak, static_cast<double>(std::max(std::fabs(l[k]), std::fabs(r[k]))));
+        sumAbs += std::fabs(l[k]) + std::fabs(r[k]);
+      }
+    }
+  }
+};
+
+static void worldMirrorSize() {
+  Scale sc; World w(sc); w.prepare(48000, 1);
+  std::vector<double> buf(MIRROR_N + 10, -99);
+  CHECK(MIRROR_N == 219);
+  CHECK(w.mirror(buf.data(), MIRROR_N) == MIRROR_N);
+  CHECK(buf[1] == 0.15);                                                         // step по умолчанию
+  CHECK(buf[3 + 1] == 5);                                                        // N голоса 0
+  CHECK(buf[3 + 72 + 1] == 8 && buf[3 + 144 + 1] == 12);
+  CHECK(buf[MIRROR_N] == -99);                                                   // за пределы не пишет
+  std::vector<double> small(MIRROR_N - 1, -99);
+  CHECK(w.mirror(small.data(), MIRROR_N - 1) == 0);
+  CHECK(small[0] == -99);
+  CHECK(w.mirror(nullptr, 500) == 0);
+}
+
+static void worldActionDispatch() {
+  Scale sc; World w(sc); w.prepare(48000, 1);
+  std::vector<double> m(MIRROR_N);
+  double a[3];
+  a[0] = LVL; a[1] = 0.9; w.action(VOICE, 1, a, 2); w.mirror(m.data(), MIRROR_N);
+  CHECK(m[3 + 72 + LVL] == 0.9);
+  a[0] = 2; a[1] = 0.25; a[2] = 0.4; w.action(STAR, 0, a, 3); w.mirror(m.data(), MIRROR_N);
+  CHECK(m[3 + 8 + 2 * 4 + 2] == 0.25 && m[3 + 8 + 2 * 4 + 3] == 0.4);          // hd, ha точки 2 голоса 0
+  a[0] = 0.8; w.action(MOON, 0, a, 1); w.mirror(m.data(), MIRROR_N);
+  CHECK(m[1] == 0.8);
+  const std::vector<double> before = m;
+  w.action(99, 0, a, 3); w.action(VOICE, 0, a, 1); w.action(STAR, 0, a, 2); w.action(MOON, 0, a, 0); w.action(VOICE, 0, nullptr, 3);   // неизвестное и короткое — ничего
+  w.mirror(m.data(), MIRROR_N);
+  CHECK(m == before);
+}
+
+static void worldSilentUntilRun() {
+  Scale sc; World w(sc); w.prepare(48000, 1);
+  Blocks b; b.run(w, 100);
+  CHECK(b.sumAbs == 0); CHECK(!w.sounding());                                    // до RUN — тишина (как Hymenaeus до входа)
+  go(w); Blocks c; c.run(w, 100);
+  CHECK(c.peak > 0.01); CHECK(w.sounding());
+  go(w, 0); Blocks d; d.run(w, 10);
+  CHECK(d.sumAbs == 0);
+  double nan = NAN; w.action(RUN, 0, &nan, 1); w.action(RUN, 0, nullptr, 0);    // мусор не включает и не выключает
+  Blocks e; e.run(w, 10); CHECK(e.sumAbs == 0);
+}
+
+static void worldClearSilent() {
+  Scale sc; World w(sc); w.prepare(48000, 1); go(w);
+  Blocks b0; b0.run(w, 100);
+  CHECK(b0.peak > 0.01); CHECK(w.sounding());
+  w.action(CLEAR, 0, nullptr, 0);
+  CHECK(!w.sounding());
+  Blocks warm; warm.run(w, 400);                                                 // ~1 с: усилители спускаются в ноль
+  Blocks b; b.run(w, 50);
+  CHECK(b.sumAbs == 0);
+}
+
+static void worldDiceReseeds() {
+  Scale sc; World a(sc), b(sc); a.prepare(48000, 9); b.prepare(48000, 9); go(a); go(b);
+  Blocks x; x.run(a, 200); x.run(b, 200);
+  double v = -1; a.action(DICE, 0, &v, 1); b.action(DICE, 0, nullptr, 0);
+  std::vector<double> ma(MIRROR_N), mb(MIRROR_N);
+  a.mirror(ma.data(), MIRROR_N); b.mirror(mb.data(), MIRROR_N);
+  for (int v2 = 0; v2 < NV; v2++) for (int i = 0; i < 5; i++) {
+    const int base = 3 + 72 * v2 + 8 + 4 * i;
+    CHECK(ma[base] == ma[base + 2] && ma[base + 1] == ma[base + 3]);             // точки в центрах рамок
+  }
+  CHECK(ma == mb);                                                               // «−1» и «без аргумента» — одно и то же
+  Blocks y; y.run(a, 100); y.run(b, 100);
+  a.mirror(ma.data(), MIRROR_N); b.mirror(mb.data(), MIRROR_N);
+  CHECK(ma == mb);                                                               // дальше та же дорожка
+  double one = 1; a.action(DICE, 0, &one, 1); double big = 9; a.action(DICE, 0, &big, 1);   // один голос; вне диапазона — ничего
+}
+
+static void worldLfoKeys() {
+  Scale sc; World w(sc); w.prepare(48000, 1);
+  std::vector<double> m(MIRROR_N);
+  double a[2] = {0, 0.6};
+  w.action(sdk::ACT_LFO, -1, a, 2); w.mirror(m.data(), MIRROR_N); CHECK(m[1] == 0.6);
+  a[0] = 1 + 4 * 2 + 1; a[1] = 1.0; w.action(sdk::ACT_LFO, -1, a, 2); w.mirror(m.data(), MIRROR_N);
+  CHECK(m[3 + 144 + PAN] == 1);                                                  // 0…1 → −1…1
+  a[0] = 1 + 4 * 1 + 2; a[1] = 0.5; w.action(sdk::ACT_LFO, -1, a, 2); w.mirror(m.data(), MIRROR_N);
+  CHECK(m[3 + 72 + WD] == 0.5);
+  const std::vector<double> before = m;
+  a[0] = 13; w.action(sdk::ACT_LFO, -1, a, 2); a[0] = -3; w.action(sdk::ACT_LFO, -1, a, 2); a[0] = 0; w.action(sdk::ACT_LFO, 4, a, 2);   // вне диапазона и obj ≠ −1
+  w.mirror(m.data(), MIRROR_N);
+  CHECK(m == before);
+}
+
+static void worldSnapshotRoundTrip() {
+  Scale sc; World a(sc); a.prepare(48000, 5); go(a);
+  double v[2] = {N, 11}; a.action(VOICE, 1, v, 2); double st = 0.6; a.action(MOON, 0, &st, 1);
+  Blocks b; b.run(a, 80);
+  const std::string js = a.snapshot();
+  World c(sc); c.prepare(48000, 77); c.restore(js);
+  CHECK(c.snapshot() == js);
+  Blocks bd; bd.run(c, 30); CHECK(bd.peak > 0.0);                                // восстановленный включённый мир играет
+}
+
+static void worldRestoreGarbage() {
+  Scale sc; World w(sc); w.prepare(48000, 1);
+  for (const char* js : {"{", "[]", "", "null", "{\"model\":3}", "{\"model\":{\"voices\":[1,2,3]}}"}) {
+    w.restore(js); go(w);
+    std::vector<double> m(MIRROR_N);
+    CHECK(w.mirror(m.data(), MIRROR_N) == MIRROR_N);
+    bool fin = true; for (double x : m) fin = fin && std::isfinite(x);
+    CHECK(fin);
+    Blocks b; b.run(w, 4); CHECK(b.finite);
+  }
+  double nan[2] = {NAN, NAN}, inf[3] = {INFINITY, -INFINITY, INFINITY};
+  go(w); w.action(VOICE, 0, nan, 2); w.action(STAR, 0, inf, 3); w.action(MOON, 0, nan, 1); w.action(sdk::ACT_LFO, -1, nan, 2);
+  Blocks b; b.run(w, 40); CHECK(b.finite);
+}
+
+static void worldOutputBounded() {
+  Scale sc; World w(sc); w.prepare(48000, 3); go(w);
+  double one = 1; w.action(MOON, 0, &one, 1);
+  for (int v = 0; v < NV; v++) { double a[2] = {WD, 1}; w.action(VOICE, v, a, 2); a[0] = WA; w.action(VOICE, v, a, 2); a[0] = LVL; w.action(VOICE, v, a, 2); }
+  Blocks b; b.run(w, 22500);                                                     // 60 с
+  CHECK(b.finite);
+  CHECK(b.peak <= 1.0);
+  CHECK(b.peak > 0.05);
+}
+
 int main() {
   modelSeedDeterministic(); modelBarriersHold(); modelStepZeroStatic(); modelCollapsedBox(); modelClamps(); modelMoveHome(); modelSilence();
   modelRollResetsToHome(); modelSnapshotRoundTrip(); modelRestoreGarbage(); modelHzFollowsScale();
   voiceSumOfSegments(); voiceNoDc(); voiceFiniteExtremes(); voiceStepZeroPeriodic(); voiceLevelZeroSilent(); voiceNoteChangeAtBoundary(); voiceSilenceThenResume();
+  worldMirrorSize(); worldActionDispatch(); worldSilentUntilRun(); worldClearSilent(); worldDiceReseeds(); worldLfoKeys(); worldSnapshotRoundTrip(); worldRestoreGarbage(); worldOutputBounded();
   std::printf("sidera-test: %d checks, %d failed\n", checks, fails);
   return fails ? 1 : 0;
 }
