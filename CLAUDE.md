@@ -47,6 +47,7 @@
 | XI | Tria corpora | ядро, слот 11 | в нативе вернулся 11.11 (был выключен 05.11), принят автором на iPhone 11.11 |
 | XII | Arcadia | ядро, слот 12 | |
 | XIII | Portus | ядро, слот 13 | |
+| XIV | Hymenaeus | ядро, слот 14 | только iOS: нить жемчужин → кольца (порт Rings) → облака; звук принят автором 11.11, жесты и плашки ждут iPhone (`docs/worlds/hymenaeus.md`) |
 | XV | Goetia | ядро, слот 15 | выключен (04.11) |
 | XVII | Prisma (DLC vol. I) | `prisma.js` | в бэклоге |
 | XVIII | Vitrea (DLC vol. I) | `vitrea.js` | в бэклоге |
