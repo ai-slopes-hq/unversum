@@ -108,6 +108,9 @@ static void modelDeterministic() {
   for (int i = 0; i < 50; i++) { a.next(i % 2); b.next(i % 2); }
   CHECK(a.snapshot() == b.snapshot());
   Model c(sc); c.reset(8); CHECK(c.snapshot() != Model(sc).snapshot());
+  Model d(sc), e(sc); d.reset(8); e.reset(8);
+  for (int i = 0; i < 37; i++) { d.next(i % 2); e.next(i % 2); }
+  CHECK(d.snapshot() == e.snapshot());
 }
 
 static void modelScaleSnap() {
@@ -122,6 +125,23 @@ static void modelScaleSnap() {
     bool in = false; for (int k = 0; k < 7; k++) if (((semi % 12) + 12) % 12 == st[k]) in = true;
     CHECK(in);
   }
+}
+
+static void modelScaleSnapLowRange() {
+  Scale sc; sc.on = true; sc.idx = 0; sc.root = 0;
+  Model m(sc); m.reset(5); m.setRange(0, 24, 40);
+  const int* st = Scale::stepsOf(0);
+  bool below = false;
+  for (int k = 0; k <= 40; k++) {
+    const double midi = 69 + 12 * std::log2(m.hzOf(0, k / 40.0) / 440.0);
+    const int semi = static_cast<int>(std::lround(midi - 33));
+    CHECK(std::fabs(midi - 33 - semi) < 1e-6);
+    bool in = false; for (int j = 0; j < 7; j++) if (((semi % 12) + 12) % 12 == st[j]) in = true;
+    CHECK(in);
+    CHECK(midi >= 24 - 1 - 1e-6 && midi <= 40 + 1 + 1e-6);
+    if (k == 0) below = midi <= 33 + 1e-6;
+  }
+  CHECK(below);
 }
 
 static void modelClamps() {
@@ -684,7 +704,7 @@ static void worldMirrorSize() {
 
 int main() {
   modelSeedDeterministic(); modelDejaVuOneRepeats(); modelDejaVuZeroVaries(); modelRestsSilent();
-  modelRingsCount(); modelDefaultRanges(); modelTwoThreadsIndependent(); modelRangeClamp(); modelPitchWithinRange(); modelDeterministic(); modelScaleSnap(); modelClamps(); modelLenOne();
+  modelRingsCount(); modelDefaultRanges(); modelTwoThreadsIndependent(); modelRangeClamp(); modelPitchWithinRange(); modelDeterministic(); modelScaleSnap(); modelScaleSnapLowRange(); modelClamps(); modelLenOne();
   modelSnapshotRoundTrip(); modelRestoreGarbage(); modelRollAndClear(); modelCloudSend();
   ringsRingsDown(); ringsDampingMonotone(); ringsBrightnessCentroid(); ringsStable(); ringsIdleCheap(); ringsNoAlloc(); ringsPluckerBurst();
   cloudSilentIn(); cloudEchoesInput(); cloudFreezeHolds(); cloudFreezeEmpty(); cloudEchoDecays(); cloudNoNan(); cloudDensityBounded(); cloudSleepsAgain();

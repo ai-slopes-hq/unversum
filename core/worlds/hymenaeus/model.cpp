@@ -94,7 +94,10 @@ double Model::hzOf(int t, double pitch) const {
   const Thread& th = thr_[(t >= 0 && t < NR) ? t : 0];
   const double p = clamp01(std::isnan(pitch) ? 0.5 : pitch);
   double semi = std::round(th.lo + p * (th.hi - th.lo)) - 33;   // ноты Scale — от A1 (MIDI 33)
-  if (scale_.on) semi = scale_.snapSemi(semi);
+  if (scale_.on) {                                      // snapSemi не уходит ниже ноты 0: поднимаем на целые октавы (класс высоты тот же), снапим, опускаем
+    const double shift = semi < 12 ? 12 * std::ceil((12 - semi) / 12) : 0;
+    semi = scale_.snapSemi(semi + shift) - shift;
+  }
   return 55.0 * std::pow(2.0, semi / 12);
 }
 
