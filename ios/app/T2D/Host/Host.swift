@@ -286,15 +286,24 @@ final class Host {
 
   // ---------- хедер на карте ----------
   private var recycleStash: [(slot: Int, w: String, scl: Scl)]?   // состояния миров до последнего recycle на карте; один шаг отмены
-  private var mapEnabled: Set<Btn> { [.play, .transport, .vol, .fx] }
-  // кнопки бара, которые ловят касание: на карте — mapEnabled; в мире без часов play погашен
-  private var barEnabled: Set<Btn> { onMap ? mapEnabled : Set(Btn.allCases) }
+  // кнопки бара, которые ловят касание: dice / undo / clear — как строки вкладки transport (кубик на карте и undo без истории погашены)
+  private var mapEnabled: Set<Btn> { barEnabled }
+  private var barEnabled: Set<Btn> {
+    let t = transportState()
+    var e: Set<Btn> = [.play, .transport, .vol, .fx]
+    if !onMap { e.insert(.back) }
+    if t.diceOn { e.insert(.dice) }
+    if t.canUndo { e.insert(.undo) }
+    if t.recycleOn { e.insert(.clear) }
+    return e
+  }
   private func hitsBtn(_ f: Finger, _ b: Btn) -> Bool { bar.hit(f.x, f.y, titleW: onMap ? 0 : titleW, enabled: barEnabled) == .btn(b) }
 
   func mapBarState() -> TopBar.State {
     var st = TopBar.State(title: "Universum", held: heldBtns)
     st.enabled = mapEnabled
     st.playing = mapPlaying
+    st.diceSpin = transportState().diceSpin
     return st
   }
   private var heldBtns: Set<Btn> { Set(Btn.allCases.filter { held($0) }) }
@@ -337,6 +346,9 @@ final class Host {
     case .transport: togglePlate(.transport)
     case .vol: togglePlate(.mix)
     case .fx: togglePlate(.fx)
+    case .dice: transportAct(.dice)
+    case .undo: transportAct(.undo)
+    case .clear: transportAct(.recycle)
     case .back: break
     }
   }
@@ -349,6 +361,9 @@ final class Host {
     case .transport: togglePlate(.transport)
     case .vol: togglePlate(.mix)
     case .fx: togglePlate(.fx)
+    case .dice: transportAct(.dice)
+    case .undo: transportAct(.undo)
+    case .clear: transportAct(.recycle)
     }
   }
 
@@ -742,6 +757,7 @@ final class Host {
     var st = TopBar.State(title: w.title, held: heldBtns)
     st.playing = w.tempo?.playing ?? true
     st.enabled = barEnabled
+    st.diceSpin = transportState().diceSpin
     return st
   }
 

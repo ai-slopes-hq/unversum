@@ -18,6 +18,7 @@ final class TopBarTests: XCTestCase {
     XCTAssertEqual(bar.pos(.vol).x, 322)
     XCTAssertEqual(bar.pos(.transport).x, 284)
     XCTAssertEqual(bar.pos(.play).x, 246)
+    XCTAssertEqual(bar.pos(.clear).x, 208); XCTAssertEqual(bar.pos(.undo).x, 170); XCTAssertEqual(bar.pos(.dice).x, 132)
     let b = bar.pos(.back)
     XCTAssertEqual(b.x, 26); XCTAssertEqual(b.y, y); XCTAssertEqual(b.r, 17)
     XCTAssertEqual(TopBar.barH, 52)
@@ -25,7 +26,7 @@ final class TopBarTests: XCTestCase {
 
   func testRadii() {
     XCTAssertEqual(bar.pos(.fx).r, 20)
-    for k in [Btn.vol, .transport, .play, .back] { XCTAssertEqual(bar.pos(k).r, 17) }
+    for k in [Btn.vol, .transport, .play, .back, .clear, .undo, .dice] { XCTAssertEqual(bar.pos(k).r, 17) }
   }
 
   func testHitCentres() {
@@ -44,7 +45,7 @@ final class TopBarTests: XCTestCase {
   }
 
   func testHitMisses() {
-    XCTAssertNil(bar.hit(150, y, titleW: tw))        // между back и play
+    XCTAssertNil(bar.hit(80, y, titleW: tw))         // между back и dice
     XCTAssertNil(bar.hit(195, 400, titleW: tw))      // поле мира
   }
 
@@ -57,7 +58,7 @@ final class TopBarTests: XCTestCase {
   }
 
   func testButtonOrderRightToLeft() {
-    let xs = [Btn.fx, .vol, .transport, .play, .back].map { bar.pos($0).x }
+    let xs = [Btn.fx, .vol, .transport, .play, .clear, .undo, .dice, .back].map { bar.pos($0).x }
     XCTAssertEqual(xs, xs.sorted(by: >))
   }
 
@@ -67,14 +68,14 @@ final class TopBarTests: XCTestCase {
     XCTAssertNil(bar.hit(u.x, u.y, titleW: tw, enabled: Set(Btn.allCases).subtracting([.play])))
   }
 
-  func testFiveButtonsDoNotOverlapAtW320() {
+  func testEightButtonsDoNotOverlapAtW320() {
     let b = TopBar(W: 320, top: 47, H: 568, safeBot: 0)
-    let order = [Btn.fx, .vol, .transport, .play]
+    let order = [Btn.fx, .vol, .transport, .play, .clear, .undo, .dice]
     for (a, c) in zip(order, order.dropFirst()) {
       let p = b.pos(a), q = b.pos(c)
       XCTAssertGreaterThanOrEqual(hypot(p.x - q.x, p.y - q.y), p.r + q.r + 2, "\(a) / \(c)")
     }
-    XCTAssertGreaterThanOrEqual(b.pos(.play).x - b.pos(.back).x, 2 * 17 + 2)
+    XCTAssertGreaterThanOrEqual(b.pos(.dice).x - b.pos(.back).x, 2 * 17 + 2)
     let (w, _, _) = TopBar.fit("Tria corpora", max: b.titleMax)
     XCTAssertLessThanOrEqual(TopBar.titleX + w, 320 - 16 + 0.5)
   }
@@ -116,5 +117,15 @@ final class TopBarTests: XCTestCase {
     let p = bar.pos(.play)
     XCTAssertNotEqual(render(TopBar.State(title: "x", playing: true)).1(p.x, p.y),
                       render(TopBar.State(title: "x", playing: false)).1(p.x, p.y))
+  }
+}
+
+extension TopBarTests {
+  func testDiceUndoClearHitAndDisabled() {
+    for k in [Btn.dice, .undo, .clear] {
+      let p = bar.pos(k)
+      XCTAssertEqual(bar.hit(p.x, p.y, titleW: tw), .btn(k), "\(k)")
+      XCTAssertNil(bar.hit(p.x, p.y, titleW: tw, enabled: Set(Btn.allCases).subtracting([k])), "\(k) погашена")
+    }
   }
 }

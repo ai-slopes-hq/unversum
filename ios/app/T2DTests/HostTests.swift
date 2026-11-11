@@ -199,6 +199,19 @@ final class HostTests: XCTestCase {
     XCTAssertEqual(world.dices, 1); XCTAssertEqual(world.clears, 1); XCTAssertEqual(world.downs, 0)
   }
 
+  func testBarDiceUndoClearButtons() {
+    host.reapply(); answer("w0", now: 1)
+    tap(100, 400); answer("w1", now: 2)
+    XCTAssertTrue(host.barState(world).enabled.isSuperset(of: [.dice, .undo, .clear]))
+    tapBtn(.dice); tapBtn(.clear)
+    XCTAssertEqual(world.dices, 1); XCTAssertEqual(world.clears, 1); XCTAssertEqual(world.downs, 1)   // касание поля (100, 400) — одно
+    let before = world.restoredN
+    tapBtn(.undo, at: 3)
+    XCTAssertEqual(core.restores.last?.w, "w0")
+    XCTAssertEqual(world.restoredN, before + 1)
+    XCTAssertNil(host.plate, "кнопки бара не открывают плашку")
+  }
+
   func testClearDropsOnlyWindLfo() {
     let w7 = HWorld(7)
     host = makeHost(views: [w7]); host.go(7)
@@ -1129,7 +1142,7 @@ final class HostTests: XCTestCase {
   func testMapHeaderEnabledSet() {
     host = mapHost()
     let e = host.mapBarState().enabled
-    XCTAssertEqual(e, [.play, .transport, .vol, .fx])
+    XCTAssertEqual(e, [.play, .transport, .vol, .fx, .clear], "кубик и undo на карте погашены")
     tapTr(.recycle)
     XCTAssertTrue(host.transportState().canUndo)
     XCTAssertEqual(host.mapBarState().title, "Universum")

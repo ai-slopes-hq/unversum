@@ -1,10 +1,10 @@
 import UIKit
 import CoreText
 
-// верхняя строка хоста — порт host/ui-top.js: раскладка, попадания, список ладов, рисование.
+// хост: нижний бар (восемь кнопок) и заголовок сверху — порт host/ui-top.js: раскладка, попадания, список ладов, рисование.
 // top — safeAreaInsets.top (scopeY веба), W — ширина экрана в пунктах. Без теней, жирного и градиентов.
 
-enum Btn: CaseIterable { case back, play, transport, vol, fx }
+enum Btn: CaseIterable { case back, play, transport, vol, fx, clear, undo, dice }
 enum Hit: Equatable { case btn(Btn), title }
 
 struct TopBar {
@@ -21,10 +21,11 @@ struct TopBar {
     var title: String
     var held: Set<Btn> = []             // палец на кнопке: кольцо и знак ярче
     var playing = false                 // часы идут: на кнопке пауза, иначе треугольник
+    var diceSpin = false                // кубик крутится после броска
     var enabled = Set(Btn.allCases)     // неактивные кнопки притушены и не ловят касания
   }
 
-  // пять кнопок на нижней строке: back слева; fx, vol, transport, play справа налево, шаг 38 у малых
+  // восемь кнопок на нижней строке: back слева; fx, vol, transport, play, clear, undo, dice справа налево, шаг 38
   func pos(_ b: Btn) -> (x: CGFloat, y: CGFloat, r: CGFloat) {
     let y = H - safeBot - TopBar.barH / 2
     switch b {
@@ -33,6 +34,9 @@ struct TopBar {
     case .vol: return (W - 68, y, TopBar.clrR)
     case .transport: return (W - 106, y, TopBar.clrR)
     case .play: return (W - 144, y, TopBar.clrR)
+    case .clear: return (W - 182, y, TopBar.clrR)
+    case .undo: return (W - 220, y, TopBar.clrR)
+    case .dice: return (W - 258, y, TopBar.clrR)
     }
   }
 
@@ -46,7 +50,7 @@ struct TopBar {
     if enabled.contains(.back) && hypot(x - B.x, y - B.y) < B.r + 10 { return .btn(.back) }
     if y < top + 38 && x > TopBar.titleX - 4 && x < TopBar.titleX + titleW + 10 { return .title }
     var best: (Btn, CGFloat)?
-    for k in [Btn.fx, .vol, .transport, .play] where enabled.contains(k) {
+    for k in [Btn.fx, .vol, .transport, .play, .clear, .undo, .dice] where enabled.contains(k) {
       let b = pos(k), dd = hypot(x - b.x, y - b.y)
       if dd < (k == .fx ? TopBar.btnR + 6 : TopBar.clrR + 4) && dd < (best?.1 ?? .infinity) { best = (k, dd) }
     }
@@ -139,6 +143,15 @@ struct TopBar {
       g.fill(CGRect(x: pl.x - 5, y: pl.y - 6, width: 3.5, height: 12)); g.fill(CGRect(x: pl.x + 1.5, y: pl.y - 6, width: 3.5, height: 12))
     } else {
       g.beginPath(); g.move(to: CGPoint(x: pl.x - 4, y: pl.y - 7)); g.addLine(to: CGPoint(x: pl.x + 6, y: pl.y)); g.addLine(to: CGPoint(x: pl.x - 4, y: pl.y + 7)); g.closePath(); g.fillPath()
+    }
+
+    // dice · undo · clear: те же знаки, что во вкладке transport плашки
+    for (b, row) in [(Btn.dice, Plate.TransportRow.dice), (.undo, .undo), (.clear, .recycle)] {
+      let p = pos(b), on = s.enabled.contains(b), h: CGFloat = s.held.contains(b) ? 1 : 0.85
+      ringOf(b)
+      g.setStrokeColor(d.ink(h * (on ? 0.85 : 0.3))); g.setFillColor(d.ink(h * (on ? 0.85 : 0.3))); g.setLineWidth(1.2); g.setLineCap(.round); g.setLineJoin(.round)
+      PlateDraw.glyph(d, row, p.x, p.y, on: on, spin: b == .dice && s.diceSpin)
+      g.setLineCap(.butt)
     }
     return tw
   }

@@ -159,6 +159,28 @@ enum PlateDraw {
     }
   }
 
+  // знак dice / undo / recycle вокруг (x, y); тот же в плашке (вкладка transport) и в нижнем баре. Штрих и заливку ставит вызывающий
+  static func glyph(_ d: Draw, _ r: Plate.TransportRow, _ bx: CGFloat, _ y: CGFloat, on: Bool, spin: Bool) {
+    let c = d.g
+    switch r {
+    case .dice:
+      c.saveGState(); c.translateBy(x: bx, y: y); c.rotate(by: 0.18 + (spin ? 0.9 : 0))
+      c.addPath(CGPath(roundedRect: CGRect(x: -8, y: -8, width: 16, height: 16), cornerWidth: 3, cornerHeight: 3, transform: nil)); c.strokePath()
+      for (px, py) in [(-3.5, -3.5), (3.5, -3.5), (0, 0), (-3.5, 3.5), (3.5, 3.5)] as [(CGFloat, CGFloat)] { d.dot(px, py, 1.2, on ? 0.85 : 0.3) }
+      c.restoreGState()
+    case .undo:
+      c.beginPath(); c.addArc(center: CGPoint(x: bx + 1, y: y + 1), radius: 7, startAngle: .pi * 1.05, endAngle: .pi * 2.35, clockwise: false); c.strokePath()
+      c.beginPath(); c.move(to: CGPoint(x: bx - 9.5, y: y - 4)); c.addLine(to: CGPoint(x: bx - 6, y: y + 2)); c.addLine(to: CGPoint(x: bx - 1.5, y: y - 2.5)); c.strokePath()
+    case .recycle:
+      c.beginPath()
+      c.move(to: CGPoint(x: bx - 8, y: y - 5)); c.addLine(to: CGPoint(x: bx + 8, y: y - 5))
+      c.move(to: CGPoint(x: bx - 3, y: y - 8)); c.addLine(to: CGPoint(x: bx + 3, y: y - 8))
+      c.move(to: CGPoint(x: bx - 6.5, y: y - 5)); c.addLine(to: CGPoint(x: bx - 5, y: y + 8)); c.addLine(to: CGPoint(x: bx + 5, y: y + 8)); c.addLine(to: CGPoint(x: bx + 6.5, y: y - 5))
+      c.strokePath()
+    default: break
+    }
+  }
+
   private static func drawTransport(_ d: Draw, _ g: PlateGeo, _ t: TransportState) {
     let c = d.g, bx = g.x + g.w - 20
     for (i, r) in Plate.TransportRow.allCases.enumerated() {
@@ -185,20 +207,8 @@ enum PlateDraw {
         let bpm = t.bpm ?? 120, k = (bpm - t.range.lowerBound) / (t.range.upperBound - t.range.lowerBound)
         Mixer.fader(d, g.mixTx0, g.mixTx1, y, min(max(k, 0), 1), 0, on)
         d.text("\(Int(bpm))", g.mixTx1 + 8, y, 12, on ? 0.7 : 0.3)
-      case .dice:
-        c.saveGState(); c.translateBy(x: bx, y: y); c.rotate(by: 0.18 + (t.diceSpin ? 0.9 : 0))
-        c.addPath(CGPath(roundedRect: CGRect(x: -8, y: -8, width: 16, height: 16), cornerWidth: 3, cornerHeight: 3, transform: nil)); c.strokePath()
-        for (px, py) in [(-3.5, -3.5), (3.5, -3.5), (0, 0), (-3.5, 3.5), (3.5, 3.5)] as [(CGFloat, CGFloat)] { d.dot(px, py, 1.2, on ? 0.85 : 0.3) }
-        c.restoreGState()
-      case .undo:
-        c.beginPath(); c.addArc(center: CGPoint(x: bx + 1, y: y + 1), radius: 7, startAngle: .pi * 1.05, endAngle: .pi * 2.35, clockwise: false); c.strokePath()
-        c.beginPath(); c.move(to: CGPoint(x: bx - 9.5, y: y - 4)); c.addLine(to: CGPoint(x: bx - 6, y: y + 2)); c.addLine(to: CGPoint(x: bx - 1.5, y: y - 2.5)); c.strokePath()
-      case .recycle:
-        c.beginPath()
-        c.move(to: CGPoint(x: bx - 8, y: y - 5)); c.addLine(to: CGPoint(x: bx + 8, y: y - 5))
-        c.move(to: CGPoint(x: bx - 3, y: y - 8)); c.addLine(to: CGPoint(x: bx + 3, y: y - 8))
-        c.move(to: CGPoint(x: bx - 6.5, y: y - 5)); c.addLine(to: CGPoint(x: bx - 5, y: y + 8)); c.addLine(to: CGPoint(x: bx + 5, y: y + 8)); c.addLine(to: CGPoint(x: bx + 6.5, y: y - 5))
-        c.strokePath()
+      case .dice, .undo, .recycle:
+        glyph(d, r, bx, y, on: on, spin: t.diceSpin)
       }
       c.setLineCap(.butt)
       if i > 0 {
