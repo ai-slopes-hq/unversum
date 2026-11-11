@@ -90,6 +90,7 @@ void Model::setStep(double s) { if (!std::isnan(s)) step_ = clampd(s, 0, 1); }
 void Model::roll(int v) {
   for (int k = 0; k < NV; k++) {
     if (v >= 0 && k != v) continue;
+    if (prm_[k][LVL] <= 0.001) prm_[k][LVL] = DEF_LVL[k];             // после «очистить» кубик возвращает звук; ручной уровень не трогаем
     vrng_[k] = sdk::Rng(static_cast<uint32_t>(rng_.next() * 4294967296.0));
     for (int i = 0; i < NPT_MAX; i++) { pts_[k][i].d = pts_[k][i].hd; pts_[k][i].a = pts_[k][i].ha; fit(pts_[k][i], k); }
   }

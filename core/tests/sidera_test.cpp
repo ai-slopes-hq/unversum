@@ -266,6 +266,29 @@ static void voiceSilenceThenResume() {
   CHECK(fin);
 }
 
+static void diceAfterClearWakesVoices() {                 // автор: после корзины звук не возвращался — кубик должен его вернуть
+  Scale sc; Model m(sc); m.reset(4); m.silence();
+  CHECK(!m.sounding());
+  m.roll();
+  for (int v = 0; v < NV; v++) CHECK(m.voice(v, LVL) > 0.2);
+  m.silence(); m.setVoice(1, LVL, 0.7); m.roll(1);                  // один голос: поднимается только он, чужие стоят
+  CHECK(m.voice(0, LVL) == 0); CHECK(m.voice(1, LVL) == 0.7); CHECK(m.voice(2, LVL) == 0);
+  m.silence(); m.roll(2);
+  CHECK(m.voice(2, LVL) > 0.2); CHECK(m.voice(0, LVL) == 0);
+}
+
+static void voiceResumeRampsFromZero() {                 // ревью: подъём голоса с нуля не должен щёлкать
+  Scale sc; Model m(sc); Voice vo; vo.prepare(48000);
+  Buf b; b.render(vo, m, 0, 4800);
+  m.setVoice(0, LVL, 0); b.render(vo, m, 0, 48000);                // голос отцеплен
+  m.setVoice(0, LVL, 0.8); Buf c; c.render(vo, m, 0, 64);
+  double first = 0; for (int i = 0; i < 8; i++) first = std::max(first, static_cast<double>(std::fabs(c.L[i])));
+  CHECK(first < 0.01);                                              // старт с нуля, а не со ступеньки
+  Buf d; d.render(vo, m, 0, 4800);
+  double pk = 0; for (float x : d.L) pk = std::max(pk, static_cast<double>(std::fabs(x)));
+  CHECK(pk > 0.05);                                                 // и всё же поднимается до уровня
+}
+
 // ---------- Task 3: мир ----------
 
 static void go(World& w, double on = 1) { w.action(RUN, 0, &on, 1); }
@@ -410,7 +433,7 @@ static void worldOutputBounded() {
 int main() {
   modelSeedDeterministic(); modelBarriersHold(); modelStepZeroStatic(); modelCollapsedBox(); modelClamps(); modelMoveHome(); modelSilence();
   modelRollResetsToHome(); modelSnapshotRoundTrip(); modelRestoreGarbage(); modelHzFollowsScale();
-  voiceSumOfSegments(); voiceNoDc(); voiceFiniteExtremes(); voiceStepZeroPeriodic(); voiceLevelZeroSilent(); voiceNoteChangeAtBoundary(); voicePeriodShorterThanN(); voiceSilenceThenResume();
+  voiceSumOfSegments(); voiceNoDc(); voiceFiniteExtremes(); voiceStepZeroPeriodic(); voiceLevelZeroSilent(); voiceNoteChangeAtBoundary(); voicePeriodShorterThanN(); voiceSilenceThenResume(); voiceResumeRampsFromZero(); diceAfterClearWakesVoices();
   worldMirrorSize(); worldActionDispatch(); worldSilentUntilRun(); worldClearSilent(); worldDiceReseeds(); worldLfoKeys(); worldSnapshotRoundTrip(); worldRestoreGarbage(); worldOutputBounded();
   std::printf("sidera-test: %d checks, %d failed\n", checks, fails);
   return fails ? 1 : 0;

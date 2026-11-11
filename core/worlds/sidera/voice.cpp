@@ -38,7 +38,7 @@ void Voice::render(Model& m, int v, float* L, float* R, float* sL, float* sR, in
   }
   const double pan = m.voice(v, PAN);
   if (pan != pan_) { pan_ = pan; sdk::panEq(pan, gl_, gr_); }
-  if (!started_) { startPeriod(m, v); pos_ = 0; gain_ = target; }   // первый запуск: без нарастания из нуля
+  if (!started_) { startPeriod(m, v); pos_ = 0; gain_ = 0; }          // подъём с нуля нарастает (≈10 мс), без ступеньки
   for (int i = 0; i < n; i++) {
     const int nx = seg_ + 1 < n_ ? seg_ + 1 : 0;
     const double x = amp_[seg_] + (amp_[nx] - amp_[seg_]) * (pos_ / len_[seg_]);

@@ -109,8 +109,8 @@ final class SideraTests: XCTestCase {
     XCTAssertEqual(Worlds.info(14)?.title, "Sidera")
     final class Rec: Core { var acts: [(Int, Int, [Double])] = []; func action(_ k: Int, _ i: Int, _ a: [Double], touchTime: Double) -> Bool { acts.append((k, i, a)); return true } }
     let rec = Rec(), v = SideraView(core: rec, readMirror: { b in for i in 0..<Sid.mirrorN { b[i] = 0.5 }; return Sid.mirrorN })
-    v.enter(); v.enter()
-    XCTAssertEqual(rec.acts.count, 1, "enter будит ядро один раз")
+    v.enter()
+    XCTAssertEqual(rec.acts.count, 1, "enter будит ядро: RUN 1")
     XCTAssertEqual(rec.acts[0].0, SidAct.run.rawValue); XCTAssertEqual(rec.acts[0].2, [1])
     v.tick(now: 1, dt: 0.016)
     XCTAssertEqual(v.mirror.step, 0.5, accuracy: 1e-9)
@@ -347,6 +347,13 @@ final class SideraTests: XCTestCase {
     XCTAssertEqual(after.voices.map { $0.note }, before.voices.map { $0.note })
     XCTAssertEqual(after.voices.map { $0.n }, before.voices.map { $0.n })
     XCTAssertEqual(after.voices[1].stars.map { $0.hd }, before.voices[1].stars.map { $0.hd }, "центры рамок не блуждают")
+  }
+
+  // ревью: reinit ядра сбрасывает run — каждый вход в мир должен снова слать RUN 1 (в том числе после restored)
+  func testEnterAlwaysSendsRun() {
+    let rec = SidRec(), v = SideraView(core: rec)
+    v.enter(); v.enter(); v.restored(); v.enter()
+    XCTAssertEqual(rec.acts.filter { $0.kind == SidAct.run.rawValue && $0.a == [1] }.count, 3)
   }
 
 }

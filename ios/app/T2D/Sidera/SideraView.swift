@@ -47,8 +47,7 @@ final class SideraView: World {
   func cornerHit(_ x: CGFloat, _ y: CGFloat) -> Bool { false }   // луна сама ведёт касание: тап — карта, тянешь — фаза
   func dice() { core.action(Act.dice.rawValue, 0, [], touchTime: 0) }
   func clear() { core.action(Act.clear.rawValue, 0, [], touchTime: 0) }
-  func enter() {                                          // звук начинается со входа; остановленный и восстановленный не будим
-    guard !started else { return }
+  func enter() {                                          // каждый вход шлёт RUN 1: reinit ядра сбрасывает run, мир без него молчит
     started = true; core.action(Act.run.rawValue, 0, [1], touchTime: 0)
   }
   func scale(pcs: [Int]?, root: Int) {}                   // лад читает ядро
