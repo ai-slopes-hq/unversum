@@ -53,6 +53,7 @@ struct T2DApp: App {
     case InfernoView.slotN: return InfernoView(core: AppCore(slot: slot))
     case NaturaView.slotN: return NaturaView(core: AppCore(slot: slot))
     case PortusView.slotN: return PortusView(core: AppCore(slot: slot))
+    case HymenaeusView.slotN: return HymenaeusView(core: AppCore(slot: slot))
     case CymaticaView.slotN: return CymaticaView(core: AppCore(slot: slot))
     default: return nil
     }
@@ -104,6 +105,7 @@ struct T2DApp: App {
     case "natura", "natura-play", "natura-fx", "natura-res", "natura-skiff", "natura-ducks-away", "natura-sheet", "natura-menu": shotNatura(T2DApp.shotName); return
     case "portus", "portus-empty", "portus-play", "portus-echo", "portus-star", "portus-bloodmoon", "portus-sheet": shotPortus(T2DApp.shotName); return
     case "cymatica", "cym-empty", "cym-play", "cym-pinch", "cym-steprec", "cym-chance", "cym-drift", "cym-luna": shotCymatica(T2DApp.shotName); return
+    case "hymenaeus": host.go(HymenaeusView.slotN); return   // нить играет сама (enter → run)
     case "tenebrae", "ten-empty", "ten-sun", "ten-hole", "ten-hold", "ten-lfo", "ten-ring", "ten-zoom", "ten-scale": shotTenebrae(T2DApp.shotName); return
     default: break
     }

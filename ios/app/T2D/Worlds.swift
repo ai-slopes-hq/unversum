@@ -28,11 +28,12 @@ enum Worlds {
     WorldInfo(slot: 11, title: "Tria corpora", roman: "XI", theme: th((222, 198, 152), (19, 15, 10), (19, 15, 10)), col: 3, row: 0, view: true),
     WorldInfo(slot: 12, title: "Arcadia", roman: "XII", theme: th((40, 46, 32), (224, 221, 198), (224, 221, 198)), col: 0, row: 3, view: true),
     WorldInfo(slot: 13, title: "Portus", roman: "XIII", theme: th((196, 208, 216), (6, 9, 13), (6, 9, 13)), col: 3, row: 3, view: true),
+    WorldInfo(slot: 14, title: "Hymenaeus", roman: "XIV", theme: th((44, 38, 30), (242, 237, 226), (242, 237, 226)), col: 1, row: 2, view: true),   // только нативный (11.11)
     // XV Goetia выключен (04.11, автор): вернуть — эта строка и убрать (2, 3) из backs
     // WorldInfo(slot: 15, title: "Goetia", roman: "XV", theme: th((226, 214, 190), (12, 8, 7), (12, 8, 7)), col: 2, row: 3, view: false),
   ]
-  // рубашки — клетки без открытого мира (III, VI и XV выключены, две свободные)
-  static let backs: [(col: Int, row: Int)] = [(0, 0), (0, 1), (1, 0), (1, 2), (2, 3)]
+  // рубашки — клетки без открытого мира (III, VI и XV выключены, одна свободная)
+  static let backs: [(col: Int, row: Int)] = [(0, 0), (0, 1), (1, 0), (2, 3)]
 
   static func at(col: Int, row: Int) -> WorldInfo? { all.first { $0.col == col && $0.row == row } }
   static func info(_ slot: Int) -> WorldInfo? { all.first { $0.slot == slot } }

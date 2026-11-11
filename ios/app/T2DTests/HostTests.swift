@@ -399,7 +399,7 @@ final class HostTests: XCTestCase {
 
   func testTapOtherCardPeeks() {
     host = makeHost(); tick(1)
-    tapCell(1, 2)                                            // клетка без мира (у Cymatica 1,1 теперь вид)
+    tapCell(1, 0)                                            // клетка без мира (рубашка)
     XCTAssertNotNil(host.nav.peek); XCTAssertEqual(host.nav.view, .map); XCTAssertNil(host.nav.anim)
     tick(2)
     XCTAssertNil(host.nav.peek, "peek 420 мс")
@@ -1069,7 +1069,7 @@ final class HostTests: XCTestCase {
     host.reapply()
     XCTAssertTrue(core.faders.contains { $0.0 == 4 && abs($0.1 - pow(10, (-36 + 21) / 20)) < 1e-9 })
     XCTAssertTrue(core.faders.contains { $0.0 == 10 && $0.1 == 0 })
-    XCTAssertEqual(core.faders.count, 11); XCTAssertEqual(core.masters.count, 1)
+    XCTAssertEqual(core.faders.count, 12); XCTAssertEqual(core.masters.count, 1)
   }
 
 

@@ -216,6 +216,17 @@ enum Emblems {
       g.setFillColor(moon.copy(alpha: 0.9)!); g.fill(CGRect(x: tx - R * 0.07, y: ty - R * 1.08, width: R * 0.14, height: R * 0.16))
       g.setFillColor(moon.copy(alpha: 0.12)!); g.beginPath(); line([pt(tx, ty - R), pt(cx - R * 1.1, hy - R * 0.1), pt(cx - R * 1.1, hy + R * 0.25)]); g.closePath(); g.fillPath()
       for k in 1...3 { S(0.75 * (1 - CGFloat(k) * 0.25)); g.beginPath(); ell(g, cx - R * 0.25, cy + R * 0.55, R * 0.22 * CGFloat(k), R * 0.07 * CGFloat(k)); g.strokePath() }   // globalAlpha × alpha цвета
+    case 14:                                              // жемчужная нить с приоткрытой застёжкой вокруг золотого кольца
+      let rr = R * 0.42, nx = R * 1.1, ny = R * 0.7
+      g.setStrokeColor(rgb(168, 124, 48, 0.9)); g.setLineWidth(2.2); g.beginPath(); arc(g, cx, cy, rr); g.strokePath()
+      g.setLineWidth(1); g.setStrokeColor(rgb(168, 124, 48, 0.6)); g.beginPath(); arc(g, cx, cy, rr - 2.5); g.strokePath()
+      S(0.45); g.beginPath()
+      for i in 0...120 { let a = -0.7 + CGFloat(i) / 120 * (T2 - 0.5), p = pt(cx + cos(a) * nx, cy + sin(a) * ny); i > 0 ? g.addLine(to: p) : g.move(to: p) }
+      g.strokePath()
+      for k in 0..<8 {
+        let a = -0.5 + (CGFloat(k) + 0.5) / 8 * (T2 - 0.9), x = cx + cos(a) * nx, y = cy + sin(a) * ny, pr = R * (0.07 + 0.03 * CGFloat((k * 5) % 3))
+        bgF(); g.beginPath(); arc(g, x, y, pr); g.fillPath(); S(0.85); g.beginPath(); arc(g, x, y, pr); g.strokePath()
+      }
     case 15:                                              // круг заклинателя: двойное кольцо, восемь знаков, красная печать с кружком и чертой
       S(0.85); g.beginPath(); arc(g, cx, cy, R * 1.05); g.strokePath()
       S(0.35); g.beginPath(); arc(g, cx, cy, R * 0.9); g.strokePath()
