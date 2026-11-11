@@ -21,6 +21,7 @@
 #include "../worlds/goetia/world.hpp"
 #include "../worlds/monochord/world.hpp"
 #include "../worlds/horologium/world.hpp"
+#include "../worlds/hymenaeus/world.hpp"
 #include "../worlds/arcadia/world.hpp"
 #include "../worlds/tria/world.hpp"
 #include "../worlds/portus/world.hpp"
@@ -35,6 +36,7 @@ static oceanus::Oceanus ocean(host.scale());
 static goetia::World goe(host.scale());
 static monochord::World mono(host.scale());
 static horologium::World horo(host.scale());
+static hymenaeus::World hym(host.scale());             // только нативный мир (XIV): в вебе слот 14 никто не открывает
 static arcadia::World arc(host.scale());
 static tria::World tria3(host.scale());
 static portus::World port(host.scale());
@@ -66,6 +68,7 @@ T2D_API void t2d_init(double sr, unsigned seed) {
     {12, &arc},                                         // Arcadia
     {11, &tria3},                                       // Tria corpora
     {13, &port},                                        // Portus
+    {14, &hym},                                         // Hymenaeus
     {4, &nat},                                          // Natura: шанс шага и шелест — от зерна
     {5, &inf},                                          // Inferno
     {1, &ten},                                          // Tenebrae: шум голосов и удары — от зерна

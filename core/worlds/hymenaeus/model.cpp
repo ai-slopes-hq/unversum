@@ -8,7 +8,7 @@
 namespace hymenaeus {
 
 namespace {
-constexpr double CLOUD_DEF[NCK] = {0.5, 0.4, 0.4, 0.5, 0, 0.3, 0.6};   // POS SIZE DENS PITCH FREEZE ECHO CLEVEL
+constexpr double CLOUD_DEF[NCK] = {0.5, 0.4, 0.4, 0.5, 0, 0.3, 0.6, 0.35};   // POS SIZE DENS PITCH FREEZE ECHO CLEVEL SEND
 constexpr double RING_DEF[NRK] = {0.5, 0.5, 0.5, 0.8};               // STRUCT BRIGHT DAMP LVL
 
 bool finite(double v) { return std::isfinite(v); }
@@ -70,9 +70,13 @@ Step Model::next() {
   if (rng_.next() >= dejavu_) toss(i);                  // dejavu 1: never; 0: always
   cur_ = (i + 1) % len_;
   const Pearl& p = p_[i];
-  double semi = std::round(12 + p.pitch * 36);          // 3 октавы от A2
+  return Step{!p.rest, ringFor(p.pitch), hzOf(p.pitch), 0.8, i};
+}
+
+double Model::hzOf(double pitch) const {
+  double semi = std::round(12 + clamp01(std::isnan(pitch) ? 0.5 : pitch) * 36);   // 3 октавы от A2
   if (scale_.on) semi = scale_.snapSemi(semi);
-  return Step{!p.rest, ringFor(p.pitch), 55.0 * std::pow(2.0, semi / 12), 0.8, i};
+  return 55.0 * std::pow(2.0, semi / 12);
 }
 
 std::string Model::snapshot() const {

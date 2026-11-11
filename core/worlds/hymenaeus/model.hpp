@@ -14,7 +14,7 @@ namespace hymenaeus {
 
 constexpr int NR = 3, PEARL_MAX = 16, PEARL_DEF = 11, NRK = 4;
 enum RingKey { STRUCT, BRIGHT, DAMP, LVL };
-enum CloudKey { POS, SIZE, DENS, PITCH, FREEZE, ECHO, CLEVEL, NCK };
+enum CloudKey { POS, SIZE, DENS, PITCH, FREEZE, ECHO, CLEVEL, SEND, NCK };   // SEND — посыл в общий ревербер
 constexpr double REST_P = 0.15;                         // шанс паузы у перебрасываемой жемчужины
 
 struct Pearl { double pitch = 0.5; bool rest = false; };
@@ -38,6 +38,7 @@ class Model {
 
   Step next();                                          // шаг нити: курсор двигается, жемчужина может перебросится
   int ringFor(double pitch) const;                      // полоса высоты → кольцо 0…2
+  double hzOf(double pitch) const;                      // высота 0…1 → Гц: полутон (3 октавы от A2), лад хоста
   bool sounding() const;                                // есть ли среди первых len жемчужин звучащая
 
   std::string snapshot() const;

@@ -33,7 +33,7 @@ class Resonator {
     freq_ = 220.0f / sr_; structure_ = 0.25f; brightness_ = 0.5f; damping_ = 0.7f; position_ = prevPos_ = 0.999f;
     dirty_ = true; active_ = false;
   }
-  void setFreq(double hz) { if (std::isnan(hz)) return; const float f = static_cast<float>(hz) / sr_; freq_ = std::min(std::max(f, 10.0f / sr_), 0.49f); dirty_ = true; }
+  void setFreq(double hz) { if (std::isnan(hz)) return; const float f = std::min(std::max(static_cast<float>(hz) / sr_, 10.0f / sr_), 0.49f); if (f != freq_) { freq_ = f; dirty_ = true; } }
   void setStructure(double v) { set(structure_, v); }
   void setBrightness(double v) { set(brightness_, v); }
   void setDamping(double v) { set(damping_, v); }
@@ -70,7 +70,7 @@ class Resonator {
   }
 
  private:
-  void set(float& dst, double v) { if (std::isnan(v)) return; dst = static_cast<float>(std::min(std::max(v, 0.0), 1.0)); dirty_ = true; }
+  void set(float& dst, double v) { if (std::isnan(v)) return; const float x = static_cast<float>(std::min(std::max(v, 0.0), 1.0)); if (x != dst) { dst = x; dirty_ = true; } }
 
   int computeFilters() {
     float stiffness = stiffnessOf(structure_);

@@ -1,5 +1,6 @@
 // Тесты мира Hymenaeus (XIV): модель, кольца, облака, мир. Сборка и запуск — core/build.sh → core/build/hymenaeus-test.
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <string>
@@ -8,6 +9,7 @@
 #include "../host/scale.hpp"
 #include "../worlds/hymenaeus/cloud.hpp"
 #include "../worlds/hymenaeus/model.hpp"
+#include "../worlds/hymenaeus/world.hpp"
 #include "../worlds/hymenaeus/rings/plucker.hpp"
 #include "../worlds/hymenaeus/rings/resonator.hpp"
 
@@ -134,6 +136,12 @@ static void modelRestoreGarbage() {
     for (int i = 0; i < PEARL_MAX; i++) CHECK(m.pearl(i).pitch >= 0 && m.pearl(i).pitch <= 1);
     for (int i = 0; i < 20; i++) m.next();
   }
+}
+
+static void modelCloudSend() {
+  Scale sc; Model m(sc);
+  CHECK(NCK == 8); CHECK(m.cloud(SEND) == 0.35);
+  m.setCloud(SEND, 2); CHECK(m.cloud(SEND) == 1);
 }
 
 static void modelRollAndClear() {
@@ -336,12 +344,143 @@ static void cloudSleepsAgain() {
   CHECK(c.sleeping());
 }
 
+// ---------- Task 4: мир ----------
+
+static hymenaeus::World& theWorld(const Scale&, uint32_t seed = 1) { static Scale gs; static hymenaeus::World w(gs); w.prepare(48000, seed); return w; }   // мир держит ссылку на лад — свой, статический
+
+struct WRun { double peak = 0, energy = 0; int heard = 0, maxPerBlock = 0; bool finite = true; };
+// blocks блоков по 128; clk — часы хоста (или nullptr); вход мира — только его действия
+static WRun runWorld(hymenaeus::World& w, int blocks, sdk::Clock* clk = nullptr, double* heardRings = nullptr) {
+  static float L[128], R[128], sL[128], sR[128];
+  sdk::Out out{L, R, sL, sR};
+  WRun r; double hb[64];
+  for (int b = 0; b < blocks; b++) {
+    if (clk) clk->now = b * 128.0 / 48000;
+    w.process(out, 128);
+    for (int i = 0; i < 128; i++) {
+      for (float x : {L[i], R[i], sL[i], sR[i]}) if (!std::isfinite(x)) r.finite = false;
+      r.peak = std::max(r.peak, double(std::max(std::fabs(L[i]), std::fabs(R[i])))); r.energy += double(L[i]) * L[i] + double(R[i]) * R[i];
+    }
+    const int k = w.heard(hb, 64);
+    if (k > 0) { r.heard += static_cast<int>(hb[0]); r.maxPerBlock = std::max(r.maxPerBlock, static_cast<int>(hb[0])); if (heardRings) for (int j = 0; j < hb[0]; j++) heardRings[static_cast<int>(hb[1 + 2 * j])]++; }
+  }
+  return r;
+}
+static void act(hymenaeus::World& w, int kind, int i, std::initializer_list<double> a) { std::vector<double> v(a); w.action(kind, i, v.data(), static_cast<int>(v.size())); }
+
+static void worldSilentWhenStopped() {
+  Scale sc; auto& w = theWorld(sc);
+  const WRun r = runWorld(w, 200);
+  CHECK(r.energy == 0); CHECK(!w.sounding()); CHECK(r.heard == 0);
+}
+
+static void worldStepsInTime() {
+  Scale sc; auto& w = theWorld(sc);
+  act(w, hymenaeus::THREAD, 0, {0, 1});                                   // déjà vu 1
+  for (int i = 0; i < hymenaeus::PEARL_MAX; i++) act(w, hymenaeus::PEARL, i, {1, 0});   // ни одной паузы
+  act(w, hymenaeus::BPM, 0, {120}); act(w, hymenaeus::RUN, 0, {1});
+  const WRun r = runWorld(w, 4 * 48000 / 128);
+  CHECK(r.heard >= 15 && r.heard <= 17);                                  // 120 уд/мин, восьмые: 4 шага в секунду
+  CHECK(r.energy > 0);
+}
+
+static void worldStrikeSounds() {
+  Scale sc; auto& w = theWorld(sc);
+  act(w, hymenaeus::STRIKE, 1, {0.3, 1});
+  const WRun a = runWorld(w, 48000 * 3 / 10 / 128);
+  CHECK(a.peak > 0.01); CHECK(a.finite);
+  CHECK(w.sounding());
+  const WRun b = runWorld(w, 48000 * 90 / 128);                           // облако с эхом гаснет за минуту
+  CHECK(b.finite);
+  CHECK(!w.sounding());
+}
+
+static void worldNoStepFlood() {
+  Scale sc; auto& w = theWorld(sc);
+  for (double bpm : {0.0, -5.0, 1e9, double(NAN)}) act(w, hymenaeus::BPM, 0, {bpm});
+  double m[hymenaeus::MIRROR_N]; CHECK(w.mirror(m, hymenaeus::MIRROR_N) == hymenaeus::MIRROR_N);
+  CHECK(m[1] >= 20 && m[1] <= 300);                                       // bpm в зеркале всегда в допустимых границах
+  act(w, hymenaeus::RUN, 0, {1});
+  sdk::Clock clk; clk.sr = 48000; clk.grid.on = true; clk.grid.t0 = 0; clk.grid.p = 1e-4;   // безумная сетка: доля 0.1 мс
+  w.attach(&clk);
+  const WRun r = runWorld(w, 400, &clk);
+  CHECK(r.maxPerBlock <= 4); CHECK(r.finite);
+  clk.grid.p = -1; const WRun r2 = runWorld(w, 100, &clk); CHECK(r2.maxPerBlock <= 4 && r2.finite);
+  w.attach(nullptr);
+}
+
+static void worldStopNoStuck() {
+  Scale sc; auto& w = theWorld(sc);
+  act(w, hymenaeus::RUN, 0, {1});
+  runWorld(w, 2 * 48000 / 128);
+  act(w, hymenaeus::RUN, 0, {0});
+  const WRun r = runWorld(w, 60 * 48000 / 128);
+  CHECK(r.finite); CHECK(!w.sounding());
+}
+
+static void worldSnapshotRoundTrip() {
+  Scale sc;
+  auto& w = theWorld(sc, 4);
+  act(w, hymenaeus::THREAD, 0, {0, 0.3}); act(w, hymenaeus::THREAD, 0, {1, 9}); act(w, hymenaeus::BPM, 0, {77});
+  act(w, hymenaeus::RING, 2, {2, 0.9}); act(w, hymenaeus::CLOUD, 0, {5, 0.6});
+  const std::string js = w.snapshot();
+  hymenaeus::World* b = new hymenaeus::World(sc); b->prepare(48000, 4); b->restore(js);
+  CHECK(b->snapshot() == js);
+  b->restore("{"); CHECK(b->snapshot() != "");
+  b->restore(js); CHECK(b->snapshot() == js);
+  delete b;
+}
+
+static void worldGarbageActions() {
+  Scale sc; auto& w = theWorld(sc);
+  const double vals[] = {NAN, INFINITY, -INFINITY, 1e30, -7, 0, 0.5, 3};
+  bool finite = true;
+  for (int kind = -4; kind < 14; kind++) for (int i : {-5, -1, 0, 1, 2, 3, 15, 99})
+    for (double v : vals) {
+      double a[3] = {v, v, v};
+      w.action(kind, i, a, 3); w.action(kind, i, a, 1); w.action(kind, i, a, 0); w.action(kind, i, nullptr, 0);
+      finite = runWorld(w, 2).finite && finite;
+    }
+  CHECK(finite);
+  double m[hymenaeus::MIRROR_N]; w.mirror(m, hymenaeus::MIRROR_N);
+  for (double x : m) CHECK(std::isfinite(x));
+  CHECK(w.mirror(m, 3) == 0);                                              // буфер короче зеркала — 0 чисел
+}
+
+static void worldBudget() {
+  Scale sc; auto& w = theWorld(sc);
+  act(w, hymenaeus::CLOUD, 0, {2, 1}); act(w, hymenaeus::CLOUD, 0, {1, 1}); act(w, hymenaeus::CLOUD, 0, {5, 0.8});
+  act(w, hymenaeus::BPM, 0, {300}); act(w, hymenaeus::RUN, 0, {1});
+  for (int r = 0; r < 3; r++) act(w, hymenaeus::RING, r, {2, 0.1});       // damping 0.1: звенят долго
+  for (int i = 0; i < hymenaeus::PEARL_MAX; i++) act(w, hymenaeus::PEARL, i, {1, 0});
+  runWorld(w, 48000 * 2 / 128);                                            // разогнать
+  const int blocks = 48000 * 4 / 128;
+  const auto t0 = std::chrono::steady_clock::now();
+  runWorld(w, blocks);
+  const double sec = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count(), audio = blocks * 128.0 / 48000;
+  CHECK(sec < audio * 0.25);
+  std::printf("  budget: %.2f%% of real time\n", 100 * sec / audio);
+}
+
+static void worldRingsByPitch() {
+  Scale sc; auto& w = theWorld(sc, 3);
+  act(w, hymenaeus::THREAD, 0, {0, 1}); act(w, hymenaeus::THREAD, 1, {1, 3});
+  for (int i = 0; i < 3; i++) act(w, hymenaeus::PEARL, i, {1, 0});
+  act(w, hymenaeus::PEARL, 0, {0, 0.1}); act(w, hymenaeus::PEARL, 1, {0, 0.5}); act(w, hymenaeus::PEARL, 2, {0, 0.9});
+  act(w, hymenaeus::BPM, 0, {240}); act(w, hymenaeus::RUN, 0, {1});
+  double rings[8] = {};
+  runWorld(w, 48000 * 3 / 128, nullptr, rings);
+  CHECK(rings[0] > 3 && rings[1] > 3 && rings[2] > 3);                     // по кругу бьют все три кольца
+}
+
 int main() {
   modelSeedDeterministic(); modelDejaVuOneRepeats(); modelDejaVuZeroVaries(); modelRestsSilent();
   modelRingBands(); modelPitchToRing(); modelScaleSnap(); modelClamps(); modelLenOne();
-  modelSnapshotRoundTrip(); modelRestoreGarbage(); modelRollAndClear();
+  modelSnapshotRoundTrip(); modelRestoreGarbage(); modelRollAndClear(); modelCloudSend();
   ringsRingsDown(); ringsDampingMonotone(); ringsBrightnessCentroid(); ringsStable(); ringsIdleCheap(); ringsNoAlloc(); ringsPluckerBurst();
   cloudSilentIn(); cloudEchoesInput(); cloudFreezeHolds(); cloudFreezeEmpty(); cloudNoNan(); cloudDensityBounded(); cloudSleepsAgain();
+  worldSilentWhenStopped(); worldStepsInTime(); worldStrikeSounds(); worldNoStepFlood(); worldStopNoStuck(); worldSnapshotRoundTrip();
+  worldGarbageActions(); worldBudget(); worldRingsByPitch();
   std::printf("hymenaeus-test: %d checks, %d failed\n", checks, fails);
   return fails ? 1 : 0;
 }

@@ -51,6 +51,7 @@
 #include "../worlds/horologium/model.hpp"
 #include "../worlds/horologium/sound.hpp"
 #include "../worlds/horologium/world.hpp"
+#include "../worlds/hymenaeus/world.hpp"
 #include "../worlds/tenebrae/tone.hpp"
 #include "../worlds/tenebrae/waves.hpp"
 #include "../worlds/tenebrae/shifter.hpp"
@@ -2874,6 +2875,18 @@ static void bridgeNative() {
   CHECK(sound);
 }
 
+// Hymenaeus (XIV) в слоте 14 общего моста: ручной удар по кольцу — зеркало нужной длины и звук в dry
+static void bridgeHymenaeus() {
+  t2d_init(48000, 1);
+  t2d_args()[0] = 0.3; t2d_args()[1] = 1;
+  t2d_action(14, hymenaeus::STRIKE, 1, t2d_args(), 2);
+  float peak = 0;
+  for (int b = 0; b < 40; b++) { t2d_process(128); const float* d = t2d_dry(14, 0); for (int k = 0; k < 128; k++) peak = std::max(peak, std::fabs(d[k])); }
+  CHECK(peak > 0.01f);
+  CHECK(t2d_mirror(14) == hymenaeus::MIRROR_N);
+  CHECK(t2d_mbuf()[1] == 90);                                             // bpm по умолчанию
+}
+
 // Веб не меняется: FNV-1a по байтам dry(10) и ret за 200 блоков сцены «3 звезды, seed 1» (константа снята до правки host.cpp)
 static void mixWebUntouched() {
   t2d_init(48000, 1);
@@ -5037,7 +5050,7 @@ int main(int argc, char** argv) {
   tenebraeTone(); tenebraeWaves(); tenebraeWavesNyquist(); tenebraeMorph(); tenebraeShifter();
   tenebraeVoiceSilent(); tenebraeVoiceExtremes(); tenebraeVoiceNoise(); tenebraeVoiceRelive();
   tenebraeWorldBus(); tenebraeTzfmFollows(); tenebraeLinksClear(); tenebraeMirror(); tenebraeModelPick(); tenebraeActionNan(); tenebraeCycleSafe(); tenebraeStrikeClear(); tenebraeScaleRetune();
-  shaper(); shaperOs4(); shaperChromium2(); bpbank(); noise(); infernoModel(); infernoSound(); bridgeNative(); mixWebUntouched(); mixSum(); mixMaster();
+  shaper(); shaperOs4(); shaperChromium2(); bpbank(); noise(); infernoModel(); infernoSound(); bridgeNative(); bridgeHymenaeus(); mixWebUntouched(); mixSum(); mixMaster();
   appSpscThreads(); appTripleThreads(); appChunking(); appVsBridge(); appHeardAccumulates(); appMidiClock(); appMidiTime(); appMidiOverflow(); appOverflow(); appLatency(); appReinitRate();
   appHostOrder(); appSnapRoundtrip(); appRestoreGarbage(); appHeavyOnePerBlock(); appStrOverflow(); appHostVolScale(); appStrCap();
   lfoForms(); lfoRandom(); hostLfo(); lfoApply(); lfoUnits(); lfoOff(); lfoOrder(); lfoDeadObj(); lfoSpecNan(); lfoForeign(); oceanLfo(); oceanLfoIgnores(); monoLfo(); monoLfoIgnores(); monoDice(); horoLfo(); horoFilterMap(); horoFilterAudio(); horoFilterTail(); horoFilterExtremes(); horoModelFltGarbage(); horoLfoFlt(); horoDiceFlt(); horoModelInst(); horoModelLen(); horoModelDefaults(); horoModelGarbage(); horoSoundGarbage(); horoModelPitch(); horoModelPitchGarbage(); drumVoices(); drumGlitch(); horoLfoIgnores(); sdkEuclid(); horoOnsets(); horoBackward(); horoBackwardJump(); horoRot(); horoLenSwitch(); horoNonFiniteTempo(); horoConcursus(); horoAttacksPerTurn(); horoCeiling(); horoKitPeak(); horoKitRms(); horoTailOff(); horoInstSwitch(); horoDice(); horoRetiredActions(); horoLockNeedsRunOnly(); hostTwoWorldsSamePhase(); hostMasterBpmChange(); horoLockNoMidi(); cymaticaGridNoLock(); cymaticaLockOverriddenByGrid(); arcLfo(); arcLfoIgnores(); triaLfo(); triaLfoIgnores(); infLfo(); infLfoIgnores(); portusLfo(); portusLfoIgnores(); portusDice(); arcPicSame(); arcPicMeta(); arcPicRiverName(); arcName(); arcRouteSame(); arcPicFixture(); appScaleSteps(); appLfo(); appLevels(); appLevelsPreFader(); appHostFader(); appHostFaderSmooth(); appHostMaster();
