@@ -29,6 +29,7 @@ class Sound {
   void strike(int ring, double hz, double pos, double vel);
   // n ≤ BLOCK сэмплов: пишет L, R (сухо) и sL, sR (посыл) — присваивает, не прибавляет
   void render(float* L, float* R, float* sL, float* sR, int n);
+  void silence();                                        // оборвать всё звучащее (кольца, струны, облака) без выделений; параметры остаются
   bool sounding() const;
   double ringEnergy(int i) const { return (i >= 0 && i < NR) ? env_[i] : 0; }
   double cloudEnergy() const { return cenv_; }

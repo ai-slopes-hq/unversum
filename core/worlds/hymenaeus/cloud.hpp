@@ -23,6 +23,7 @@ class Cloud {
   void process(float& l, float& r);
   bool sleeping() const { return !hasSound_ && ng_ == 0; }
   int grains() const { return ng_; }
+  void silence() { ng_ = 0; written_ = 0; silentRun_ = 0; hasSound_ = false; fbL_ = fbR_ = 0; }   // зёрна и эхо забыты; буфер не чистим: чтение ограничено written_
 
  private:
   struct Grain { float dist, rate, age, inv, gl, gr; };   // dist — кадров позади головы записи

@@ -42,7 +42,7 @@ void World::action(int kind, int i, const double* a, int n) {
       if (keyOf(a[0]) == 0) model_.setDejaVu(0, a[1]); else if (keyOf(a[0]) == 1) model_.setLen(0, a[1]);   // временно: нить 0 (Task 4)
       break;
     case DICE: model_.roll(); break;
-    case CLEAR: model_.clearAll(); nman_ = 0; nh_ = 0; break;
+    case CLEAR: model_.clearAll(); sound_.silence(); nman_ = 0; nh_ = 0; break;
     case RUN: if (has(1) && !std::isnan(a[0])) { const bool on = a[0] != 0; if (on && !run_) steps_.reset(); run_ = on; } break;
     case BPM: if (has(1) && !std::isnan(a[0]) && a[0] > 0) bpm_ = std::min(std::max(a[0], 20.0), 300.0); break;
     case sdk::ACT_LFO: {

@@ -39,6 +39,7 @@ class Resonator {
   void setDamping(double v) { set(damping_, v); }
   void setPosition(double v) { if (!std::isnan(v)) position_ = static_cast<float>(std::min(std::max(v, 0.0), 0.999)); }
   bool active() const { return active_; }
+  void silence() { for (auto& f : f_) f.reset(); active_ = false; }   // обнулить моды; параметры не трогает
 
   // in → odd (моды 1, 3, 5…) и even (2, 4, 6…); n любое
   void process(const float* in, float* odd, float* even, int n) {

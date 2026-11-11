@@ -59,6 +59,15 @@ void Sound::strike(int ring, double hz, double pos, double vel) {
   pluckLeft_[ring][v] = static_cast<int>(sr_ * 0.5) + 256 * 64;   // шум щипка + хвост гребёнки (0.8^64 < 1e-6)
 }
 
+void Sound::silence() {
+  for (int i = 0; i < NR; i++) {
+    for (int v = 0; v < VOICES; v++) { res_[i][v].silence(); pluckLeft_[i][v] = 0; dcx_[i][v] = dcy_[i][v] = 0; }
+    for (int s = 0; s < STRINGS; s++) str_[i][s].reset();
+    strActive_[i] = false; env_[i] = 0;
+  }
+  cloud_.silence(); cenv_ = 0;
+}
+
 bool Sound::sounding() const {
   for (int i = 0; i < NR; i++) {
     if (strActive_[i]) return true;

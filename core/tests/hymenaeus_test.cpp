@@ -234,7 +234,7 @@ static void modelClearAllIsEmpty() {
     for (int t = 0; t < NR; t++) {
       const Thread& th = m.thread(t);
       for (int i = 0; i < PEARL_MAX; i++) CHECK(th.p[i].rest);
-      CHECK(th.len == PEARL_DEF && th.dejavu == 0.7 && th.cur == 0);
+      CHECK(th.len == PEARL_DEF && th.dejavu == 1.0 && th.cur == 0);
       CHECK(th.lo == def.thread(t).lo && th.hi == def.thread(t).hi);
     }
     CHECK(!m.sounding());
@@ -243,7 +243,7 @@ static void modelClearAllIsEmpty() {
   for (int r = 0; r < NR; r++) for (int k = 0; k < NRK; k++) CHECK(m.ring(r, k) == def.ring(r, k));
   for (int k = 0; k < NCK; k++) CHECK(m.cloud(k) == def.cloud(k));
   CHECK(m.mix() == 0.5);
-  for (int t = 0; t < NR; t++) { m.setDejaVu(t, 1); for (int i = 0; i < 20; i++) CHECK(!m.next(t).hit); }   // дефолтный déjà vu 0.7 перебрасывает пустую нить, поэтому проверяем при 1
+  for (int t = 0; t < NR; t++) for (int i = 0; i < 40; i++) CHECK(!m.next(t).hit);   // déjà vu 1 после очистки: пустое остаётся пустым
 }
 
 static void modelClearUndoRestores() {
@@ -723,20 +723,19 @@ static void worldClearSilences() {
   act(w, hymenaeus::BPM, 0, {240}); act(w, hymenaeus::RUN, 0, {1});
   for (int r = 0; r < NR; r++) act(w, hymenaeus::RING, r, {2, 0.3});
   runWorld(w, 48000 * 2 / 128);
+  CHECK(w.sounding());
   act(w, hymenaeus::STRIKE, 0, {0.3, 1}); act(w, hymenaeus::STRIKE, 1, {0.3, 1});   // ручные удары ждут блока
-  act(w, hymenaeus::CLEAR, 0, {}); act(w, hymenaeus::RUN, 0, {0});         // нить после CLEAR с déjà vu 0.7 снова наполняется, поэтому ход останавливаем
+  act(w, hymenaeus::CLEAR, 0, {});                                         // ход не останавливаем
   const int half = 48000 / 2 / 128;
-  const WRun first = runWorld(w, half);                                    // звон и хвост облака не гасятся параметрами мгновенно (ревербер хоста тут не в счёт)
-  CHECK(first.heard == 0);                                                 // ни ручных ударов, ни heard после CLEAR
-  const WRun mid = runWorld(w, half * 3), last = runWorld(w, half);        // до 2 с
-  std::printf("  clear: peak 0-0.5 s %.3g, 1.5-2 s %.3g\n", first.peak, last.peak);
-  CHECK(first.finite && mid.finite && last.finite);
-  CHECK(mid.heard == 0 && last.heard == 0);
-  CHECK(last.peak < first.peak * 0.8);                                     // звон затухает
-  runWorld(w, half * 2 * 20);                                              // ещё 20 с: затухание до тишины (замер: ниже 1e-4 примерно к 19.5 с)
-  const WRun tail = runWorld(w, half);
-  std::printf("  clear: peak at 22-22.5 s %.3g\n", tail.peak);
-  CHECK(tail.peak < 1e-4);
+  const WRun first = runWorld(w, half * 3);                                // 1.5 с
+  const WRun last = runWorld(w, half);                                     // последние 0.5 с из 2 с
+  std::printf("  clear: peak 0-1.5 s %.3g, 1.5-2 s %.3g\n", first.peak, last.peak);
+  CHECK(first.finite && last.finite);
+  CHECK(first.heard == 0 && last.heard == 0);
+  CHECK(last.peak < 1e-4);
+  const WRun more = runWorld(w, 48000 * 6 / 128);                          // всего 8 с с идущим ходом: ни одного удара
+  CHECK(more.heard == 0 && more.peak < 1e-4);
+  CHECK(!w.sounding());
   CHECK(!w.model().sounding());
 }
 
