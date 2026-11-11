@@ -4,17 +4,17 @@
 // action(kind, i, a, n):
 //   RING i = кольцо, a = [RingKey (STRUCT BRIGHT DAMP LVL POLY), v];  CLOUD a = [CloudKey, v];  STRIKE i = кольцо, a = [место удара 0…1, сила 0…1] (по умолчанию 1) — ручной удар;
 //   PEARL i = жемчужина, a = [нить, 0 высота | 1 пауза, v] (интерфейс iOS его не шлёт — мелодия пальцем не правится, только кубик; номер оставлен);
-//   THREAD i = нить, a = [0 déjà vu | 1 длина | 2 lo | 3 hi (ноты MIDI), v] (lo/hi интерфейс не шлёт — диапазон фиксирован);
+//   THREAD i = нить, a = [0 длина | 1 lo | 2 hi (ноты MIDI), v] (lo/hi интерфейс не шлёт — диапазон фиксирован);
 //   DICE a = [нить] (пусто или −1 — обе нити; вне диапазона — ничего);  TIMBRE — тембр колец и облаков случайно (ноты не трогает);  CLEAR — очистить всё;
 //   LOC a = [слот 0…3];  MIX a = [0…1];  RUN a = [on];  BPM a = [bpm];
 //   ACT_LFO (i == -1) a = [key, v]: key 0…NR·NRK−1 — кольцо key / NRK, ключ key % NRK (кольцо 1, ключ 0 = 5); затем 10 + CloudKey (POS = 10)
 //   Act-номера зеркалит Swift (ActNumbers): порядок enum Act менять нельзя.
-// Зеркало (MIRROR_N = 99 чисел), порядок:
+// Зеркало (MIRROR_N = 97 чисел), порядок:
 //   [0] run  [1] bpm  [2] loc  [3] mix
-//   [4..5] cursor нитей  [6..7] len  [8..9] dejavu  [10..11] lo  [12..13] hi          (MIRROR_HEAD = 14; по полю на все нити)
-//   [14..77] жемчужины: нить 0 — PEARL_MAX × (высота, пауза), затем нить 1 (2 × PEARL_MAX × 2 = 64)
-//   [78..89] кольца: NR × (struct, bright, damp, lvl, poly, энергия)                   (MIRROR_RING = 6)
-//   [90..97] облака: NCK значений CloudKey  [98] энергия облаков
+//   [4..5] cursor нитей  [6..7] len  [8..9] lo  [10..11] hi                           (MIRROR_HEAD = 12; по полю на все нити)
+//   [12..75] жемчужины: нить 0 — PEARL_MAX × (высота, пауза), затем нить 1 (2 × PEARL_MAX × 2 = 64)
+//   [76..87] кольца: NR × (struct, bright, damp, lvl, poly, энергия)                   (MIRROR_RING = 6)
+//   [88..95] облака: NCK значений CloudKey  [96] энергия облаков
 // heard: [k, (кольцо, жемчужина) × k]; кольцо = нить, жемчужина −1 — ручной удар.
 #pragma once
 #include "../../sdk/transport.hpp"
@@ -25,7 +25,7 @@
 namespace hymenaeus {
 
 enum Act { RING, CLOUD, PEARL, STRIKE, THREAD, DICE, CLEAR, RUN, BPM, TIMBRE, LOC, MIX };
-constexpr int MIRROR_HEAD = 14, MIRROR_RING = 6, MIRROR_N = MIRROR_HEAD + NR * 2 * PEARL_MAX + NR * MIRROR_RING + NCK + 1;
+constexpr int MIRROR_HEAD = 12, MIRROR_RING = 6, MIRROR_N = MIRROR_HEAD + NR * 2 * PEARL_MAX + NR * MIRROR_RING + NCK + 1;
 constexpr int MAX_EV = 4, HEARD_MAX = 32, MAN_MAX = 8, EV_CAP = NR * MAX_EV + MAN_MAX;   // шаги: обе нити × MAX_EV за блок + ручные удары
 
 class World : public sdk::World {

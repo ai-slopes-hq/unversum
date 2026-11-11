@@ -40,14 +40,13 @@ void World::action(int kind, int i, const double* a, int n) {
       queue(man_, nman_, MAN_MAX, Ev{0, i, -1, model_.hzOf(i, 0.5), pos, vel});
       break;
     }
-    case THREAD: {                                             // i = нить, a = [0 déjà vu | 1 длина | 2 lo | 3 hi, v]
+    case THREAD: {                                             // i = нить, a = [0 длина | 1 lo | 2 hi, v]
       if (!has(2) || i < 0 || i >= NR) break;
       const double v = a[1];
       switch (keyOf(a[0])) {
-        case 0: model_.setDejaVu(i, v); break;
-        case 1: model_.setLen(i, v); break;
-        case 2: if (std::isfinite(v)) model_.setRange(i, v, model_.thread(i).hi); break;
-        case 3: if (std::isfinite(v)) model_.setRange(i, model_.thread(i).lo, v); break;
+        case 0: model_.setLen(i, v); break;
+        case 1: if (std::isfinite(v)) model_.setRange(i, v, model_.thread(i).hi); break;
+        case 2: if (std::isfinite(v)) model_.setRange(i, model_.thread(i).lo, v); break;
         default: break;
       }
       break;
@@ -120,7 +119,6 @@ int World::mirror(double* buf, int cap) const {
   *p++ = run_; *p++ = bpm_; *p++ = model_.loc(); *p++ = model_.mix();
   for (int t = 0; t < NR; t++) *p++ = model_.thread(t).cur;
   for (int t = 0; t < NR; t++) *p++ = model_.thread(t).len;
-  for (int t = 0; t < NR; t++) *p++ = model_.thread(t).dejavu;
   for (int t = 0; t < NR; t++) *p++ = model_.thread(t).lo;
   for (int t = 0; t < NR; t++) *p++ = model_.thread(t).hi;
   for (int t = 0; t < NR; t++) for (int i = 0; i < PEARL_MAX; i++) { const Pearl q = model_.thread(t).p[i]; *p++ = q.pitch; *p++ = q.rest; }

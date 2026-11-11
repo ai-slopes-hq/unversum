@@ -8,6 +8,7 @@
 #include <new>
 #include <string>
 #include <vector>
+#include "../sdk/euclid.hpp"
 
 #include "../host/scale.hpp"
 #include "../worlds/hymenaeus/cloud.hpp"
@@ -32,8 +33,8 @@ static void modelSeedDeterministic() {
   }
 }
 
-static void modelDejaVuOneRepeats() {
-  Scale sc; Model m(sc); m.reset(3); m.setDejaVu(0, 1);
+static void modelLoopRepeats() {
+  Scale sc; Model m(sc); m.reset(3); 
   const int len = m.thread(0).len;
   std::vector<double> first;
   for (int i = 0; i < len; i++) first.push_back(m.next(0).hz);
@@ -41,18 +42,8 @@ static void modelDejaVuOneRepeats() {
     for (int i = 0; i < len; i++) CHECK(m.next(0).hz == first[i]);
 }
 
-static void modelDejaVuZeroVaries() {
-  Scale sc; Model m(sc); m.reset(3); m.setDejaVu(0, 0);
-  const int len = m.thread(0).len;
-  std::vector<std::vector<double>> rounds;
-  for (int r = 0; r < 8; r++) { std::vector<double> v; for (int i = 0; i < len; i++) v.push_back(m.next(0).hz); rounds.push_back(v); }
-  int different = 0;
-  for (int r = 1; r < 8; r++) if (rounds[r] != rounds[0]) different++;
-  CHECK(different >= 6);
-}
-
 static void modelRestsSilent() {
-  Scale sc; Model m(sc); m.reset(2); m.setDejaVu(0, 1);
+  Scale sc; Model m(sc); m.reset(2); 
   for (int i = 0; i < PEARL_MAX; i++) for (int t = 0; t < NR; t++) m.setRest(t, i, true);
   CHECK(!m.sounding());
   for (int i = 0; i < m.thread(0).len * 3; i++) CHECK(!m.next(0).hit);
@@ -69,7 +60,7 @@ static void modelDefaultRanges() {
 }
 
 static void modelTwoThreadsIndependent() {
-  Scale sc; Model m(sc); m.reset(1); m.setDejaVu(0, 1); m.setDejaVu(1, 1);
+  Scale sc; Model m(sc); m.reset(1); 
   m.setLen(0, 3); m.setLen(1, 5);
   for (int i = 0; i < 15; i++) { const Step a = m.next(0), b = m.next(1); CHECK(a.ring == 0 && b.ring == 1); }
   CHECK(m.thread(0).cur == 15 % 3); CHECK(m.thread(1).cur == 15 % 5);
@@ -92,7 +83,7 @@ static void modelRangeClamp() {
 }
 
 static void modelPitchWithinRange() {
-  Scale sc; Model m(sc); m.reset(3); m.setDejaVu(0, 0);              // dejavu 0: нить всё время перебрасывается
+  Scale sc; Model m(sc); m.reset(3);
   m.setRange(0, 50, 62);
   for (int i = 0; i < 1000; i++) {
     const Step s = m.next(0);
@@ -117,7 +108,7 @@ static void modelDeterministic() {
 
 static void modelScaleSnap() {
   Scale sc; sc.on = true; sc.idx = 0; sc.root = 0;          // мажор от A
-  Model m(sc); m.reset(7); m.setDejaVu(0, 1);
+  Model m(sc); m.reset(7); 
   for (int i = 0; i < PEARL_MAX; i++) { m.setRest(0, i, false); m.setPearlPitch(0, i, i / 15.0); }
   const int* st = Scale::stepsOf(0);
   for (int i = 0; i < m.thread(0).len; i++) {
@@ -155,11 +146,8 @@ static void modelClamps() {
     m.setLen(t, 7.6); CHECK(th.len == 8);
     m.setLen(t, 5); m.setLen(t, NAN); CHECK(th.len == 5);
     m.setLen(t, INFINITY); CHECK(th.len == 5);
-    m.setDejaVu(t, 2); CHECK(th.dejavu == 1);
-    m.setDejaVu(t, -1); CHECK(th.dejavu == 0);
-    m.setDejaVu(t, 0.4); m.setDejaVu(t, NAN); CHECK(th.dejavu == 0.4);
   }
-  m.setLen(-1, 3); m.setLen(NR, 3); m.setDejaVu(NR, 1); m.togglePearl(NR, 0); m.setRest(-1, 0, true); m.setPearlPitch(NR, 0, 1);
+  m.setLen(-1, 3); m.setLen(NR, 3); m.togglePearl(NR, 0); m.setRest(-1, 0, true); m.setPearlPitch(NR, 0, 1);
   m.setRing(1, STRUCT, 0.3); m.setRing(1, STRUCT, NAN); CHECK(m.ring(1, STRUCT) == 0.3);
   m.setRing(1, BRIGHT, INFINITY); CHECK(m.ring(1, BRIGHT) == 1);
   m.setRing(1, DAMP, -INFINITY); CHECK(m.ring(1, DAMP) == 0);
@@ -181,7 +169,7 @@ static void modelLenOne() {
 
 static void modelSnapshotRoundTrip() {
   Scale sc; Model m(sc); m.reset(9);
-  m.setLen(0, 7); m.setLen(1, 4); m.setDejaVu(0, 0.35); m.setRange(1, 40, 80); m.setRing(1, DAMP, 0.9); m.setCloud(ECHO, 0.77); m.setPearlPitch(1, 1, 0.123);
+  m.setLen(0, 7); m.setLen(1, 4); m.setRange(1, 40, 80); m.setRing(1, DAMP, 0.9); m.setCloud(ECHO, 0.77); m.setPearlPitch(1, 1, 0.123);
   for (int i = 0; i < 5; i++) { m.next(0); m.next(1); }
   const std::string js = m.snapshot();
   Model b(sc); b.restore(js);
@@ -197,7 +185,6 @@ static void modelRestoreGarbage() {
     for (int t = 0; t < NR; t++) {
       const Thread& th = m.thread(t);
       CHECK(th.len >= 1 && th.len <= PEARL_MAX);
-      CHECK(th.dejavu >= 0 && th.dejavu <= 1);
       CHECK(th.lo >= NOTE_MIN && th.hi <= NOTE_MAX && th.hi - th.lo >= RANGE_MIN_W);
       for (int i = 0; i < PEARL_MAX; i++) CHECK(th.p[i].pitch >= 0 && th.p[i].pitch <= 1);
       for (int i = 0; i < 20; i++) m.next(t);
@@ -225,7 +212,7 @@ static void modelRollAndClear() {
 static void modelClearAllIsEmpty() {
   Scale sc; Model m(sc); m.reset(7);
   m.setRing(0, STRUCT, 0.9); m.setRing(1, POLY, 1); m.setCloud(ECHO, 0.9); m.setCloud(FREEZE, 1); m.setMix(0.1);
-  m.setDejaVu(0, 0.1); m.setLen(1, 4); m.setRange(0, 30, 90);
+  m.setLen(1, 4); m.setRange(0, 30, 90);
   for (int l : {2, 1, 3, 0}) { m.setLoc(l); m.setRest(0, 3, false); m.setRest(1, 5, false); m.setPearlPitch(0, 1, 0.9); }
   m.setLoc(2);
   for (int i = 0; i < 5; i++) { m.next(0); m.next(1); }
@@ -237,7 +224,7 @@ static void modelClearAllIsEmpty() {
     for (int t = 0; t < NR; t++) {
       const Thread& th = m.thread(t);
       for (int i = 0; i < PEARL_MAX; i++) CHECK(th.p[i].rest);
-      CHECK(th.len == PEARL_DEF && th.dejavu == 1.0 && th.cur == 0);
+      CHECK(th.len == PEARL_DEF && th.cur == 0);
       CHECK(th.lo == def.thread(t).lo && th.hi == def.thread(t).hi);
     }
     CHECK(!m.sounding());
@@ -246,7 +233,7 @@ static void modelClearAllIsEmpty() {
   for (int r = 0; r < NR; r++) for (int k = 0; k < NRK; k++) CHECK(m.ring(r, k) == def.ring(r, k));
   for (int k = 0; k < NCK; k++) CHECK(m.cloud(k) == def.cloud(k));
   CHECK(m.mix() == 0.5);
-  for (int t = 0; t < NR; t++) for (int i = 0; i < 40; i++) CHECK(!m.next(t).hit);   // déjà vu 1 после очистки: пустое остаётся пустым
+  for (int t = 0; t < NR; t++) for (int i = 0; i < 40; i++) CHECK(!m.next(t).hit);   // после очистки пустое остаётся пустым: ход нити не перебрасывает
 }
 
 static void modelClearUndoRestores() {
@@ -269,7 +256,7 @@ static void modelClearTwice() {
 // ---------- Task 2 (two rings): локации, mix, тембр ----------
 
 static bool sameNotes(const Thread& a, const Thread& b) {
-  if (a.len != b.len || a.dejavu != b.dejavu || a.lo != b.lo || a.hi != b.hi) return false;
+  if (a.len != b.len || a.lo != b.lo || a.hi != b.hi) return false;
   for (int i = 0; i < PEARL_MAX; i++) if (a.p[i].pitch != b.p[i].pitch || a.p[i].rest != b.p[i].rest) return false;
   return true;
 }
@@ -291,7 +278,7 @@ static void modelLocSwapKeepsSound() {
 
 static void modelLocKeepsEdits() {
   Scale sc; Model m(sc); m.reset(4);
-  m.setDejaVu(0, 1); m.setDejaVu(1, 1);
+  
   m.setPearlPitch(0, 2, 0.123); m.setRest(1, 3, true); m.setLen(0, 6);
   for (int i = 0; i < 4; i++) { m.next(0); m.next(1); }
   const int c0 = m.thread(0).cur, c1 = m.thread(1).cur;
@@ -374,7 +361,7 @@ static void modelMixClamp() {
 
 static void modelLocSnapshotRoundTrip() {
   Scale sc; Model m(sc); m.reset(11);
-  m.setMix(0.77); m.setPearlPitch(0, 1, 0.31); m.setLoc(2); m.setPearlPitch(1, 4, 0.66); m.setLen(0, 9); m.setDejaVu(0, 1); m.setDejaVu(1, 1);   // dejavu 1: ходы не перебрасывают правки
+  m.setMix(0.77); m.setPearlPitch(0, 1, 0.31); m.setLoc(2); m.setPearlPitch(1, 4, 0.66); m.setLen(0, 9);
   for (int i = 0; i < 5; i++) { m.next(0); m.next(1); }
   const std::string js = m.snapshot();
   Model b(sc); b.restore(js);
@@ -642,8 +629,7 @@ static void worldSilentWhenStopped() {
 
 static void worldStepsInTime() {
   Scale sc; auto& w = theWorld(sc);
-  act(w, hymenaeus::THREAD, 0, {0, 1});                                   // déjà vu 1
-  for (int i = 0; i < hymenaeus::PEARL_MAX; i++) act(w, hymenaeus::PEARL, i, {0, 1, 0});   // ни одной паузы
+    for (int i = 0; i < hymenaeus::PEARL_MAX; i++) act(w, hymenaeus::PEARL, i, {0, 1, 0});   // ни одной паузы
   act(w, hymenaeus::BPM, 0, {120}); act(w, hymenaeus::RUN, 0, {1});
   double rg[8] = {};
   const WRun r = runWorld(w, 4 * 48000 / 128, nullptr, rg);
@@ -925,23 +911,22 @@ static void mixSetup(hymenaeus::World& w) {
   act(w, hymenaeus::CLOUD, 0, {5, 0.6}); act(w, hymenaeus::CLOUD, 0, {2, 0.7});
 }
 
-// Эталон: mixSetup + 375 блоков, seed 5 (theWorld(sc, 5)). Первый снят с коммита 99105d1 (до mix: звук без него); после музыкального генератора
+// Эталон: mixSetup + 375 блоков, seed 5 (theWorld(sc, 5)). Первый снят с коммита 99105d1 (до mix: звук без него); после музыкального генератора и после кубика Евклида
 // (мелодии другие) переснят — mix 0.5 при этом звучит как раньше: сухое/влажное в этом положении по формуле равны 1.
-static const MixRef MIX_REF = {0.997241914, 0.990167618, 0.172694285, 0.171363661, 0.349034667, true};
+static const MixRef MIX_REF = {0.800939202, 0.907557428, 0.119531089, 0.118977414, 0.317645103, true};
 
 static std::vector<double> mirrorOf(hymenaeus::World& w) { std::vector<double> m(MIRROR_N + 4, -777); CHECK(w.mirror(m.data(), MIRROR_N) == MIRROR_N); return m; }
 // смещения зеркала (см. world.hpp)
-constexpr int M_RUN = 0, M_BPM = 1, M_LOC = 2, M_MIX = 3, M_CUR = 4, M_LEN = 6, M_DEJAVU = 8, M_LO = 10, M_HI = 12, M_PEARL = 14,
+constexpr int M_RUN = 0, M_BPM = 1, M_LOC = 2, M_MIX = 3, M_CUR = 4, M_LEN = 6, M_LO = 8, M_HI = 10, M_PEARL = 12,
               M_RING = M_PEARL + 2 * 2 * PEARL_MAX, M_CLOUD = M_RING + NR * 6, M_CENV = M_CLOUD + NCK;
 
 static void worldActRouting() {
   CHECK(hymenaeus::RING == 0 && hymenaeus::CLOUD == 1 && hymenaeus::PEARL == 2 && hymenaeus::STRIKE == 3 && hymenaeus::THREAD == 4 && hymenaeus::DICE == 5
         && hymenaeus::CLEAR == 6 && hymenaeus::RUN == 7 && hymenaeus::BPM == 8 && hymenaeus::TIMBRE == 9 && hymenaeus::LOC == 10 && hymenaeus::MIX == 11);
   Scale sc; auto& w = theWorld(sc, 3);
-  act(w, hymenaeus::THREAD, 1, {2, 50}); CHECK(w.model().thread(1).lo == 50 && w.model().thread(0).lo == 47);
-  act(w, hymenaeus::THREAD, 1, {3, 80}); CHECK(w.model().thread(1).hi == 80);
-  act(w, hymenaeus::THREAD, 0, {0, 0.25}); CHECK(w.model().thread(0).dejavu == 0.25 && w.model().thread(1).dejavu != 0.25);
-  act(w, hymenaeus::THREAD, 1, {1, 4}); CHECK(w.model().thread(1).len == 4 && w.model().thread(0).len == PEARL_DEF);
+  act(w, hymenaeus::THREAD, 1, {1, 50}); CHECK(w.model().thread(1).lo == 50 && w.model().thread(0).lo == 47);
+  act(w, hymenaeus::THREAD, 1, {2, 80}); CHECK(w.model().thread(1).hi == 80);
+  act(w, hymenaeus::THREAD, 1, {0, 4}); CHECK(w.model().thread(1).len == 4 && w.model().thread(0).len == PEARL_DEF);
   act(w, hymenaeus::PEARL, 3, {1, 0, 0.77}); CHECK(w.model().thread(1).p[3].pitch == 0.77 && w.model().thread(0).p[3].pitch != 0.77);
   act(w, hymenaeus::PEARL, 3, {1, 1, 1}); CHECK(w.model().thread(1).p[3].rest);
   act(w, hymenaeus::PEARL, 3, {1, 1, 0}); CHECK(!w.model().thread(1).p[3].rest);
@@ -1046,22 +1031,22 @@ static void worldNoAllocInProcess() {
 }
 
 static void worldMirrorLayout() {
-  CHECK(hymenaeus::MIRROR_HEAD == 14); CHECK(hymenaeus::MIRROR_RING == 6);
-  CHECK(MIRROR_N == 14 + 2 * 2 * 16 + 2 * 6 + 8 + 1); CHECK(MIRROR_N == 99);
+  CHECK(hymenaeus::MIRROR_HEAD == 12); CHECK(hymenaeus::MIRROR_RING == 6);
+  CHECK(MIRROR_N == 12 + 2 * 2 * 16 + 2 * 6 + 8 + 1); CHECK(MIRROR_N == 97);
   CHECK(M_CENV == MIRROR_N - 1);
   Scale sc; auto& w = theWorld(sc, 8);
   act(w, hymenaeus::MIX, 0, {0.25}); act(w, hymenaeus::LOC, 0, {3});
-  act(w, hymenaeus::THREAD, 1, {1, 6}); act(w, hymenaeus::THREAD, 1, {0, 0.33}); act(w, hymenaeus::THREAD, 0, {2, 40}); act(w, hymenaeus::THREAD, 0, {3, 70});
-  act(w, hymenaeus::PEARL, 4, {1, 0, 0.6}); act(w, hymenaeus::PEARL, 5, {1, 1, 1}); act(w, hymenaeus::RING, 1, {1, 0.42}); act(w, hymenaeus::CLOUD, 0, {7, 0.12});
+  act(w, hymenaeus::THREAD, 1, {0, 6}); act(w, hymenaeus::THREAD, 0, {1, 40}); act(w, hymenaeus::THREAD, 0, {2, 70});
+  act(w, hymenaeus::PEARL, 4, {1, 0, 0.6}); act(w, hymenaeus::PEARL, 4, {1, 1, 0}); act(w, hymenaeus::PEARL, 5, {1, 1, 1}); act(w, hymenaeus::RING, 1, {1, 0.42}); act(w, hymenaeus::CLOUD, 0, {7, 0.12});
   const auto m = mirrorOf(w);
   const Model& md = w.model();
   CHECK(m[M_LOC] == 3 && m[M_MIX] == 0.25);
   for (int t = 0; t < NR; t++) {
-    CHECK(m[M_CUR + t] == md.thread(t).cur); CHECK(m[M_LEN + t] == md.thread(t).len); CHECK(m[M_DEJAVU + t] == md.thread(t).dejavu);
+    CHECK(m[M_CUR + t] == md.thread(t).cur); CHECK(m[M_LEN + t] == md.thread(t).len);
     CHECK(m[M_LO + t] == md.thread(t).lo); CHECK(m[M_HI + t] == md.thread(t).hi);
     for (int i = 0; i < PEARL_MAX; i++) { CHECK(m[M_PEARL + t * 2 * PEARL_MAX + 2 * i] == md.thread(t).p[i].pitch); CHECK(m[M_PEARL + t * 2 * PEARL_MAX + 2 * i + 1] == md.thread(t).p[i].rest); }
   }
-  CHECK(m[M_LEN + 1] == 6 && m[M_DEJAVU + 1] == 0.33 && m[M_LO] == 40 && m[M_HI] == 70);
+  CHECK(m[M_LEN + 1] == 6 && m[M_LO] == 40 && m[M_HI] == 70);
   CHECK(m[M_PEARL + 2 * PEARL_MAX + 8] == 0.6 && m[M_PEARL + 2 * PEARL_MAX + 9] == 0 && m[M_PEARL + 2 * PEARL_MAX + 11] == 1);
   CHECK(m[M_RING + 6 + 1] == 0.42);                                      // кольцо 1, bright
   CHECK(m[M_CLOUD + SEND] == 0.12);
@@ -1095,10 +1080,17 @@ struct Deg {
   int gAt(const Thread& th, int i) const { return degOf(noteAt(th, i)); }
   int role(const Thread& th, int i) const { return ((gAt(th, i) % 7) + 7) % 7; }
 };
+// Евклид: пауза/звучание нити на len жемчужин — ровно k ударов (k подбираем), жемчужины за len повторяют петлю
+static int euclidK(const Thread& th) {
+  for (int k = 1; k <= th.len; k++) {
+    bool ok = true;
+    for (int i = 0; i < th.len && ok; i++) ok = th.p[i].rest == !sdk::euclid(i, k, th.len);
+    if (ok) return k;
+  }
+  return -1;
+}
 struct Stats {
-  int steps = 0, small = 0, leaps = 0, maxLeap = 0, maxMid = 0, bigMid = 0;      // интервалы между соседними жемчужинами по кругу
-  int rests = 0, pearls = 0;
-  int first = 0, firstOk = 0, firstRest = 0, last = 0, lastOk = 0, outOfRange = 0, offScale = 0;
+  int steps = 0, small = 0, rests = 0, pearls = 0, outOfRange = 0, offScale = 0, badRhythm = 0, badTail = 0, kLo = 0, kHi = 0;
   int both = 0, cons = 0, seeds = 0;
 };
 static void collect(const Scale& sc, int seed, bool reroll, Stats* sts) {
@@ -1107,24 +1099,28 @@ static void collect(const Scale& sc, int seed, bool reroll, Stats* sts) {
   for (int t = 0; t < NR; t++) {
     Stats& st = sts[t]; st.seeds++;
     const Thread& th = m.thread(t);
-    const int len = th.len;
-    for (int i = 0; i < len; i++) {
-      st.pearls++; if (th.p[i].rest) st.rests++;
+    const int len = th.len, k = euclidK(th);
+    if (k < 0) st.badRhythm++; else if (k < 3) st.kLo++; else if (k > len - 2) st.kHi++;
+    for (int i = 0; i < PEARL_MAX; i++) {
       const int n = D.noteAt(th, i);
       if (n < th.lo || n > th.hi) st.outOfRange++;
       if (sc.on && !D.inScale(n)) st.offScale++;
-      const int d = std::abs(D.gAt(th, i) - D.gAt(th, (i + 1) % len));
-      st.steps++; if (d <= 2) st.small++; if (d >= 3) st.leaps++; st.maxLeap = std::max(st.maxLeap, d);
-      if (i > 0 && i + 1 < len - 1) { st.maxMid = std::max(st.maxMid, d); if (d > 5) st.bigMid++; }   // между серединными жемчужинами (без якорей и замыкания)
+      if (i >= len && (th.p[i].pitch != th.p[i % len].pitch || th.p[i].rest != th.p[i % len].rest)) st.badTail++;
     }
-    st.first++; { const int r = D.role(th, 0); if (r == 0 || r == 2 || r == 4) st.firstOk++; if (th.p[0].rest) st.firstRest++; }
-    st.last++; { const int r = D.role(th, len - 1); if (r == 0 || r == 4) st.lastOk++; }
+    int prev = -1000;                                                    // шаги между соседними звучащими жемчужинами
+    for (int i = 0; i < len; i++) {
+      st.pearls++; if (th.p[i].rest) { st.rests++; continue; }
+      const int g = D.gAt(th, i);
+      if (prev != -1000) { st.steps++; if (std::abs(g - prev) <= 2) st.small++; }
+      prev = g;
+    }
   }
   const Thread& a = m.thread(0); const Thread& b = m.thread(1);
-  for (int i = 0; i < std::min(a.len, b.len); i++) {
-    if (a.p[i].rest || b.p[i].rest) continue;
+  for (int i = 0; i < b.len; i++) {                                      // созвучие нити 1 с нитью 0 того же номера (по модулю её длины)
+    const int q = i % a.len;
+    if (a.p[q].rest || b.p[i].rest) continue;
     sts[1].both++;
-    const int d = std::abs(D.gAt(b, i) - D.gAt(a, i)) % 7;
+    const int d = std::abs(D.gAt(b, i) - D.gAt(a, q)) % 7;
     if (d == 0 || d == 2 || d == 4) sts[1].cons++;
   }
 }
@@ -1138,79 +1134,75 @@ static void genInvariants() {
     for (int seed = 1; seed <= 300; seed++) gen::collect(sc, seed, seed & 1, st);
     for (int t = 0; t < NR; t++) {
       const gen::Stats& s = st[t];
-      const double small = double(s.small) / s.steps, rest = double(s.rests) / s.pearls, f0rest = double(s.firstRest) / s.first;
-      const double cons = s.both ? double(s.cons) / s.both : 1;
-      std::printf("  gen scale(on=%d idx=%d root=%d) thread %d: steps<=2 %.3f leaps(>=3) %.3f maxInterval %d maxMid %d rest %.3f pearl0 rest %.3f pearl0 ok %d/%d last ok %d/%d cons %.3f (%d)\n",
-                  c.on, c.idx, c.root, t, small, double(s.leaps) / s.steps, s.maxLeap, s.maxMid, rest, f0rest, s.firstOk, s.first, s.lastOk, s.last, cons, s.both);
-      CHECK(small >= (t == 0 ? 0.70 : 0.65));                           // нить 1 ходит параллельно нити 0, интервалы чуть шире
-      if (t == 0) CHECK(s.maxMid <= 5);                                 // скачок ≤ 5 ступеней между серединными жемчужинами (без якорей и замыкания)
+      const double small = double(s.small) / s.steps, rest = double(s.rests) / s.pearls, cons = s.both ? double(s.cons) / s.both : 1;
+      std::printf("  gen scale(on=%d idx=%d root=%d) thread %d: steps<=2 %.3f rest %.3f cons %.3f (%d)\n", c.on, c.idx, c.root, t, small, rest, cons, s.both);
+      CHECK(s.badRhythm == 0);                                          // ритм каждой нити — евклидов
+      CHECK(s.kLo == 0 && s.kHi == 0);                                  // ударов 3…len−2
+      CHECK(s.badTail == 0);                                            // жемчужины за len повторяют петлю
       CHECK(s.outOfRange == 0);
       CHECK(s.offScale == 0);
-      CHECK(rest >= 0.15 && rest <= 0.25);
-      CHECK(f0rest <= 0.20);                                            // жемчужина 0 звучит в ≥ 80% нитей
-      CHECK(s.firstOk == s.first);                                      // жемчужина 0 — I, III или V
-      CHECK(s.lastOk == s.last);                                        // последняя — I или V
+      if (t == 0) CHECK(small >= 0.60);                                 // блуждание ±1…2 ступени, разрыв только на стыке петли мелодии
+      CHECK(rest > 0.15 && rest < 0.60);
       if (t == 1) CHECK(cons >= 0.60);                                  // нить 1 созвучна нити 0 (терция/квинта/октава), когда обе звучат
     }
   }
 }
 
-static void genDeterministicAndDejaVu() {
+static void genDeterministic() {
   Scale sc;
   Model a(sc), b(sc); a.reset(11); b.reset(11);
   for (int k = 0; k < 3; k++) { a.roll(); b.roll(); CHECK(a.snapshot() == b.snapshot()); }
-  a.setDejaVu(0, 0.2); b.setDejaVu(0, 0.2);                             // с броском на ходу тоже одинаково
-  for (int i = 0; i < 200; i++) { const Step x = a.next(i & 1), y = b.next(i & 1); CHECK(x.hit == y.hit && x.hz == y.hz); }
   Model c(sc); c.reset(12); CHECK(c.snapshot() != Model(sc).snapshot());
-  Model m(sc); m.reset(4); m.roll(); m.setDejaVu(0, 1); m.setDejaVu(1, 1);   // dejavu 1 — петля не меняется
+  Model m(sc); m.reset(4); m.roll();                                    // ход нити не меняет петлю: ни высоты, ни паузы
   const std::string before = m.snapshot();
   Model keep(sc); keep.restore(before);
   std::vector<double> hz;
-  for (int i = 0; i < 40; i++) { const Step s = m.next(i & 1); hz.push_back(s.hit ? s.hz : -1); }
-  const std::string cur = m.snapshot();
-  for (int t = 0; t < NR; t++) for (int i = 0; i < PEARL_MAX; i++) { CHECK(m.thread(t).p[i].pitch == keep.thread(t).p[i].pitch); CHECK(m.thread(t).p[i].rest == keep.thread(t).p[i].rest); }   // dejavu 1: мелодия не меняется
+  for (int i = 0; i < 60; i++) { const Step s = m.next(i & 1); hz.push_back(s.hit ? s.hz : -1); }
+  for (int t = 0; t < NR; t++) for (int i = 0; i < PEARL_MAX; i++) { CHECK(m.thread(t).p[i].pitch == keep.thread(t).p[i].pitch); CHECK(m.thread(t).p[i].rest == keep.thread(t).p[i].rest); }
   Model m2(sc); m2.restore(before);
-  for (int i = 0; i < 40; i++) { const Step s = m2.next(i & 1); CHECK((s.hit ? s.hz : -1) == hz[i]); }
-  CHECK(m2.snapshot() == cur);
+  for (int i = 0; i < 60; i++) { const Step s = m2.next(i & 1); CHECK((s.hit ? s.hz : -1) == hz[i]); }
+  CHECK(m2.snapshot() == m.snapshot());
 }
 
-static void genLengths() {                                              // разные длины петли: замыкание и ритм на len 1…16
+static void genRollsDiffer() {                                          // каждый бросок — другая мелодия; roll(0) нить 1 не трогает
+  Scale sc; Model m(sc); m.reset(6);
+  const auto sig = [&](int t) { std::string r; for (int i = 0; i < PEARL_MAX; i++) r += std::to_string(m.thread(t).p[i].pitch) + (m.thread(t).p[i].rest ? "r" : "n"); return r; };
+  int diff = 0;
+  for (int k = 0; k < 20; k++) { const std::string a = sig(0); m.roll(0); if (sig(0) != a) diff++; }
+  CHECK(diff >= 18);
+}
+
+static void genLengths() {                                              // разные длины петли 1…16: ритм Евклида, ноты в диапазоне
   Scale sc;
   for (int len = 1; len <= PEARL_MAX; len++) for (int seed = 1; seed <= 40; seed++) {
     Model m(sc); m.reset(seed); m.setLen(0, len); m.setLen(1, len); m.roll();
     const gen::Deg D(sc);
     for (int t = 0; t < NR; t++) {
       const Thread& th = m.thread(t);
-      const int r0 = D.role(th, 0), rl = D.role(th, len - 1);
-      CHECK(r0 == 0 || r0 == 2 || r0 == 4);
-      if (len > 1) CHECK(rl == 0 || rl == 4);
+      CHECK(gen::euclidK(th) > 0);
       for (int i = 0; i < PEARL_MAX; i++) { const int n = D.noteAt(th, i); CHECK(n >= th.lo && n <= th.hi); }
     }
   }
 }
 
-
-static void genSetLenClosesLoop() {                                     // смена длины заново ставит концы петли, даже при dejavu 1
-  const struct { bool on; int idx, root; } cfg[] = {{false, 0, 0}, {true, 1, 3}};
-  for (const auto& c : cfg) {
-    Scale sc; sc.on = c.on; sc.idx = c.idx; sc.root = c.root;
-    const gen::Deg D(sc);
-    for (int seed = 1; seed <= 40; seed++) {
-      Model m(sc); m.reset(seed); m.roll(); m.setDejaVu(0, 1); m.setDejaVu(1, 1);
-      for (int len : {2, 5, 16, 8, 3, 13, 1, 11}) {
-        for (int t = 0; t < NR; t++) m.setLen(t, len);
-        for (int t = 0; t < NR; t++) {
-          const Thread& th = m.thread(t);
-          const int r0 = D.role(th, 0); CHECK(r0 == 0 || r0 == 2 || r0 == 4);
-          if (len > 1) { const int rl = D.role(th, len - 1); CHECK(rl == 0 || rl == 4); }
-          for (int i = 0; i < PEARL_MAX; i++) { const int n = D.noteAt(th, i); CHECK(n >= th.lo && n <= th.hi); }
-        }
-      }
-      const std::string before = m.snapshot();
-      m.setLen(0, m.thread(0).len);                                     // та же длина — ничего не меняется
-      CHECK(m.snapshot() == before);
-    }
+static void genSetLenKeepsNotes() {                                     // смена длины жемчужины не трогает; удлинение продолжает петлю
+  Scale sc; Model m(sc); m.reset(5); m.roll();
+  const std::string a = m.snapshot();
+  Model b(sc); b.restore(a);
+  for (int t = 0; t < NR; t++) for (int len : {2, 5, 16, 8, 3, 13, 1, 11}) {
+    m.setLen(t, len);
+    for (int i = 0; i < PEARL_MAX; i++) { CHECK(m.thread(t).p[i].pitch == b.thread(t).p[i].pitch); CHECK(m.thread(t).p[i].rest == b.thread(t).p[i].rest); }
   }
+  m.setLen(0, m.thread(0).len); m.setLen(1, m.thread(1).len);
+  Model r(sc); r.restore(m.snapshot()); CHECK(r.snapshot() == m.snapshot());
+}
+
+static void genNoDejaVuInSnapshot() {                                   // застёжки déjà vu больше нет: снимок её не пишет, старый с ней грузится
+  Scale sc; Model m(sc); m.reset(2);
+  CHECK(m.snapshot().find("dejavu") == std::string::npos);
+  Model o(sc); o.restore("{\"thr\":[{\"len\":5,\"dejavu\":0.2},{\"len\":4,\"dejavu\":1}]}");
+  CHECK(o.thread(0).len == 5 && o.thread(1).len == 4);
+  CHECK(o.snapshot().find("dejavu") == std::string::npos);
 }
 
 static void genOldSnapshotLoads() {                                     // снимок до генератора: lo/hi 45…69 и 57…81, ноты вне лада, высоты любые
@@ -1223,7 +1215,7 @@ static void genOldSnapshotLoads() {                                     // сн�
     Model m(sc); m.restore(old);
     CHECK(m.thread(0).lo == 45 && m.thread(0).hi == 69 && m.thread(1).lo == 57 && m.thread(1).hi == 81);
     for (int i = 0; i < 300; i++) {                                     // играем с перебросом поверх старых нот
-      if (i == 100) { m.setDejaVu(0, 0); m.setDejaVu(1, 0); }
+      if (i == 100) { }
       const Step s = m.next(i & 1);
       const int t = i & 1, semi = int(std::lround(12 * std::log2(s.hz / 55.0))), midi = semi + 33;
       CHECK(std::isfinite(s.hz) && s.hz > 0);
@@ -1235,7 +1227,7 @@ static void genOldSnapshotLoads() {                                     // сн�
 }
 
 int main() {
-  modelSeedDeterministic(); modelDejaVuOneRepeats(); modelDejaVuZeroVaries(); modelRestsSilent();
+  modelSeedDeterministic(); modelLoopRepeats(); modelRestsSilent();
   modelRingsCount(); modelDefaultRanges(); modelTwoThreadsIndependent(); modelRangeClamp(); modelPitchWithinRange(); modelDeterministic(); modelScaleSnap(); modelScaleSnapLowRange(); modelClamps(); modelLenOne();
   modelSnapshotRoundTrip(); modelRestoreGarbage(); modelRollAndClear(); modelClearAllIsEmpty(); modelClearUndoRestores(); modelClearTwice(); modelCloudSend();
   modelLocSwapKeepsSound(); modelLocKeepsEdits(); modelLocOutOfRange(); modelLocsDiffer(); modelDiceKeepsTimbre(); modelTimbreKeepsNotes(); modelTimbreDoesNotShiftMelody(); modelMixClamp(); modelLocSnapshotRoundTrip(); modelLocRestoreGarbage();
@@ -1244,7 +1236,7 @@ int main() {
   worldSilentWhenStopped(); worldStepsInTime(); worldStrikeSounds(); worldNoStepFlood(); worldStopNoStuck(); worldSnapshotRoundTrip();
   worldGarbageActions(); worldBudget(); worldBothRingsStep(); worldClearSilences();
   modelRingModePoly(); soundStringsSound(); soundStructureGlide(); soundPolyVoices(); soundPolyStrings(); soundModeSwitchLive(); worldActRouting(); worldDiceBothOrOne(); worldMixSignal(); worldMixNoNaN(); worldNoAllocInProcess(); worldMirrorLayout(); worldLfoKeys();
-  genInvariants(); genDeterministicAndDejaVu(); genLengths(); genSetLenClosesLoop(); genOldSnapshotLoads();
+  genInvariants(); genDeterministic(); genRollsDiffer(); genLengths(); genSetLenKeepsNotes(); genNoDejaVuInSnapshot(); genOldSnapshotLoads();
   std::printf("hymenaeus-test: %d checks, %d failed\n", checks, fails);
   return fails ? 1 : 0;
 }

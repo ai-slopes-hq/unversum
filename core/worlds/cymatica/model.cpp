@@ -8,6 +8,7 @@
 #include "../../sdk/euclid.hpp"
 #include "../../sdk/jsmath.hpp"
 #include "../../sdk/json.hpp"
+#include "../../sdk/melody.hpp"
 
 namespace cymatica {
 
@@ -334,27 +335,15 @@ void Model::loadFx(const double* a) {
 // ---------- патч ----------
 void Model::dice(uint32_t seed) {                         // генеративный узор: ритм по Евклиду, мелодия другой длины по ладу — полиритм
   sdk::Rng R(seed);
-  const int n = 8 + static_cast<int>(std::floor(R.next() * 9)), k = 3 + static_cast<int>(std::floor(R.next() * (n - 4)));
+  const int n = 8 + static_cast<int>(std::floor(R.next() * 9)), k = sdk::diceHits(R, n);
   bool e[SLOTS] = {};
   for (int i = 0; i < n; i++) e[i] = sdk::euclid(i, k, n);
-  int m = 3 + static_cast<int>(std::floor(R.next() * 6));
-  while (n % m == 0) m++;                                 // длина мелодии не делит ритм — ноты ложатся на удары по-новому каждый круг
+  const int m = sdk::coprimeLen(R, n);                    // длина мелодии не делит ритм — ноты ложатся на удары по-новому каждый круг
   int list[NOTE_TOP + 1];
   const int nl = noteList(list), b = nearestIdx(list, nl, fs()), dn = degPerOct();   // ноты — блуждание по ладу по всем трём кольцам
   const int sn = std::min(b + 3 * dn, nl) - b;            // span = list.slice(b, min(b + 3·dn, length))
-  const int* span = list + b;
-  const double start = span[static_cast<int>(std::floor(R.next() * sn))];   // со случайной ноты — иначе от края до центра не дойдёт
   int w[SLOTS];
-  {                                                       // walkMelody(m, start, span, R)
-    int i = 0;
-    for (int q = 1; q < sn; q++) if (std::fabs(span[q] - start) < std::fabs(span[i] - start)) i = q;
-    static const int D[4] = {-2, -1, 1, 2};
-    for (int q = 0; q < m; q++) {
-      w[q] = span[i];
-      const int d = D[static_cast<int>(std::floor(R.next() * 4))];
-      i = std::min(sn - 1, std::max(0, i + d));
-    }
-  }
+  sdk::walkSpan(list + b, sn, m, R, w);                   // со случайной ноты — иначе от края до центра не дойдёт
   for (int i = 0; i < SLOTS; i++) { rhythm_[i] = RStep(); rhythm_[i].on = i < n && e[i]; }
   rlen_ = n;
   for (int i = 0; i < SLOTS; i++) {

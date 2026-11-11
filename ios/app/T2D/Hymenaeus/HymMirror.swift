@@ -1,18 +1,18 @@
 import Foundation
 
-// зеркало Hymenaeus (MIRROR_N = 99) — core/worlds/hymenaeus/world.hpp:
-// [0] run [1] bpm [2] loc [3] mix; [4..5] cursor, [6..7] len, [8..9] dejavu, [10..11] lo, [12..13] hi (по полю на нить; MIRROR_HEAD = 14);
+// зеркало Hymenaeus (MIRROR_N = 97) — core/worlds/hymenaeus/world.hpp:
+// [0] run [1] bpm [2] loc [3] mix; [4..5] cursor, [6..7] len, [8..9] lo, [10..11] hi (по полю на нить; MIRROR_HEAD = 12);
 // 2 нити × 16 × (высота, пауза); 2 кольца × (struct, bright, damp, lvl, poly, энергия); 8 значений облаков; энергия облаков
 enum Hym {
-  static let nr = 2, pearlMax = 16, nck = 8, head = 14, ringN = 6
-  static let mirrorN = head + nr * 2 * pearlMax + nr * ringN + nck + 1   // 99
+  static let nr = 2, pearlMax = 16, nck = 8, head = 12, ringN = 6
+  static let mirrorN = head + nr * 2 * pearlMax + nr * ringN + nck + 1   // 97
   static let ink: RGB = (44, 38, 30), gold: RGB = (168, 124, 48), ivory: RGB = (242, 237, 226)
   static let roman = ["I", "II"]
   static let ringNames = ["resonans", "chorda"]                          // нить t играет кольцо t
   static let locN = 4
   enum Cloud { static let pos = 0, size = 1, dens = 2, pitch = 3, freeze = 4, echo = 5, level = 6, send = 7 }   // CloudKey ядра
   enum Ring { static let structure = 0, bright = 1, damp = 2, lvl = 3, poly = 4 }                                // RingKey ядра (NRK = 5)
-  enum Thread { static let dejavu = 0, len = 1 }                                                                 // ключи THREAD (lo/hi интерфейс не шлёт)
+  enum Thread { static let len = 0 }                                                                             // ключи THREAD (1 lo, 2 hi интерфейс не шлёт)
   static func clamp(_ v: Double, _ lo: Double = 0, _ hi: Double = 1) -> Double { v.isFinite ? min(hi, max(lo, v)) : lo }
 }
 
@@ -29,7 +29,7 @@ struct HymMirror {
   var bpm = 0.0, mix = 0.5
   var loc = 0
   var cursor = [Int](repeating: 0, count: Hym.nr), len = [Int](repeating: 0, count: Hym.nr)
-  var dejavu = [Double](repeating: 0, count: Hym.nr), lo = [Int](repeating: 0, count: Hym.nr), hi = [Int](repeating: 0, count: Hym.nr)   // lo / hi — ноты MIDI
+  var lo = [Int](repeating: 0, count: Hym.nr), hi = [Int](repeating: 0, count: Hym.nr)   // lo / hi — ноты MIDI
   var pearls = [[(pitch: Double, rest: Bool)]](repeating: [(pitch: Double, rest: Bool)](repeating: (0.5, false), count: Hym.pearlMax), count: Hym.nr)
   var rings = [HymRing](repeating: HymRing(), count: Hym.nr)
   var cloud = [Double](repeating: 0, count: Hym.nck)
@@ -54,8 +54,7 @@ struct HymMirror {
     for t in 0..<Hym.nr {
       cursor[t] = Int(Hym.clamp(m[4 + t].rounded(), 0, Double(Hym.pearlMax - 1)))
       len[t] = Int(Hym.clamp(m[6 + t].rounded(), 1, Double(Hym.pearlMax)))
-      dejavu[t] = Hym.clamp(m[8 + t])
-      lo[t] = Int(Hym.clamp(m[10 + t].rounded(), 0, 127)); hi[t] = Int(Hym.clamp(m[12 + t].rounded(), 0, 127))
+      lo[t] = Int(Hym.clamp(m[8 + t].rounded(), 0, 127)); hi[t] = Int(Hym.clamp(m[10 + t].rounded(), 0, 127))
     }
     var o = Hym.head
     for t in 0..<Hym.nr { for i in 0..<Hym.pearlMax { pearls[t][i] = (Hym.clamp(m[o]), m[o + 1] != 0); o += 2 } }

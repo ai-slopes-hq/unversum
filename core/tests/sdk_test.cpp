@@ -48,6 +48,7 @@
 #include "../worlds/natura/world.hpp"
 #include "../worlds/inferno/world.hpp"
 #include "../sdk/euclid.hpp"
+#include "../sdk/melody.hpp"
 #include "../worlds/horologium/drums.hpp"
 #include "../worlds/horologium/model.hpp"
 #include "../worlds/horologium/sound.hpp"
@@ -3978,6 +3979,31 @@ static void sdkEuclid() {                                  // k ударов н�
       if (k == n) for (int j = 0; j < n; j++) CHECK(sdk::euclid(j, k, n));
     }
 }
+// melody.hpp: число ударов 3…n−2 (малые n — зажато в 1…n−1), длина мелодии 3…8 и не делит n, блуждание — ноты из span, шаг ≤ 2 индексов; один Rng — то же
+static void sdkMelody() {
+  for (int n = 1; n <= 16; n++) for (uint32_t seed = 1; seed <= 50; seed++) {
+    sdk::Rng R(seed);
+    const int k = sdk::diceHits(R, n);
+    CHECK(k >= 1 && k <= std::max(1, n - 1));
+    if (n >= 5) CHECK(k >= 3 && k <= n - 2);
+    const int m = sdk::coprimeLen(R, n);
+    CHECK(m >= 3 && n % m != 0);
+  }
+  const int span[7] = {40, 43, 45, 47, 50, 52, 55};
+  for (uint32_t seed = 1; seed <= 100; seed++) {
+    sdk::Rng R(seed), R2(seed);
+    int w[12], w2[12];
+    sdk::walkSpan(span, 7, 12, R, w); sdk::walkSpan(span, 7, 12, R2, w2);
+    for (int q = 0; q < 12; q++) {
+      CHECK(w[q] == w2[q]);
+      int idx = -1; for (int i = 0; i < 7; i++) if (span[i] == w[q]) idx = i;
+      CHECK(idx >= 0);
+      if (q > 0) { int p = -1; for (int i = 0; i < 7; i++) if (span[i] == w[q - 1]) p = i; CHECK(std::abs(idx - p) <= 2); }
+    }
+  }
+  sdk::Rng R(3); int one[4]; sdk::walkSpan(span, 1, 4, R, one);
+  for (int q = 0; q < 4; q++) CHECK(one[q] == 40);
+}
 // число шагов q в (floor(P0·S), floor(P1·S)], на которых кольцо бьёт (rot — сдвиг рисунка, k ударов на L шагов)
 static long horoExpect(double P0, double P1, int S, int rot, int k, int L) {
   long c = 0;
@@ -5169,7 +5195,7 @@ int main(int argc, char** argv) {
   shimmer(); shaper(); shaperOs4(); shaperChromium2(); bpbank(); noise(); infernoModel(); infernoSound(); bridgeNative(); bridgeHymenaeus(); bridgeParadisus(); mixWebUntouched(); mixSum(); mixMaster();
   appSpscThreads(); appTripleThreads(); appChunking(); appVsBridge(); appHeardAccumulates(); appMidiClock(); appMidiTime(); appMidiOverflow(); appOverflow(); appLatency(); appReinitRate();
   appHostOrder(); appSnapRoundtrip(); appRestoreGarbage(); appHeavyOnePerBlock(); appStrOverflow(); appHostVolScale(); appStrCap();
-  lfoForms(); lfoRandom(); hostLfo(); lfoApply(); lfoUnits(); lfoOff(); lfoOrder(); lfoDeadObj(); lfoSpecNan(); lfoForeign(); oceanLfo(); oceanLfoIgnores(); monoLfo(); monoLfoIgnores(); monoDice(); horoLfo(); horoFilterMap(); horoFilterAudio(); horoFilterTail(); horoFilterExtremes(); horoModelFltGarbage(); horoLfoFlt(); horoDiceFlt(); horoModelInst(); horoModelLen(); horoModelDefaults(); horoModelGarbage(); horoSoundGarbage(); horoModelPitch(); horoModelPitchGarbage(); drumVoices(); drumGlitch(); horoLfoIgnores(); sdkEuclid(); horoOnsets(); horoBackward(); horoBackwardJump(); horoRot(); horoLenSwitch(); horoNonFiniteTempo(); horoConcursus(); horoAttacksPerTurn(); horoCeiling(); horoKitPeak(); horoKitRms(); horoTailOff(); horoInstSwitch(); horoDice(); horoRetiredActions(); horoLockNeedsRunOnly(); hostTwoWorldsSamePhase(); hostMasterBpmChange(); horoLockNoMidi(); cymaticaGridNoLock(); cymaticaLockOverriddenByGrid(); arcLfo(); arcLfoIgnores(); triaLfo(); triaLfoIgnores(); infLfo(); infLfoIgnores(); portusLfo(); portusLfoIgnores(); portusDice(); arcPicSame(); arcPicMeta(); arcPicRiverName(); arcName(); arcRouteSame(); arcPicFixture(); appScaleSteps(); appLfo(); appLevels(); appLevelsPreFader(); appHostFader(); appHostFaderSmooth(); appHostMaster();
+  lfoForms(); lfoRandom(); hostLfo(); lfoApply(); lfoUnits(); lfoOff(); lfoOrder(); lfoDeadObj(); lfoSpecNan(); lfoForeign(); oceanLfo(); oceanLfoIgnores(); monoLfo(); monoLfoIgnores(); monoDice(); horoLfo(); horoFilterMap(); horoFilterAudio(); horoFilterTail(); horoFilterExtremes(); horoModelFltGarbage(); horoLfoFlt(); horoDiceFlt(); horoModelInst(); horoModelLen(); horoModelDefaults(); horoModelGarbage(); horoSoundGarbage(); horoModelPitch(); horoModelPitchGarbage(); drumVoices(); drumGlitch(); horoLfoIgnores(); sdkEuclid(); sdkMelody(); horoOnsets(); horoBackward(); horoBackwardJump(); horoRot(); horoLenSwitch(); horoNonFiniteTempo(); horoConcursus(); horoAttacksPerTurn(); horoCeiling(); horoKitPeak(); horoKitRms(); horoTailOff(); horoInstSwitch(); horoDice(); horoRetiredActions(); horoLockNeedsRunOnly(); hostTwoWorldsSamePhase(); hostMasterBpmChange(); horoLockNoMidi(); cymaticaGridNoLock(); cymaticaLockOverriddenByGrid(); arcLfo(); arcLfoIgnores(); triaLfo(); triaLfoIgnores(); infLfo(); infLfoIgnores(); portusLfo(); portusLfoIgnores(); portusDice(); arcPicSame(); arcPicMeta(); arcPicRiverName(); arcName(); arcRouteSame(); arcPicFixture(); appScaleSteps(); appLfo(); appLevels(); appLevelsPreFader(); appHostFader(); appHostFaderSmooth(); appHostMaster();
   std::printf("sdk-test: %d checks, %d failed\n", checks, fails);
   return fails ? 1 : 0;
 }

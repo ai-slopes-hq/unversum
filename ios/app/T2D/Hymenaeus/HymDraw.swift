@@ -1,6 +1,6 @@
 import UIKit
 
-// рисование Hymenaeus по макету: небо и облака, кольца, две нити с бегунками, солнце.
+// рисование Hymenaeus по макету: небо и облака, кольца со звёздочками нот, солнце.
 // Неподвижное (небо, два облака, ободки колец) — в кеше «стена»; живое — каждый кадр, без градиентов кроме спрайта glowAt и без shadowBlur.
 final class HymDrawState {
   struct WallKey: Equatable { var W, H, sc: CGFloat }
@@ -197,10 +197,10 @@ extension HymenaeusView {
     g.addArc(center: CGPoint(x: kx, y: y), radius: 3.2 * S, startAngle: 0, endAngle: tau * (1 - t * 0.8), clockwise: false); g.strokePath()
   }
 
-  // ноты в полёте: от бегунка на нити (где он стоял в момент удара; выше нота — выше звёздочка) к месту удара на ободе своего кольца, пунктир золотом
+  // ноты в полёте: от точки над своим кольцом (правее — выше нота) к месту удара на ободе, пунктир золотом
   private func drawStrikes(_ d: Draw, _ now: Double) {
     let g = d.g, G = geo
-    func start(_ r: Int, _ nt: Note) -> CGPoint { let p = G.playheadPoint(r, u: nt.u); return CGPoint(x: p.x, y: p.y + G.pitchOffset(nt.pitch)) }
+    func start(_ r: Int, _ nt: Note) -> CGPoint { G.launchPoint(r, pitch: nt.pitch) }
     for r in 0..<Hym.nr {
       let c = G.ringCenter(r), ang = CGFloat(ringHitPos[r]) * tau - .pi / 2, rr = G.ringR(r) + HymGeo.ringW * G.S / 2
       let to = CGPoint(x: c.x + cos(ang) * rr, y: c.y + sin(ang) * rr)
@@ -214,7 +214,7 @@ extension HymenaeusView {
         let t = CGFloat(age / HymenaeusView.noteLife), p = CGPoint(x: from.x + (to.x - from.x) * min(1, t * 2.2), y: from.y + (to.y - from.y) * min(1, t * 2.2))
         star4(g, p.x, p.y, 3 + 3 * (1 - t), col(Hym.gold, 0.9 * (1 - t * 0.7)))
       }
-      if flash > 0.02, let nt = newest {                  // пунктир — от места, где стоял бегунок при последнем ударе
+      if flash > 0.02, let nt = newest {                  // пунктир — от точки старта последней ноты
         let from = start(r, nt)
         g.setLineDash(phase: 0, lengths: [1.5, 3]); g.setStrokeColor(col(Hym.gold, 0.85 * flash)); g.setLineWidth(1.1)
         g.beginPath(); g.move(to: from); g.addLine(to: to); g.strokePath(); g.setLineDash(phase: 0, lengths: [])
@@ -255,47 +255,6 @@ extension HymenaeusView {
     }
   }
 
-  // две нити: волосяная линия с едва заметными засечками шагов петли и бегунок (где сейчас курсор); жемчужин на экране нет — они не трогаются.
-  // Застёжка справа: зазор крючков — déjà vu
-  private func drawThreads(_ d: Draw, _ now: Double) {
-    let g = d.g, G = geo, m = mirror, S = G.S
-    for t in 0..<Hym.nr {
-      let y = G.staveY(t), x0 = G.pt(HymGeo.staveL, 0).x, x1 = G.pt(HymGeo.staveR, 0).x
-      g.setStrokeColor(col(Hym.ink, 0.3)); g.setLineWidth(0.8); g.beginPath()
-      g.move(to: CGPoint(x: x0, y: y)); g.addLine(to: CGPoint(x: x1, y: y))
-      let n = max(1, m.len[t])
-      for i in 0..<n { let p = G.playheadPoint(t, u: G.playU(i, n: n)); g.move(to: CGPoint(x: p.x, y: y - 2 * S)); g.addLine(to: CGPoint(x: p.x, y: y + 2 * S)) }
-      g.strokePath()
-      let h = G.playheadPoint(t, u: G.playU(m.playedIndex(t), n: n)), lit = max(0, 1 - CGFloat(now - ringHit[t]) / 0.5)
-      g.setFillColor(theme.bg.cgColor); disc(g, h.x, y, 3.6 * S)
-      g.setStrokeColor(col(Hym.ink, m.run ? 0.9 : 0.4)); g.setLineWidth(1); circle(g, h.x, y, 3.6 * S)
-      g.setFillColor(col(Hym.ink, m.run ? 0.9 : 0.4)); disc(g, h.x, y, 1.2 * S)
-      if lit > 0.02 { d.glowAt(h.x, y, 16 * S, lit * 0.35) }
-      let c = G.claspPoint(t), open = (1.5 + CGFloat(m.dejavu[t]) * 6.5) * S
-      g.setStrokeColor(col(Hym.ink, 0.6)); g.setLineWidth(0.9)
-      circle(g, c.x, c.y - open, 2.6 * S); circle(g, c.x, c.y + open, 2.6 * S)
-    }
-  }
-
-  // печати-локации: активная — двойной ободок и контур мелодии первой нити внутри; остальные — пустые кружки
-  private func drawSeals(_ d: Draw) {
-    let g = d.g, G = geo, S = G.S, m = mirror
-    for l in 0..<Hym.locN {
-      let x = G.pt(HymGeo.sealX0 + CGFloat(l) * HymGeo.sealDX, 0).x, y = G.pt(0, HymGeo.sealY).y, r = HymGeo.sealR * S, on = l == m.loc
-      g.setFillColor(theme.bg.cgColor); disc(g, x, y, r)
-      g.setStrokeColor(col(Hym.ink, on ? 0.9 : 0.4)); g.setLineWidth(on ? 1.2 : 1); circle(g, x, y, r)
-      if on {
-        g.setStrokeColor(col(Hym.ink, 0.45)); g.setLineWidth(0.8); circle(g, x, y, r - 3.5 * S)
-        let n = max(1, m.len[0])
-        for j in 0..<n where !m.pearls[0][j].rest {
-          let u = n > 1 ? CGFloat(j) / CGFloat(n - 1) : 0.5
-          g.setFillColor(col(Hym.ink, 0.85)); disc(g, x + (-9 + u * 18) * S, y + (5 - CGFloat(m.pearls[0][j].pitch) * 10) * S, 0.9 * S)
-        }
-      }
-      d.mapText(["i", "ii", "iii", "iv"][l], x, y + r + 9 * S, 12, on ? 0.8 : 0.4, align: .center)
-    }
-  }
-
   func frame(_ d: Draw, _ now: Double, sun: Bool) {
     let g = d.g, G = geo
     if let w = wallImage() {
@@ -304,10 +263,8 @@ extension HymenaeusView {
     }
     drawClouds(d, now)
     drawMix(d)
-    drawThreads(d, now)
     drawStrikes(d, now)
     drawRings(d, now)
-    drawSeals(d)
     for l in activeLabels { d.mapText(l.text, l.at.x, l.at.y, 12, 0.85, align: .center) }       // подписи — только пока жест идёт
     if holds.values.contains(where: { $0.zone == HymHit.mix }) {                                  // концы mix подписаны, пока ведёшь бегунок
       let y = G.pt(0, HymGeo.mixY).y + 22 * G.S

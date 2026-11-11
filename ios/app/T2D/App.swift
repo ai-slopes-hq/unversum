@@ -138,7 +138,7 @@ struct T2DApp: App {
         }
       }
       return
-    case "hymenaeus-drag", "hymenaeus-ring", "hymenaeus-clasp":     // палец удерживается посреди жеста — видна подпись оси
+    case "hymenaeus-drag", "hymenaeus-ring":     // палец удерживается посреди жеста — видна подпись оси
       host.go(HymenaeusView.slotN)
       DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
         guard let v = host.world as? HymenaeusView else { return }
@@ -147,7 +147,6 @@ struct T2DApp: App {
         let a: CGPoint, b: CGPoint
         switch T2DApp.shotName {
         case "hymenaeus-ring": a = CGPoint(x: g.ringCenter(0).x + g.ringR(0), y: g.ringCenter(0).y); b = CGPoint(x: a.x + 20 * g.S, y: a.y - 30 * g.S)
-        case "hymenaeus-clasp": a = g.claspPoint(0); b = CGPoint(x: a.x + 30 * g.S, y: a.y)
         default: a = CGPoint(x: g.cloudsRect.minX + 80 * g.S, y: g.cloudsRect.midY); b = CGPoint(x: a.x + 120 * g.S, y: a.y - 40 * g.S)
         }
         v.down(f(a, a)); v.move(f(a, b))
