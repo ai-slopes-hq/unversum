@@ -67,8 +67,8 @@ final class MonochordView: World {
   }
 
   func layout(W: CGFloat, H: CGFloat, topY: CGFloat, safeBot: CGFloat) { geo = MonoGeo(W: W, H: H, topY: topY, safeBot: safeBot) }
-  func cornerHit(_ x: CGFloat, _ y: CGFloat) -> Bool {     // view.js:307 — рука Бога в облаке ведёт на карту
-    hypot(x - geo.hand.x, y - geo.hand.y) < geo.hand.r * 1.1
+  func cornerHit(_ x: CGFloat, _ y: CGFloat) -> Bool {     // солнце четвертью справа сверху ведёт на карту
+    y > geo.hand.y && hypot(x - geo.hand.x, y - geo.hand.y) < geo.hand.r + 12
   }
   func dice() { core.action(Act.dice, 0, [], touchTime: 0) }
   func clear() {                                           // view index.js:24: порывы ветра снимаются раньше CLEAR (одно кольцо действий)

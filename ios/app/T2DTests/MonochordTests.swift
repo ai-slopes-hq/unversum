@@ -240,8 +240,8 @@ final class MonochordTests: XCTestCase {
 
   func testCornerHit() {
     let h = G.hand
-    XCTAssertTrue(view.cornerHit(h.x, h.y)); XCTAssertTrue(view.cornerHit(h.x + h.r * 1.05, h.y))
-    XCTAssertFalse(view.cornerHit(h.x + h.r * 1.2, h.y)); XCTAssertFalse(view.cornerHit(G.xs[0], G.y0))
+    XCTAssertTrue(view.cornerHit(h.x - 5, h.y + 20)); XCTAssertTrue(view.cornerHit(h.x - h.r - 5, h.y + 5))
+    XCTAssertFalse(view.cornerHit(h.x - h.r - 20, h.y + 5)); XCTAssertFalse(view.cornerHit(G.xs[0], G.y0))
   }
 
   func testStringAt() {

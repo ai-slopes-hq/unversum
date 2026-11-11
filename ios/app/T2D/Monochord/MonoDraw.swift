@@ -151,10 +151,10 @@ extension MonochordView {
     if hit > 0 { d.glowAt(E.x, E.y - E.r, 30, hit * 0.25) }
   }
 
-  // солнце справа от колков (как на карте и в Cymatica-стиле гравюры): тап ведёт на карту
+  // солнце четвертью в правом верхнем углу (как Arcadia): тап ведёт на карту
   private func hand(_ d: Draw, _ now: Double) {
     let H = geo.hand
-    d.sunGlyph(H.x, H.y, 0, MonochordView.tau, scale: H.r / 55, now: now * 1000)
+    d.quarterSun(H.x, H.y, H.r, side: -1, now: now * 1000)
   }
 
   // роза ветров, как на старых картах: с ветром крутится и дует струями на струны (view.js:198-242 drawAeolus)
