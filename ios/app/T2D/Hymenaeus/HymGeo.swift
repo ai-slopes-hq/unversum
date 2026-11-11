@@ -9,9 +9,9 @@ struct HymGeo {
   // станы: верхняя линия, 5 линий с шагом staveStep; жемчужины от staveX0 до staveX1, застёжка справа
   static let staveTop: [CGFloat] = [352, 446], staveStep: CGFloat = 16, staveX0: CGFloat = 42, staveX1: CGFloat = 332, staveL: CGFloat = 22, staveR: CGFloat = 370, claspX: CGFloat = 356
   // кольца: нить t играет кольцо t; центры по одной горизонтали, обода пересекаются
-  static let ringCY: CGFloat = 668, ringX: [CGFloat] = [158, 232], ringRad: CGFloat = 50, ringW: CGFloat = 11
+  static let ringCY: CGFloat = 640, ringX: [CGFloat] = [158, 232], ringRad: CGFloat = 50, ringW: CGFloat = 11
   static let mixY: CGFloat = 298, mixX0: CGFloat = 70, mixX1: CGFloat = 320
-  static let sealY: CGFloat = 772, sealX0: CGFloat = 105, sealDX: CGFloat = 62, sealR: CGFloat = 17
+  static let sealY: CGFloat = 722, sealX0: CGFloat = 105, sealDX: CGFloat = 62, sealR: CGFloat = 15
 
   init(W: CGFloat, H: CGFloat, topY: CGFloat) {
     self.W = W; self.H = H

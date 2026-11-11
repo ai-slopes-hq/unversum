@@ -46,6 +46,15 @@ final class HymenaeusTests: XCTestCase {
     XCTAssertEqual(b.bpm, 0); XCTAssertEqual(b.len[0], 1); XCTAssertEqual(b.pearls[0][1].pitch, 0)
   }
 
+  // печати и кольца — над нижним баром (safeBot + barH) на iPhone 16, на SE и на 320×568
+  func testSealsClearOfBottomBar() {
+    for (W, H, safeBot) in [(CGFloat(393), CGFloat(852), CGFloat(34)), (375, 667, 0), (320, 568, 0)] {
+      let g = HymGeo(W: W, H: H, topY: 59), barTop = H - safeBot - TopBar.barH
+      for l in 0..<Hym.locN { XCTAssertLessThanOrEqual(g.sealRect(l).maxY, barTop, "seal\(l) \(W)x\(H)") }
+      XCTAssertLessThanOrEqual(g.ringsRect.maxY, barTop, "rings \(W)x\(H)")
+    }
+  }
+
   func testGeoNoOverlap() {
     for (W, H) in [(CGFloat(390), CGFloat(844)), (320, 568)] {
       let g = HymGeo(W: W, H: H, topY: 59)

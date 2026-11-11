@@ -37,8 +37,8 @@ enum HymTouch {
       let c = geo.claspPoint(t, lastPitch: m.pearls[t][n - 1].pitch)
       if hypot(p.x - c.x, p.y - c.y) < 16 * geo.S { return .clasp(t) }
     }
-    if let h = geo.ringAt(p.x, p.y) { return .ring(h.ring, pos: h.pos) }
     for l in 0..<Hym.locN where geo.sealRect(l).contains(p) { return .seal(l) }
+    if let h = geo.ringAt(p.x, p.y) { return .ring(h.ring, pos: h.pos) }
     if geo.mixTrack.contains(p) { return .mix }
     let cr = geo.cloudsRect
     if cr.contains(p) { return p.y > cr.minY + cr.height * echoStrip ? .echo : .cloud }
